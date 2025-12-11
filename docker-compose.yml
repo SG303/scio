@@ -1,0 +1,13 @@
+services:
+  aipt:
+    build: .
+    container_name: ai-practice-test
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    restart: unless-stopped
+
