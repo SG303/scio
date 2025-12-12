@@ -1,7 +1,7 @@
 services:
-  aipt:
+  scio:
     build: .
-    container_name: ai-practice-test
+    container_name: scio
     ports:
       - "8001:8000"
     volumes:

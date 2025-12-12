@@ -216,7 +216,7 @@ async def _generate_batch(
                 "Authorization": f"Bearer {settings.openrouter_api_key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost:8000",
-                "X-Title": "AI Practice Test - Flashcard Generator"
+                "X-Title": "Scio"
             },
             json={
                 "model": model_id,

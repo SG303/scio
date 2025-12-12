@@ -1,5 +1,5 @@
 /**
- * Shared constants for the AI Practice Test application
+ * Shared constants for the Scio application
  */
 
 // Test configuration options

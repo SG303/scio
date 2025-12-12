@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    description="Generate AI-powered practice tests from your study materials",
+    description="Your AI Learning Hub - Generate practice tests, create flashcards, and organize your learning journey",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -96,6 +96,11 @@ if os.path.exists(static_dir):
         # API routes are handled by routers above
         if full_path.startswith("api/"):
             return {"detail": "Not Found"}
+        
+        # Try to serve static files from root (favicon, logo, etc.)
+        file_path = f"{static_dir}/{full_path}"
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
         
         # Serve index.html for all other routes (SPA routing)
         index_path = f"{static_dir}/index.html"

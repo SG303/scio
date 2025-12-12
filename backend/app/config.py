@@ -4,7 +4,7 @@ import os
 
 
 class Settings(BaseSettings):
-    app_name: str = "AI Practice Test Generator"
+    app_name: str = "Scio"
     debug: bool = False
     
     # OpenRouter
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000,http://localhost:5173,http://localhost:8000"
     
     # Paths
-    database_path: str = "/app/data/aipt.db"
+    database_path: str = "/app/data/scio.db"
     uploads_path: str = "/app/uploads"
     
     class Config:
@@ -32,7 +32,7 @@ def get_settings() -> Settings:
     else:
         # Local development paths
         return Settings(
-            database_path="./data/aipt.db",
+            database_path="./data/scio.db",
             uploads_path="./uploads"
         )
 

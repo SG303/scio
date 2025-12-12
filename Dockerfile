@@ -1,4 +1,4 @@
-# Multi-stage build for AI Practice Test Generator
+# Multi-stage build for Scio - AI Learning Hub
 
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
