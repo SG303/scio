@@ -7,9 +7,9 @@ import os
 
 # Determine database path
 if os.path.exists("/app/data"):
-    DATABASE_PATH = "/app/data/aipt.db"
+    DATABASE_PATH = "/app/data/scio.db"
 else:
-    DATABASE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "aipt.db")
+    DATABASE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "scio.db")
 
 
 def migrate(db_path: str = None):

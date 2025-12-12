@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom'
-import { BookOpen, FileText, Settings, Home, ClipboardList, Layers, FolderOpen } from 'lucide-react'
+import { FileText, Settings, Home, ClipboardList, Layers, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Dashboard from '@/pages/Dashboard'
@@ -36,12 +36,14 @@ function App() {
           <div className="container mx-auto px-4">
             <div className="flex h-16 items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25">
-                  <BookOpen className="h-5 w-5 text-white" />
-                </div>
+                <img 
+                  src="/scio_logo.png" 
+                  alt="Scio Logo" 
+                  className="h-16 w-16 object-contain"
+                />
                 <div>
-                  <h1 className="text-lg font-bold tracking-tight">AI Practice Test</h1>
-                  <p className="text-xs text-muted-foreground">Generate • Practice • Excel</p>
+                  <h1 className="text-lg font-bold tracking-tight">Scio</h1>
+                  <p className="text-xs text-muted-foreground">Learn • Practice • Master</p>
                 </div>
               </div>
               

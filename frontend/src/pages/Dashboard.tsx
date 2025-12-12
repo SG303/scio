@@ -39,11 +39,10 @@ export default function Dashboard() {
             <span className="text-sm font-medium text-primary">AI-Powered Learning</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-3">
-            Welcome to Practice Test Generator
+            Welcome to Scio
           </h1>
           <p className="text-muted-foreground max-w-2xl mb-6">
-            Upload your study materials, let AI generate practice tests, and track your progress
-            to excel in your exams.
+            Your AI Learning Hub. Upload study materials, generate practice tests, create flashcards, and organize your learning journey.
           </p>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg">

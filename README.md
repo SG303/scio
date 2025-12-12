@@ -1,8 +1,8 @@
-# AI Practice Test Generator
+# Scio
 
-Generate AI-powered practice tests from your study materials. Upload exam objectives, study guides, and example questions, then let AI create customized practice tests to help you prepare for exams.
+Your AI Learning Hub. Upload study materials, generate practice tests, create flashcards, and organize your learning journey with AI-powered tools.
 
-![AI Practice Test Generator](https://img.shields.io/badge/AI-Powered-blue)
+![Scio](https://img.shields.io/badge/AI-Powered-blue)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
 ![Python](https://img.shields.io/badge/Python-3.11-green)
 ![React](https://img.shields.io/badge/React-18-blue)
@@ -11,9 +11,10 @@ Generate AI-powered practice tests from your study materials. Upload exam object
 
 - 📚 **Document Management** - Upload PDFs, DOCX, TXT, or paste text directly
 - 🤖 **Multiple AI Models** - Choose from GPT-4, Claude, Llama, and more via OpenRouter
-- ⚙️ **Customizable Tests** - Set number of questions and answer choices
-- 📝 **Interactive Testing** - Take tests with progress tracking
-- 📊 **Detailed Results** - Review answers with explanations
+- 📝 **Practice Tests** - Generate customizable tests with AI-powered questions
+- 🎴 **Flashcards** - Create and study flashcards with spaced repetition
+- 📁 **Subject Organization** - Organize your learning materials by subject
+- 📊 **Progress Tracking** - Track your learning progress and performance
 - 🐳 **Single Container** - Easy deployment with Docker
 
 ## Quick Start
@@ -28,7 +29,7 @@ Generate AI-powered practice tests from your study materials. Upload exam object
 ```bash
 # Clone the repository
 git clone <your-repo-url>
-cd ai-pt
+cd scio
 
 # Create environment file
 cp env.example .env
@@ -49,7 +50,7 @@ docker compose logs -f
 
 ### 3. Access the App
 
-Open [http://localhost:8000](http://localhost:8000) in your browser.
+Open [http://localhost:8001](http://localhost:8001) in your browser.
 
 ## Usage
 
@@ -142,7 +143,7 @@ npm run dev
 ### Project Structure
 
 ```
-ai-pt/
+scio/
 ├── Dockerfile              # Multi-stage Docker build
 ├── docker-compose.yml      # Container orchestration
 ├── backend/
