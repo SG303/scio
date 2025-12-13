@@ -1,0 +1,17 @@
+# Docker Compose Template
+# Copy this file to docker-compose.yml and adjust the values as needed.
+# Make sure to set your OPENROUTER_API_KEY environment variable.
+
+services:
+  scio:
+    build: .
+    container_name: scio
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}  # Set this in your environment or .env file
+    restart: unless-stopped
+
