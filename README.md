@@ -31,6 +31,9 @@ Your AI Learning Hub. Upload study materials, generate practice tests, create fl
 git clone <your-repo-url>
 cd scio
 
+# Copy Docker Compose template
+cp docker-compose.yml.template docker-compose.yml
+
 # Create environment file
 cp env.example .env
 
@@ -145,7 +148,7 @@ npm run dev
 ```
 scio/
 ├── Dockerfile              # Multi-stage Docker build
-├── docker-compose.yml      # Container orchestration
+├── docker-compose.yml.template  # Docker Compose template
 ├── backend/
 │   ├── requirements.txt
 │   └── app/
