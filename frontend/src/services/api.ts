@@ -247,14 +247,28 @@ export const flashcardsApi = {
     fetchApi<void>(`/flashcards/cards/${cardId}`, { method: 'DELETE' }),
   
   // Study
-  getStudyQueue: (deckId: number) =>
-    fetchApi<StudyQueueResponse>(`/flashcards/decks/${deckId}/study`),
+  getStudyQueue: (deckId: number, sessionId?: number) =>
+    fetchApi<StudyQueueResponse>(
+      sessionId
+        ? `/flashcards/decks/${deckId}/study?session_id=${sessionId}`
+        : `/flashcards/decks/${deckId}/study`
+    ),
   
-  submitReview: (cardId: number, rating: number, timeTakenMs?: number) =>
-    fetchApi<ReviewResponse>(`/flashcards/cards/${cardId}/review`, {
-      method: 'POST',
-      body: JSON.stringify({ rating, time_taken_ms: timeTakenMs }),
-    }),
+  submitReview: (cardId: number, rating: number, timeTakenMs?: number, sessionId?: number) =>
+    fetchApi<ReviewResponse>(
+      sessionId
+        ? `/flashcards/cards/${cardId}/review?session_id=${sessionId}`
+        : `/flashcards/cards/${cardId}/review`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ rating, time_taken_ms: timeTakenMs }),
+      }
+    ),
+  
+  getIncompleteSession: (deckId: number) =>
+    fetchApi<{ has_incomplete_session: boolean; session_id?: number; cards_studied_count?: number; started_at?: string }>(
+      `/flashcards/decks/${deckId}/incomplete-session`
+    ),
   
   // Sessions
   startSession: (deckId?: number) =>

@@ -37,6 +37,8 @@ frontend/dist/
 
 # Docker
 .docker/
+!docker-compose.yml.template
+docker-compose.yml
 
 # Logs
 *.log

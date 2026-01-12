@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
 import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
@@ -14,6 +15,9 @@ export default function StudySession() {
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [sessionId, setSessionId] = useState<number | null>(null)
+  const [pendingSessionId, setPendingSessionId] = useState<number | null>(null)
+  const [showResumePrompt, setShowResumePrompt] = useState(false)
+  const [cardsStudiedCount, setCardsStudiedCount] = useState(0)
   const [sessionStats, setSessionStats] = useState({
     again: 0,
     hard: 0,
@@ -24,15 +28,33 @@ export default function StudySession() {
   const sessionStartTime = useRef<number>(Date.now())
   const cardStartTime = useRef<number>(Date.now())
 
+  // Check for incomplete session
+  const { data: incompleteSession } = useQuery({
+    queryKey: ['incomplete-session', deckId],
+    queryFn: () => flashcardsApi.getIncompleteSession(parseInt(deckId!)),
+    enabled: !!deckId,
+  })
+
+  // Handle incomplete session detection
+  useEffect(() => {
+    if (incompleteSession && incompleteSession.has_incomplete_session && !sessionId) {
+      setPendingSessionId(incompleteSession.session_id || null)
+      setCardsStudiedCount(incompleteSession.cards_studied_count || 0)
+      setShowResumePrompt(true)
+    } else if (deckId && !sessionId && !pendingSessionId) {
+      startSessionMutation.mutate()
+    }
+  }, [incompleteSession, deckId, sessionId, pendingSessionId])
+
   // Fetch study queue
   const {
     data: studyQueue,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['study-queue', deckId],
-    queryFn: () => flashcardsApi.getStudyQueue(parseInt(deckId!)),
-    enabled: !!deckId,
+    queryKey: ['study-queue', deckId, sessionId],
+    queryFn: () => flashcardsApi.getStudyQueue(parseInt(deckId!), sessionId || undefined),
+    enabled: !!deckId && !!sessionId,
   })
 
   // Fetch deck info for title
@@ -60,7 +82,7 @@ export default function StudySession() {
       cardId: number
       rating: 1 | 2 | 3 | 4
       timeTakenMs: number
-    }) => flashcardsApi.submitReview(cardId, rating, timeTakenMs),
+    }) => flashcardsApi.submitReview(cardId, rating, timeTakenMs, sessionId || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
     },
@@ -72,12 +94,21 @@ export default function StudySession() {
       flashcardsApi.completeSession(sessionId, totalTimeMs),
   })
 
-  // Start session on component mount
-  useEffect(() => {
-    if (deckId && !sessionId) {
-      startSessionMutation.mutate()
+  // Handle resume
+  const handleResume = () => {
+    if (pendingSessionId) {
+      setSessionId(pendingSessionId)
+      setShowResumePrompt(false)
+      setPendingSessionId(null)
     }
-  }, [deckId])
+  }
+
+  // Handle start fresh
+  const handleStartFresh = () => {
+    setShowResumePrompt(false)
+    setPendingSessionId(null)
+    startSessionMutation.mutate()
+  }
 
   // Handle rating
   const handleRate = async (rating: 1 | 2 | 3 | 4) => {
@@ -152,6 +183,26 @@ export default function StudySession() {
       })
     }
     navigate(`/flashcards/${deckId}`)
+  }
+
+  // Resume prompt
+  if (showResumePrompt) {
+    return (
+      <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center p-4">
+        <h2 className="text-2xl font-semibold mb-4">Continue your study session?</h2>
+        <p className="text-muted-foreground mb-6">
+          You studied {cardsStudiedCount} card{cardsStudiedCount !== 1 ? 's' : ''} earlier today.
+        </p>
+        <div className="flex gap-4">
+          <Button onClick={handleResume}>
+            Continue Session
+          </Button>
+          <Button variant="outline" onClick={handleStartFresh}>
+            Start Fresh
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
