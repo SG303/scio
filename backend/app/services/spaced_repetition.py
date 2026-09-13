@@ -1,1 +1,433 @@
-REPLACED_WITH_SR_CONTENT
+"""
+Spaced Repetition Algorithm Service (SM-2 based)
+
+Implements the SM-2 spaced repetition algorithm for flashcard scheduling,
+including learning phases, review scheduling, and study queue building.
+
+Rating scale:
+- 1 (Again): Complete failure to recall
+- 2 (Hard): Correct but with significant difficulty
+- 3 (Good): Correct with some effort
+- 4 (Easy): Perfect recall with no hesitation
+"""
+
+from datetime import datetime, timedelta, timezone, date
+import json
+from typing import Tuple, List, Optional
+from sqlalchemy import select, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Flashcard, FlashcardDeck, StudySession
+
+# Learning steps in minutes (for new and relearning cards)
+LEARNING_STEPS = [1, 10]  # 1 minute, 10 minutes
+
+MIN_EF = 1.3
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def calculate_next_review(
+    state: str,
+    easiness_factor: float,
+    interval_days: int,
+    repetitions: int,
+    learning_step: int,
+    rating: int,
+) -> Tuple[str, float, int, int, int, datetime]:
+    """
+    Calculate the next review parameters based on SM-2 algorithm.
+
+    Args:
+        state: Current card state ('new', 'learning', 'review', 'relearning')
+        easiness_factor: Current EF value (>= 1.3)
+        interval_days: Current interval in days
+        repetitions: Number of consecutive successful reviews
+        learning_step: Current step in learning phase
+        rating: User's rating (1-4)
+
+    Returns:
+        Tuple of (new_state, new_ef, new_interval, new_repetitions, new_learning_step, next_review_at)
+    """
+    now = utc_now()
+
+    # Rating 1 (Again) - Failed, reset to learning/relearning
+    if rating == 1:
+        new_state = "relearning" if state == "review" else "learning"
+        new_ef = max(MIN_EF, easiness_factor - 0.2)
+        new_interval = 0
+        new_repetitions = 0
+        new_learning_step = 0
+        # First learning step (1 minute)
+        next_review = now + timedelta(minutes=LEARNING_STEPS[0])
+        return (
+            new_state,
+            new_ef,
+            new_interval,
+            new_repetitions,
+            new_learning_step,
+            next_review,
+        )
+
+    # Handle learning/relearning states
+    if state in ("new", "learning", "relearning"):
+        if rating >= 3:  # Good or Easy - advance learning step
+            new_learning_step = learning_step + 1
+
+            # Check if graduated to review state
+            if new_learning_step >= len(LEARNING_STEPS):
+                # Graduate to review
+                new_state = "review"
+                new_learning_step = 0
+                new_repetitions = 1
+
+                # First review interval depends on rating
+                if rating == 4:  # Easy
+                    new_interval = 4
+                else:  # Good
+                    new_interval = 1
+
+                next_review = now + timedelta(days=new_interval)
+                return (
+                    new_state,
+                    easiness_factor,
+                    new_interval,
+                    new_repetitions,
+                    new_learning_step,
+                    next_review,
+                )
+            else:
+                # Continue learning
+                next_review = now + timedelta(minutes=LEARNING_STEPS[new_learning_step])
+                return (
+                    state if state != "new" else "learning",
+                    easiness_factor,
+                    interval_days,
+                    repetitions,
+                    new_learning_step,
+                    next_review,
+                )
+        else:  # Hard (rating 2) - repeat current step
+            next_review = now + timedelta(minutes=LEARNING_STEPS[learning_step])
+            return (
+                state if state != "new" else "learning",
+                easiness_factor,
+                interval_days,
+                repetitions,
+                learning_step,
+                next_review,
+            )
+
+    # Handle review state (graduated cards)
+    # Update easiness factor based on rating using the standard SM-2 formula:
+    # EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+    # NOTE: The formula alone already rewards Easy and penalizes Hard/Again
+    # appropriately. Do NOT additionally add/subtract a flat offset on top of
+    # it (e.g. -0.15/+0.15) - a previous version of this code did that and it
+    # double-penalized "Hard" ratings and double-rewarded "Easy" ratings,
+    # causing the EF to drift much faster than intended.
+    q_map = {2: 2, 3: 4, 4: 5}  # Hard=2, Good=4, Easy=5 (SM-2 quality scale)
+    q = q_map.get(rating, 4)
+    new_ef = easiness_factor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+    new_ef = max(MIN_EF, min(3.0, new_ef))
+
+    # Calculate new interval
+    new_repetitions = repetitions + 1
+
+    if new_repetitions == 1:
+        new_interval = 1
+    elif new_repetitions == 2:
+        new_interval = 6
+    else:
+        new_interval = round(interval_days * new_ef)
+
+    # Adjust interval (but not EF again - EF was already adjusted above)
+    if rating == 2:  # Hard
+        new_interval = max(1, round(new_interval * 0.8))
+    elif rating == 4:  # Easy
+        new_interval = round(new_interval * 1.3)
+
+    next_review = now + timedelta(days=new_interval)
+
+    return ("review", new_ef, new_interval, new_repetitions, 0, next_review)
+
+
+async def get_due_cards(
+    db: AsyncSession, deck_id: int, limit: Optional[int] = None
+) -> List[Flashcard]:
+    """
+    Get cards that are due for review (next_review_at <= now).
+    """
+    now = utc_now()
+
+    query = (
+        select(Flashcard)
+        .where(
+            and_(
+                Flashcard.deck_id == deck_id,
+                Flashcard.state.in_(["review", "relearning", "learning"]),
+                Flashcard.next_review_at <= now,
+            )
+        )
+        .order_by(Flashcard.next_review_at.asc())
+    )
+
+    if limit:
+        query = query.limit(limit)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> List[Flashcard]:
+    """
+    Get new cards that haven't been studied yet.
+    """
+    query = (
+        select(Flashcard)
+        .where(and_(Flashcard.deck_id == deck_id, Flashcard.state == "new"))
+        .order_by(Flashcard.created_at.asc())
+        .limit(limit)
+    )
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_learning_cards(db: AsyncSession, deck_id: int) -> List[Flashcard]:
+    """
+    Get cards currently in learning phase (not yet graduated).
+    """
+    now = utc_now()
+
+    query = (
+        select(Flashcard)
+        .where(
+            and_(
+                Flashcard.deck_id == deck_id,
+                Flashcard.state.in_(["learning", "relearning"]),
+                or_(
+                    Flashcard.next_review_at <= now, Flashcard.next_review_at.is_(None)
+                ),
+            )
+        )
+        .order_by(Flashcard.next_review_at.asc())
+    )
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+def _build_interleaved_queue(
+    learning_cards: List[Flashcard],
+    review_cards: List[Flashcard],
+    new_cards: List[Flashcard],
+) -> List[Flashcard]:
+    """
+    Build study queue with learning cards interleaved.
+
+    Anki-style: Learning cards appear more frequently,
+    reviews and new cards are distributed throughout.
+    """
+    queue = []
+
+    queue.extend(review_cards)
+
+    queue.extend(new_cards)
+
+    if learning_cards and queue:
+        interval = max(1, len(queue) // (len(learning_cards) + 1))
+        for i, card in enumerate(learning_cards):
+            insert_pos = min((i + 1) * interval, len(queue))
+            queue.insert(insert_pos, card)
+    elif learning_cards:
+        queue = learning_cards
+
+    return queue
+
+
+async def get_study_queue(
+    db: AsyncSession,
+    deck_id: int,
+    new_cards_limit: int = 20,
+    session_id: Optional[int] = None,
+    cards_studied_json: Optional[str] = None,
+    new_cards_reviewed_today: int = 0,
+    study_date: Optional[date] = None,
+) -> List[Flashcard]:
+    """
+    Build the study queue for a deck following this priority:
+    1. Learning/relearning cards that are due (interleaved throughout)
+    2. Review cards that are due (overdue first)
+    3. New cards up to daily limit
+
+    Supports session persistence for resume functionality.
+    """
+    now = utc_now()
+    today = now.date()
+
+    cards_studied = set()
+    if cards_studied_json:
+        try:
+            cards_studied = set(json.loads(cards_studied_json))
+        except (json.JSONDecodeError, TypeError):
+            cards_studied = set()
+
+    is_new_day = study_date is None or study_date != today
+    if is_new_day:
+        remaining_new_quota = new_cards_limit
+    else:
+        remaining_new_quota = max(0, new_cards_limit - new_cards_reviewed_today)
+
+    due_cards = await get_due_cards(db, deck_id)
+
+    due_cards = [c for c in due_cards if c.id not in cards_studied]
+
+    learning_cards = [c for c in due_cards if c.state in ("learning", "relearning")]
+    review_cards = [c for c in due_cards if c.state == "review"]
+
+    if remaining_new_quota > 0:
+        new_cards = await get_new_cards(db, deck_id, remaining_new_quota)
+        new_cards = [c for c in new_cards if c.id not in cards_studied]
+    else:
+        new_cards = []
+
+    return _build_interleaved_queue(learning_cards, review_cards, new_cards)
+
+
+async def get_incomplete_session(
+    db: AsyncSession, deck_id: int
+) -> Optional[StudySession]:
+    """
+    Get the most recent incomplete session for a deck from today.
+    Returns None if no incomplete session exists.
+    """
+    now = utc_now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    result = await db.execute(
+        select(StudySession)
+        .where(
+            and_(
+                StudySession.deck_id == deck_id,
+                StudySession.completed_at.is_(None),
+                StudySession.started_at >= today_start,
+            )
+        )
+        .order_by(StudySession.started_at.desc())
+        .limit(1)
+    )
+
+    return result.scalar_one_or_none()
+
+
+async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
+    """
+    Get statistics for a deck.
+    """
+    now = utc_now()
+
+    # Get deck
+    result = await db.execute(select(FlashcardDeck).where(FlashcardDeck.id == deck_id))
+    deck = result.scalar_one_or_none()
+
+    if not deck:
+        return {}
+
+    # Count cards by state
+    result = await db.execute(
+        select(Flashcard.state, Flashcard.id).where(Flashcard.deck_id == deck_id)
+    )
+    cards = result.all()
+
+    total = len(cards)
+    new_count = sum(1 for s, _ in cards if s == "new")
+    learning_count = sum(1 for s, _ in cards if s in ("learning", "relearning"))
+    review_count = sum(1 for s, _ in cards if s == "review")
+
+    # Count due cards
+    result = await db.execute(
+        select(Flashcard).where(
+            and_(
+                Flashcard.deck_id == deck_id,
+                Flashcard.state != "new",
+                Flashcard.next_review_at <= now,
+            )
+        )
+    )
+    due_count = len(result.scalars().all())
+
+    # Cards due today including new cards up to limit
+    new_today = min(new_count, deck.new_cards_per_day)
+    due_today = due_count + new_today
+
+    # Count mastered cards (review state with high EF and good interval)
+    result = await db.execute(
+        select(Flashcard).where(
+            and_(
+                Flashcard.deck_id == deck_id,
+                Flashcard.state == "review",
+                Flashcard.interval_days >= 21,  # At least 3 weeks interval
+                Flashcard.easiness_factor >= 2.0,  # Decent easiness factor
+            )
+        )
+    )
+    mastered_count = len(result.scalars().all())
+
+    return {
+        "total_cards": total,
+        "new_cards": new_count,
+        "learning_cards": learning_count,
+        "review_cards": review_count,
+        "due_today": due_today,
+        "due_reviews": due_count,
+        "new_available": new_today,
+        "mastered_cards": mastered_count,
+    }
+
+
+async def get_global_stats(db: AsyncSession) -> dict:
+    """
+    Get global flashcard statistics across all decks.
+    """
+    now = utc_now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Total cards due across all decks
+    result = await db.execute(
+        select(Flashcard).where(
+            and_(Flashcard.state != "new", Flashcard.next_review_at <= now)
+        )
+    )
+    due_reviews = len(result.scalars().all())
+
+    # Get all decks with their new card limits
+    result = await db.execute(select(FlashcardDeck))
+    decks = result.scalars().all()
+
+    total_new_available = 0
+    for deck in decks:
+        # Count new cards in this deck
+        result = await db.execute(
+            select(Flashcard).where(
+                and_(Flashcard.deck_id == deck.id, Flashcard.state == "new")
+            )
+        )
+        new_in_deck = len(result.scalars().all())
+        total_new_available += min(new_in_deck, deck.new_cards_per_day)
+
+    total_due = due_reviews + total_new_available
+
+    # Count total decks and cards
+    result = await db.execute(select(Flashcard))
+    total_cards = len(result.scalars().all())
+
+    return {
+        "total_decks": len(decks),
+        "total_cards": total_cards,
+        "due_today": total_due,
+        "due_reviews": due_reviews,
+        "new_available": total_new_available,
+    }
