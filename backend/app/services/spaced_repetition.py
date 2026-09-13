@@ -1,12 +1,12 @@
 """
-SM-2 Spaced Repetition Algorithm implementation.
+Spaced Repetition Algorithm Service (SM-2 based)
 
-This module implements the SuperMemo 2 (SM-2) algorithm for scheduling flashcard reviews.
-The algorithm adjusts review intervals based on how well the user remembers each card.
+Implements the SM-2 spaced repetition algorithm for flashcard scheduling,
+including learning phases, review scheduling, and study queue building.
 
-Rating Scale:
-- 1 (Again): Complete failure, card needs to be relearned
-- 2 (Hard): Correct but with difficulty
+Rating scale:
+- 1 (Again): Complete failure to recall
+- 2 (Hard): Correct but with significant difficulty
 - 3 (Good): Correct with some effort
 - 4 (Easy): Perfect recall with no hesitation
 """
@@ -22,15 +22,10 @@ from app.models import Flashcard, FlashcardDeck, StudySession
 # Learning steps in minutes (for new and relearning cards)
 LEARNING_STEPS = [1, 10]  # 1 minute, 10 minutes
 
-# Minimum easiness factor
 MIN_EF = 1.3
-
-# Default easiness factor for new cards
-DEFAULT_EF = 2.5
 
 
 def utc_now() -> datetime:
-    """Return current UTC time (timezone-aware)."""
     return datetime.now(timezone.utc)
 
 
@@ -126,13 +121,17 @@ def calculate_next_review(
             )
 
     # Handle review state (graduated cards)
-    # Update easiness factor based on rating
+    # Update easiness factor based on rating using the standard SM-2 formula:
     # EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-    # where q is mapped: rating 2->2, 3->4, 4->5 (to fit SM-2 scale)
-    q_map = {2: 2, 3: 4, 4: 5}
+    # NOTE: The formula alone already rewards Easy and penalizes Hard/Again
+    # appropriately. Do NOT additionally add/subtract a flat offset on top of
+    # it (e.g. -0.15/+0.15) - a previous version of this code did that and it
+    # double-penalized "Hard" ratings and double-rewarded "Easy" ratings,
+    # causing the EF to drift much faster than intended.
+    q_map = {2: 2, 3: 4, 4: 5}  # Hard=2, Good=4, Easy=5 (SM-2 quality scale)
     q = q_map.get(rating, 4)
     new_ef = easiness_factor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-    new_ef = max(MIN_EF, new_ef)
+    new_ef = max(MIN_EF, min(3.0, new_ef))
 
     # Calculate new interval
     new_repetitions = repetitions + 1
@@ -144,13 +143,11 @@ def calculate_next_review(
     else:
         new_interval = round(interval_days * new_ef)
 
-    # Adjust interval based on rating
+    # Adjust interval (but not EF again - EF was already adjusted above)
     if rating == 2:  # Hard
         new_interval = max(1, round(new_interval * 0.8))
-        new_ef = max(MIN_EF, new_ef - 0.15)
     elif rating == 4:  # Easy
         new_interval = round(new_interval * 1.3)
-        new_ef = min(3.0, new_ef + 0.15)  # Cap EF at 3.0
 
     next_review = now + timedelta(days=new_interval)
 
@@ -162,14 +159,6 @@ async def get_due_cards(
 ) -> List[Flashcard]:
     """
     Get cards that are due for review (next_review_at <= now).
-
-    Args:
-        db: Database session
-        deck_id: ID of the deck
-        limit: Maximum number of cards to return
-
-    Returns:
-        List of due Flashcard objects, ordered by due date (oldest first)
     """
     now = utc_now()
 
@@ -195,14 +184,6 @@ async def get_due_cards(
 async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> List[Flashcard]:
     """
     Get new cards that haven't been studied yet.
-
-    Args:
-        db: Database session
-        deck_id: ID of the deck
-        limit: Maximum number of new cards to return
-
-    Returns:
-        List of new Flashcard objects
     """
     query = (
         select(Flashcard)
@@ -218,13 +199,6 @@ async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> List[Flas
 async def get_learning_cards(db: AsyncSession, deck_id: int) -> List[Flashcard]:
     """
     Get cards currently in learning phase (not yet graduated).
-
-    Args:
-        db: Database session
-        deck_id: ID of the deck
-
-    Returns:
-        List of learning Flashcard objects
     """
     now = utc_now()
 
@@ -256,14 +230,6 @@ def _build_interleaved_queue(
 
     Anki-style: Learning cards appear more frequently,
     reviews and new cards are distributed throughout.
-
-    Args:
-        learning_cards: Cards in learning/relearning state
-        review_cards: Cards in review state
-        new_cards: New cards to introduce
-
-    Returns:
-        Interleaved list of cards for study
     """
     queue = []
 
@@ -298,18 +264,6 @@ async def get_study_queue(
     3. New cards up to daily limit
 
     Supports session persistence for resume functionality.
-
-    Args:
-        db: Database session
-        deck_id: ID of the deck
-        new_cards_limit: Maximum number of new cards to include per day
-        session_id: Optional session ID for resume tracking
-        cards_studied_json: JSON array of card IDs already reviewed in this session
-        new_cards_reviewed_today: Count of new cards already reviewed today
-        study_date: Date of the study session (for daily limit reset)
-
-    Returns:
-        List of Flashcard objects in study order
     """
     now = utc_now()
     today = now.date()
@@ -343,55 +297,12 @@ async def get_study_queue(
     return _build_interleaved_queue(learning_cards, review_cards, new_cards)
 
 
-def _build_interleaved_queue(
-    learning_cards: List[Flashcard],
-    review_cards: List[Flashcard],
-    new_cards: List[Flashcard],
-) -> List[Flashcard]:
-    """
-    Build study queue with learning cards interleaved.
-
-    Anki-style: Learning cards appear more frequently,
-    reviews and new cards are distributed throughout.
-
-    Args:
-        learning_cards: Cards in learning/relearning state
-        review_cards: Cards in review state
-        new_cards: New cards to introduce
-
-    Returns:
-        Interleaved list of cards for study
-    """
-    queue = []
-
-    queue.extend(review_cards)
-
-    queue.extend(new_cards)
-
-    if learning_cards and queue:
-        interval = max(1, len(queue) // (len(learning_cards) + 1))
-        for i, card in enumerate(learning_cards):
-            insert_pos = min((i + 1) * interval, len(queue))
-            queue.insert(insert_pos, card)
-    elif learning_cards:
-        queue = learning_cards
-
-    return queue
-
-
 async def get_incomplete_session(
     db: AsyncSession, deck_id: int
 ) -> Optional[StudySession]:
     """
     Get the most recent incomplete session for a deck from today.
     Returns None if no incomplete session exists.
-
-    Args:
-        db: Database session
-        deck_id: ID of the deck
-
-    Returns:
-        StudySession if incomplete session found, None otherwise
     """
     now = utc_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -415,13 +326,6 @@ async def get_incomplete_session(
 async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
     """
     Get statistics for a deck.
-
-    Args:
-        db: Database session
-        deck_id: ID of the deck
-
-    Returns:
-        Dictionary with deck statistics
     """
     now = utc_now()
 
@@ -487,12 +391,6 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
 async def get_global_stats(db: AsyncSession) -> dict:
     """
     Get global flashcard statistics across all decks.
-
-    Args:
-        db: Database session
-
-    Returns:
-        Dictionary with global statistics
     """
     now = utc_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
