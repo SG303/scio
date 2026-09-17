@@ -96,9 +96,14 @@ if os.path.exists(static_dir):
         # API routes are handled by routers above
         if full_path.startswith("api/"):
             return {"detail": "Not Found"}
-        
-        # Try to serve static files from root (favicon, logo, etc.)
-        file_path = f"{static_dir}/{full_path}"
+
+        # P5.3b: path-traversal guard — only serve files that really live
+        # inside the static directory (blocks ../ escapes and absolute paths)
+        file_path = os.path.realpath(os.path.join(static_dir, full_path))
+        static_root = os.path.realpath(static_dir)
+        if os.path.commonpath([static_root, file_path]) != static_root:
+            return {"detail": "Not Found"}
+
         if os.path.isfile(file_path):
             return FileResponse(file_path)
         

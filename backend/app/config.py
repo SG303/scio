@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     # OpenRouter
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    # P5.3c: sent as HTTP-Referer to OpenRouter instead of a hardcoded URL
+    http_referer: str = "http://localhost:8000"
+    # P5.3c: lightweight model used for question verification
+    verification_model: str = "google/gemini-2.5-flash-lite"
     
     # CORS - comma-separated list of allowed origins
     # Use "*" for allow all (development), or specific origins for production

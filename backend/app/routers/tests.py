@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -12,7 +12,7 @@ from app.schemas.test import (
     TestConfigCreate, TestConfigResponse,
     TestResponse, TestDetailResponse,
     QuestionResponse, AnswerSubmit, TestResultResponse,
-    Choice, GenerateFromTemplateRequest
+    Choice, GenerateFromTemplateRequest, CreateAndGenerateRequest
 )
 from app.services.test_generator import generate_test_questions, verify_question_integrity
 
@@ -61,6 +61,25 @@ async def list_test_configs(db: AsyncSession = Depends(get_db)):
     )
     configs = result.scalars().all()
     return configs
+
+
+@router.get("/configs/{config_id}/scores", response_model=List[int])
+async def get_config_scores(
+    config_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)
+):
+    """
+    P5.1: chronological scores of the last completed tests for a config.
+    Used by the frontend to render a score sparkline per template.
+    """
+    result = await db.execute(
+        select(Test.score)
+        .where(and_(Test.config_id == config_id, Test.status == "completed"))
+        .order_by(Test.completed_at.desc())
+        .limit(max(1, min(limit, 100)))
+    )
+    scores = [s for (s,) in result.all() if s is not None]
+    # newest first -> flip to chronological for the sparkline
+    return list(reversed(scores))
 
 
 @router.get("/templates", response_model=List[TestConfigResponse])
@@ -154,6 +173,111 @@ async def delete_test_template(template_id: int, db: AsyncSession = Depends(get_
     await db.delete(template)
     await db.commit()
     return {"message": "Template deleted successfully"}
+
+
+@router.post("/create-and-generate", response_model=TestResponse)
+async def create_and_generate_test(
+    request: CreateAndGenerateRequest, db: AsyncSession = Depends(get_db)
+):
+    """P5.2: create a config and generate its first test in one commit.
+
+    The AI generation runs before anything is written, so a failed
+    generation leaves no empty config behind.
+    """
+    # Validate AI model (same rules as POST /configs)
+    result = await db.execute(select(AIModel).where(AIModel.id == request.ai_model_id))
+    ai_model = result.scalar_one_or_none()
+    if not ai_model:
+        raise HTTPException(status_code=404, detail="AI model not found")
+    if not ai_model.is_enabled:
+        raise HTTPException(status_code=400, detail="AI model is not enabled")
+
+    # Validate documents (if any provided)
+    documents = []
+    if request.document_ids:
+        result = await db.execute(
+            select(Document).where(Document.id.in_(request.document_ids))
+        )
+        documents = list(result.scalars().all())
+        found_ids = {d.id for d in documents}
+        missing_ids = set(request.document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(
+                status_code=404, detail=f"Document(s) not found: {missing_ids}"
+            )
+
+    num_questions = (
+        request.generate_num_questions
+        if request.generate_num_questions is not None
+        else request.num_questions
+    )
+
+    # AI call first — nothing is persisted if it fails
+    try:
+        questions_data = await generate_test_questions(
+            documents=documents,
+            num_questions=num_questions,
+            num_choices=request.num_choices,
+            model_id=ai_model.openrouter_id,
+            topic=request.title,
+            custom_prompt=request.custom_prompt,
+        )
+    except ValueError as e:
+        logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate test: {str(e)}")
+    except Exception as e:
+        logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to generate test. Please try again."
+        )
+
+    # Persist config + test + questions in a single commit
+    db_config = TestConfig(
+        title=request.title,
+        num_questions=request.num_questions,
+        num_choices=request.num_choices,
+        ai_model_id=request.ai_model_id,
+        document_ids=request.document_ids,
+        is_template=request.is_template,
+        custom_prompt=request.custom_prompt,
+    )
+    db.add(db_config)
+    await db.flush()
+
+    test = Test(
+        config_id=db_config.id,
+        status="generated",
+        total_questions=len(questions_data),
+    )
+    db.add(test)
+    await db.flush()
+
+    for i, q_data in enumerate(questions_data):
+        question = Question(
+            test_id=test.id,
+            question_number=i + 1,
+            question_text=q_data["question"],
+            choices=[{"index": j, "text": c} for j, c in enumerate(q_data["choices"])],
+            correct_answer=q_data["correct_answer"],
+            explanation=q_data.get("explanation", ""),
+        )
+        db.add(question)
+
+    await db.commit()
+    await db.refresh(test)
+
+    return TestResponse(
+        id=test.id,
+        config_id=test.config_id,
+        config_title=db_config.title,
+        status=test.status,
+        started_at=test.started_at,
+        completed_at=test.completed_at,
+        score=test.score,
+        total_questions=test.total_questions,
+        correct_answers=test.correct_answers,
+        created_at=test.created_at,
+    )
 
 
 @router.post("/generate/{config_id}", response_model=TestResponse)

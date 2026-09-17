@@ -22,6 +22,7 @@ class AIModelResponse(BaseModel):
     openrouter_id: str
     description: Optional[str] = None
     is_enabled: bool
+    is_default: bool = False
     created_at: datetime
     
     class Config:
