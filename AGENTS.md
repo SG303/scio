@@ -47,7 +47,7 @@ frontend/
   package.json          # Scripts: dev / build / preview (typecheck+lint: siehe P0.3)
 Dockerfile              # Multi-Stage: Frontend-Build → Python-Image mit Static-Files
 docker-compose.yml.template
-.github/workflows/       # docker-build.yml (+ pytest/typecheck-Jobs, siehe «Verification»)
+.github/workflows/       # docker-build.yml, tests.yml (pytest bei jedem Push/PR; typecheck: siehe P0.3)
 data/                   # SQLite-DB (runtime, git-ignored ausser .gitkeep)
 uploads/                # Hochgeladene Dokumente (runtime)
 ```
@@ -112,7 +112,7 @@ curl http://localhost:8001/api/health                 # Health-Check
 
 | Check | Befehl | Status |
 |-------|--------|--------|
-| Backend-Tests | `cd backend && pytest` | **Wird mit P0.2 eingerichtet** — bis dahin: Backend muss mindestens starten (`uvicorn app.main:app`) ohne Import-/Startup-Fehler |
+| Backend-Tests | `cd backend && pytest` | Verfügbar seit P0.2 (`backend/tests/`, Dependencies: `pip install -r requirements-dev.txt`). Läuft auch als GitHub-Actions-Job bei jedem Push/PR |
 | Frontend-Typecheck | `cd frontend && npm run typecheck` | **Wird mit P0.3 eingerichtet** — bis dahin: `npm run build` muss durchlaufen (enthält `tsc`) |
 | Lint | `cd frontend && npm run lint` | Wird mit P0.3 eingerichtet |
 | Docker-Build | `docker build .` (nur bei Dockerfile/Compose-Änderungen) | Verfügbar |
