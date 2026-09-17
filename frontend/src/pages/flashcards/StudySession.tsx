@@ -15,6 +15,24 @@ type SaveError = {
   rating: 1 | 2 | 3 | 4
 }
 
+// P2.3: human-readable interval from the review response — the real SM-2
+// schedule, shown after a rating instead of made-up numbers
+function formatNextReview(nextReviewAt: string | null, intervalDays: number): string {
+  if (nextReviewAt) {
+    const diffMs = new Date(nextReviewAt).getTime() - Date.now()
+    if (Number.isFinite(diffMs)) {
+      const minutes = Math.round(diffMs / 60000)
+      if (minutes < 1) return 'under a minute'
+      if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''}`
+      const hours = Math.round(minutes / 60)
+      if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''}`
+    }
+  }
+  // Fallback: whole days from interval_days
+  if (intervalDays > 0) return `${intervalDays} day${intervalDays !== 1 ? 's' : ''}`
+  return 'under a minute'
+}
+
 export default function StudySession() {
   const { deckId } = useParams<{ deckId: string }>()
   const navigate = useNavigate()
@@ -34,6 +52,11 @@ export default function StudySession() {
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [saveError, setSaveError] = useState<SaveError | null>(null)
   const [exitFailed, setExitFailed] = useState(false)
+  // P2.3: real interval of the last rated card (from ReviewResponse)
+  const [nextReviewHint, setNextReviewHint] = useState<string | null>(null)
+  // P2.3 (M3): started_at of a resumed session, used as the base for
+  // total_time_ms instead of the page load time
+  const [pendingStartedAt, setPendingStartedAt] = useState<string | null>(null)
   const sessionStartTime = useRef<number>(Date.now())
   const cardStartTime = useRef<number>(Date.now())
   // P2.2: once exit was requested, no further backend writes from this
@@ -73,6 +96,7 @@ export default function StudySession() {
 
     if (incompleteSession.has_incomplete_session) {
       setPendingSessionId(incompleteSession.session_id || null)
+      setPendingStartedAt(incompleteSession.started_at ?? null)
       setCardsStudiedCount(incompleteSession.cards_studied_count || 0)
       setShowResumePrompt(true)
     } else if (!startAttempted.current) {
@@ -133,9 +157,18 @@ export default function StudySession() {
   const handleResume = () => {
     decisionMade.current = true
     if (pendingSessionId) {
+      // P2.3 (M3): base total_time_ms on the session's real start, not on
+      // when this page happened to load
+      if (pendingStartedAt) {
+        const startedAtMs = new Date(pendingStartedAt).getTime()
+        if (Number.isFinite(startedAtMs)) {
+          sessionStartTime.current = startedAtMs
+        }
+      }
       setSessionId(pendingSessionId)
       setShowResumePrompt(false)
       setPendingSessionId(null)
+      setPendingStartedAt(null)
     }
   }
 
@@ -157,6 +190,7 @@ export default function StudySession() {
       }
     }
     setPendingSessionId(null)
+    setPendingStartedAt(null)
     startSessionMutation.mutate()
   }
 
@@ -175,11 +209,13 @@ export default function StudySession() {
 
     // Submit review
     try {
-      await reviewMutation.mutateAsync({
+      const response = await reviewMutation.mutateAsync({
         cardId: card.id,
         rating,
         timeTakenMs,
       })
+      // P2.3: show the real SM-2 interval for this card after rating
+      setNextReviewHint(formatNextReview(response.next_review_at, response.interval_days))
     } catch {
       // Review not saved — unfreeze the card and offer a retry for exactly
       // this card; the rating is only counted once it was actually saved
@@ -394,6 +430,13 @@ export default function StudySession() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* P2.3: real SM-2 interval of the last rated card */}
+      {nextReviewHint && (
+        <p className="text-center text-xs text-muted-foreground py-1.5 border-b">
+          Previous card: see again in {nextReviewHint}
+        </p>
       )}
 
       {/* Card Area - Takes remaining space */}
