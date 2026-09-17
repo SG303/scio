@@ -8,6 +8,13 @@ import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 
+// P2.2: a review that failed to save — offered to the user with a retry
+// button for exactly this card and rating
+type SaveError = {
+  cardId: number
+  rating: 1 | 2 | 3 | 4
+}
+
 export default function StudySession() {
   const { deckId } = useParams<{ deckId: string }>()
   const navigate = useNavigate()
@@ -25,8 +32,24 @@ export default function StudySession() {
     easy: 0,
   })
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [saveError, setSaveError] = useState<SaveError | null>(null)
+  const [exitFailed, setExitFailed] = useState(false)
   const sessionStartTime = useRef<number>(Date.now())
   const cardStartTime = useRef<number>(Date.now())
+  // P2.2: once exit was requested, no further backend writes from this
+  // component (M4) — handleRate must not fire completeSession after exit
+  const exitRequestedRef = useRef(false)
+  // P2.2: pending timeout must not fire after unmount
+  const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clean up pending timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Check for incomplete session.
   // P2.1: isLoading is exposed — a new session must never start while this
@@ -137,15 +160,47 @@ export default function StudySession() {
     startSessionMutation.mutate()
   }
 
-  // Handle rating
+  // Handle rating.
+  // P2.2: a failed submitReview must not freeze the session — the card
+  // becomes interactive again and an inline retry banner appears instead.
   const handleRate = async (rating: 1 | 2 | 3 | 4) => {
     if (!studyQueue || currentIndex >= studyQueue.cards.length || isTransitioning) return
+    if (exitRequestedRef.current) return // M4: no writes after exit
 
     const card = studyQueue.cards[currentIndex]
     const timeTakenMs = Date.now() - cardStartTime.current
 
     // Start transition animation
     setIsTransitioning(true)
+
+    // Submit review
+    try {
+      await reviewMutation.mutateAsync({
+        cardId: card.id,
+        rating,
+        timeTakenMs,
+      })
+    } catch {
+      // Review not saved — unfreeze the card and offer a retry for exactly
+      // this card; the rating is only counted once it was actually saved
+      setIsTransitioning(false)
+      setSaveError({ cardId: card.id, rating })
+      return
+    }
+
+    setSaveError(null)
+    await advanceAfterRating(rating)
+  }
+
+  // P2.2: retry the failed review — resends the same card and rating
+  const handleRetrySave = () => {
+    if (!saveError) return
+    handleRate(saveError.rating)
+  }
+
+  // Post-rating flow: stats, animation, next card or session completion
+  const advanceAfterRating = async (rating: 1 | 2 | 3 | 4) => {
+    if (!studyQueue) return
 
     // Update local stats
     setSessionStats((prev) => ({
@@ -156,15 +211,15 @@ export default function StudySession() {
       easy: prev.easy + (rating === 4 ? 1 : 0),
     }))
 
-    // Submit review
-    await reviewMutation.mutateAsync({
-      cardId: card.id,
-      rating,
-      timeTakenMs,
+    // Wait for exit animation to complete (P2.2: tracked so it can be
+    // cleaned up on unmount)
+    await new Promise<void>((resolve) => {
+      transitionTimeoutRef.current = setTimeout(resolve, 500)
     })
 
-    // Wait for exit animation to complete
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    // M4: the user exited while the animation was running — handleExit
+    // already completed the session, stop here
+    if (exitRequestedRef.current) return
 
     // Move to next card or complete session
     if (currentIndex + 1 >= studyQueue.cards.length) {
@@ -172,10 +227,16 @@ export default function StudySession() {
       const totalTimeMs = Date.now() - sessionStartTime.current
 
       if (sessionId) {
-        await completeSessionMutation.mutateAsync({
-          sessionId,
-          totalTimeMs,
-        })
+        try {
+          await completeSessionMutation.mutateAsync({
+            sessionId,
+            totalTimeMs,
+          })
+        } catch {
+          // Ratings are saved per card; the session stays resumable via
+          // the incomplete-session handling from P2.1 — navigate anyway
+          console.error('Failed to complete session after last rating')
+        }
       }
 
       // Navigate to completion screen
@@ -196,19 +257,31 @@ export default function StudySession() {
       setCurrentIndex((prev) => prev + 1)
       cardStartTime.current = Date.now()
       // Reset transition state after a brief delay for enter animation
-      setTimeout(() => setIsTransitioning(false), 50)
+      transitionTimeoutRef.current = setTimeout(() => setIsTransitioning(false), 50)
     }
   }
 
   // Handle exit — P2.1: always close the session, even if no card was rated
-  // (a session with 0 ratings must not survive as an incomplete ghost)
+  // (a session with 0 ratings must not survive as an incomplete ghost).
+  // P2.2: a failed completeSession is surfaced instead of silently doing
+  // nothing (M4).
   const handleExit = async () => {
+    if (exitRequestedRef.current) return
+    exitRequestedRef.current = true
     if (sessionId) {
       const totalTimeMs = Date.now() - sessionStartTime.current
-      await completeSessionMutation.mutateAsync({
-        sessionId,
-        totalTimeMs,
-      })
+      try {
+        await completeSessionMutation.mutateAsync({
+          sessionId,
+          totalTimeMs,
+        })
+      } catch {
+        // Ratings are already saved per card — let the user decide whether
+        // to retry closing the session or leave anyway
+        exitRequestedRef.current = false
+        setExitFailed(true)
+        return
+      }
     }
     navigate(`/flashcards/${deckId}`)
   }
@@ -307,8 +380,33 @@ export default function StudySession() {
       {/* Progress Bar */}
       <Progress value={progress} className="h-1 rounded-none" />
 
+      {/* P2.2: exit could not be saved — visible error instead of a silent
+          no-op; the user decides between retry and leaving anyway */}
+      {exitFailed && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 m-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+          <span>Could not save your session. Your reviewed cards are already saved.</span>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" onClick={() => { setExitFailed(false); handleExit() }}>
+              Try again
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => navigate(`/flashcards/${deckId}`)}>
+              Exit anyway
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Card Area - Takes remaining space */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden">
+        {/* P2.2: inline retry banner for a failed review save */}
+        {saveError && (
+          <div className="mb-4 w-full rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <span>Save failed — your rating was not saved.</span>
+            <Button size="sm" onClick={handleRetrySave} className="shrink-0">
+              Try again
+            </Button>
+          </div>
+        )}
         <div
           className={cn(
             'w-full transition-all duration-500 ease-in-out',
