@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
 import { cn, formatPricePerMillion } from '@/lib/utils'
-import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES } from '@/lib/constants'
+import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
 
@@ -67,12 +67,12 @@ export default function GenerateMaterialDialog({
   })
 
   const { data: documents = [] } = useQuery({
-    queryKey: ['documents'],
+    queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
 
   const { data: models = [] } = useQuery({
-    queryKey: ['models', true],
+    queryKey: queryKeys.modelsAll,
     queryFn: () => modelsApi.list(true),
   })
 
@@ -86,8 +86,8 @@ export default function GenerateMaterialDialog({
       custom_prompt: testForm.custom_prompt || undefined,
     }),
     onSuccess: (test) => {
-      queryClient.invalidateQueries({ queryKey: ['subject', subjectId.toString()] })
-      queryClient.invalidateQueries({ queryKey: ['subjects'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subject(subjectId.toString()) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       handleClose()
       navigate(`/test/${test.id}`)
     },
@@ -107,8 +107,8 @@ export default function GenerateMaterialDialog({
       custom_prompt: flashcardForm.custom_prompt || undefined,
     }),
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['subject', subjectId.toString()] })
-      queryClient.invalidateQueries({ queryKey: ['subjects'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subject(subjectId.toString()) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       handleClose()
       navigate(`/flashcards/${response.deck_id}`)
     },

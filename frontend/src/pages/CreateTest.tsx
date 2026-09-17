@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
 import { cn, calculateEstimatedCost, formatPricePerMillion, calculateTestGenerationTokens } from '@/lib/utils'
-import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES } from '@/lib/constants'
+import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 
 export default function CreateTest() {
   const navigate = useNavigate()
@@ -25,12 +25,12 @@ export default function CreateTest() {
   const [error, setError] = useState<string | null>(null)
 
   const { data: documents = [] } = useQuery({
-    queryKey: ['documents'],
+    queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
 
   const { data: models = [] } = useQuery({
-    queryKey: ['models', true],
+    queryKey: queryKeys.modelsAll,
     queryFn: () => modelsApi.list(true),
   })
 

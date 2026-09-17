@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import { testsApi, flashcardsApi } from '@/services/api'
 import { cn, formatScore, getScoreColor } from '@/lib/utils'
+import { queryKeys } from '@/lib/constants'
 
 interface VerificationResult {
   status: 'likely_ok' | 'potential_issue'
@@ -44,7 +45,7 @@ export default function Results() {
 
   // Fetch existing decks for the dropdown
   const { data: existingDecks = [] } = useQuery({
-    queryKey: ['flashcard-decks'],
+    queryKey: queryKeys.flashcardDecks,
     queryFn: flashcardsApi.listDecks,
     enabled: showFlashcardDialog,
   })
@@ -58,7 +59,10 @@ export default function Results() {
         wrong_only: true,
       }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
+      // P3.2: cards were added to an existing deck — its card list must be
+      // fresh when the user opens it right after
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(data.deck_id) })
       setShowFlashcardDialog(false)
       navigate(`/flashcards/${data.deck_id}`)
     },
@@ -84,7 +88,7 @@ export default function Results() {
   }
 
   const { data: test, isLoading } = useQuery({
-    queryKey: ['test', testId],
+    queryKey: queryKeys.test(testId),
     queryFn: () => testsApi.get(parseInt(testId!)),
     enabled: !!testId,
     staleTime: 0, // Always fetch fresh data for results

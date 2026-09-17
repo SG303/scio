@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, NavLink, Link } from 'react-router-dom'
 import { FileText, Settings, Home, ClipboardList, Layers, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -113,6 +113,19 @@ function App() {
             <Route path="/flashcards/:deckId" element={<DeckDetail />} />
             <Route path="/flashcards/:deckId/study" element={<StudySession />} />
             <Route path="/flashcards/session-complete" element={<SessionComplete />} />
+            {/* P3.2: catch-all for unknown URLs instead of a blank page */}
+            <Route
+              path="*"
+              element={
+                <div className="text-center py-16 space-y-3">
+                  <h2 className="text-2xl font-bold">Page not found</h2>
+                  <p className="text-muted-foreground">The page you are looking for does not exist.</p>
+                  <Link to="/" className="text-primary underline underline-offset-4">
+                    Back to Dashboard
+                  </Link>
+                </div>
+              }
+            />
           </Routes>
         </main>
         </div>

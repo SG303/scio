@@ -3,24 +3,59 @@ import { Link } from 'react-router-dom'
 import { FileText, GraduationCap, Clock, CheckCircle2, ArrowRight, Plus, Sparkles, Layers, Flame } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { QueryState } from '@/components/QueryState'
 import { documentsApi, testsApi, flashcardsApi } from '@/services/api'
 import { formatDate, getScoreColor } from '@/lib/utils'
+import { queryKeys } from '@/lib/constants'
 
 export default function Dashboard() {
-  const { data: documents = [] } = useQuery({
-    queryKey: ['documents'],
+  const {
+    data: documents = [],
+    isLoading: documentsLoading,
+    error: documentsError,
+    refetch: refetchDocuments,
+  } = useQuery({
+    queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
 
-  const { data: tests = [] } = useQuery({
-    queryKey: ['tests'],
+  const {
+    data: tests = [],
+    isLoading: testsLoading,
+    error: testsError,
+    refetch: refetchTests,
+  } = useQuery({
+    queryKey: queryKeys.tests,
     queryFn: testsApi.list,
   })
 
-  const { data: flashcardStats } = useQuery({
-    queryKey: ['flashcard-stats'],
+  const {
+    data: flashcardStats,
+    isLoading: statsLoading,
+    error: statsError,
+    refetch: refetchStats,
+  } = useQuery({
+    queryKey: queryKeys.flashcardStats,
     queryFn: flashcardsApi.getGlobalStats,
   })
+
+  // P3.3: a down backend must not look like an empty account — show an
+  // error with retry instead of all-zero stats
+  const anyLoading = documentsLoading || testsLoading || statsLoading
+  const anyError = documentsError || testsError || statsError
+  if (anyLoading || anyError) {
+    return (
+      <QueryState
+        loading={anyLoading}
+        error={anyError}
+        onRetry={() => {
+          refetchDocuments()
+          refetchTests()
+          refetchStats()
+        }}
+      />
+    )
+  }
 
   const recentTests = tests.slice(0, 5)
   const completedTests = tests.filter(t => t.status === 'completed')

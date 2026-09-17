@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
 import { cn, calculateEstimatedCost, formatPricePerMillion, calculateTestGenerationTokens, formatDate, getScoreColor } from '@/lib/utils'
-import { TEMPLATE_QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES } from '@/lib/constants'
+import { TEMPLATE_QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 import type { TestConfig } from '@/types'
 
 export default function TestTemplates() {
@@ -68,22 +68,22 @@ export default function TestTemplates() {
   
   // Queries
   const { data: templates = [], isLoading } = useQuery({
-    queryKey: ['templates'],
+    queryKey: queryKeys.templates,
     queryFn: testsApi.listTemplates,
   })
   
   const { data: documents = [] } = useQuery({
-    queryKey: ['documents'],
+    queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
   
   const { data: models = [] } = useQuery({
-    queryKey: ['models', true],
+    queryKey: queryKeys.modelsAll,
     queryFn: () => modelsApi.list(true),
   })
   
   const { data: tests = [] } = useQuery({
-    queryKey: ['tests'],
+    queryKey: queryKeys.tests,
     queryFn: testsApi.list,
   })
   
@@ -91,7 +91,7 @@ export default function TestTemplates() {
   const createMutation = useMutation({
     mutationFn: testsApi.createTemplate,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates })
       setShowCreateDialog(false)
       resetForm()
     },
@@ -104,7 +104,7 @@ export default function TestTemplates() {
         custom_prompt: data.custom_prompt || null,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates })
       setShowCreateDialog(false)
       resetForm()
     },
@@ -113,7 +113,7 @@ export default function TestTemplates() {
   const deleteMutation = useMutation({
     mutationFn: testsApi.deleteTemplate,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates })
       setDeletingTemplateId(null)
     },
     onError: () => {
