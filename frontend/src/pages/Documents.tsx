@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from '@/components/Toaster'
 import { FileText, Upload, Plus, Trash2, BookOpen, ListChecks, HelpCircle, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,11 @@ export default function Documents() {
       setIsAddOpen(false)
       resetForm()
     },
+    // P3.1 (M8): surface failures — previously the dialog closed silently
+    // or nothing happened at all
+    onError: () => {
+      toast.error('Could not create the document. Please try again.')
+    },
   })
 
   const uploadMutation = useMutation({
@@ -55,6 +61,7 @@ export default function Documents() {
     },
     onError: () => {
       setIsUploading(false)
+      toast.error('Upload failed. Please try again.')
     },
   })
 
