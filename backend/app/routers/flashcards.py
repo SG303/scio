@@ -872,14 +872,17 @@ async def submit_review(
             cards_studied.add(card_id)
             session.cards_studied_json = json.dumps(list(cards_studied))
 
-            # Track new card review (for daily limit)
+            # Always stamp the study date so the daily new-card quota resets
+            # correctly the next day — even when this session only touched
+            # review/relearning cards and no new ones
+            session.study_date = utc_now().date()
+
             if (
                 old_state == "new" and review.rating >= 2
             ):  # Rating >= Hard counts as reviewed
                 session.new_cards_reviewed_today = (
                     session.new_cards_reviewed_today or 0
                 ) + 1
-                session.study_date = utc_now().date()
 
     await db.commit()
     await db.refresh(card)

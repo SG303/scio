@@ -193,7 +193,7 @@ class TestReview:
             "review", 4, ef=2.5, interval=15, reps=3
         )
         assert new_reps == 4
-        assert new_ef == pytest.approx(2.75)  # 2.5 + 0.1 + 0.15
+        assert new_ef == pytest.approx(2.6)  # 2.5 + 0.1 (SM-2 formula, q=5)
         assert new_interval == 51  # round(15 * 2.6) = 39, then round(39 * 1.3) = 51
         assert new_state == "review"
 
@@ -201,14 +201,14 @@ class TestReview:
         _, new_ef, _, _, _, _ = run("review", 4, ef=2.9, interval=20, reps=4)
         assert new_ef == pytest.approx(3.0)
 
-    def test_hard_shrinks_interval_and_drops_ef_twice(self):
-        # Hard: EF -0.32 (formula, q=2) then -0.15 (Hard penalty);
+    def test_hard_shrinks_interval_and_penalizes_ef_once(self):
+        # Hard: EF -0.32 from the SM-2 formula (q=2) — and nothing else;
         # interval uses the formula-updated EF, then *0.8
         new_state, new_ef, new_interval, new_reps, _, _ = run(
             "review", 2, ef=2.5, interval=30, reps=5
         )
         assert new_reps == 6
-        assert new_ef == pytest.approx(2.03)  # 2.5 - 0.32 - 0.15
+        assert new_ef == pytest.approx(2.18)  # 2.5 - 0.32
         assert new_interval == 52  # round(30 * 2.18) = 65, then round(65 * 0.8) = 52
         assert new_state == "review"
 
@@ -219,6 +219,31 @@ class TestReview:
     def test_hard_interval_never_below_one_day(self):
         _, _, new_interval, _, _, _ = run("review", 2, ef=1.3, interval=1, reps=2)
         assert new_interval >= 1
+
+    def test_ef_sequence_over_repeated_good_reviews(self):
+        # Regression guard for the double-penalty fix: with Good ratings the
+        # EF must stay constant at 2.5 (q=4 changes nothing in SM-2)
+        ef = 2.5
+        for _ in range(5):
+            _, ef, _, _, _, _ = run("review", 3, ef=ef, interval=10, reps=3)
+            assert ef == pytest.approx(2.5)
+
+    def test_repeated_hard_reviews_converge_to_min_ef_not_faster(self):
+        # EF floor via the formula alone: 2.5 -> 2.18 -> 1.86 -> 1.54 -> 1.3
+        ef = 2.5
+        expected = [2.18, 1.86, 1.54, MIN_EF]
+        for want in expected:
+            _, ef, _, _, _, _ = run("review", 2, ef=ef, interval=10, reps=3)
+            assert ef == pytest.approx(want), (
+                "EF dropped faster than the SM-2 formula — double penalty?"
+            )
+
+    def test_hard_rating_is_not_double_penalized(self):
+        # The old bug: EF 2.5 ended up at 2.03 (formula -0.32, then -0.15).
+        # Correct SM-2 result is 2.18.
+        _, new_ef, _, _, _, _ = run("review", 2, ef=2.5, interval=30, reps=5)
+        assert new_ef == pytest.approx(2.18)
+        assert new_ef != pytest.approx(2.03)
 
 
 # ============== Invariants ==============

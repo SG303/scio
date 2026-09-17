@@ -130,13 +130,16 @@ def calculate_next_review(
             )
 
     # Handle review state (graduated cards)
-    # Update easiness factor based on rating
+    # Update easiness factor based on rating using the standard SM-2 formula:
     # EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-    # where q is mapped: rating 2->2, 3->4, 4->5 (to fit SM-2 scale)
-    q_map = {2: 2, 3: 4, 4: 5}
+    # The formula alone already penalizes Hard and rewards Easy. Do NOT add a
+    # flat offset on top (a previous version applied -0.15/+0.15 here, which
+    # double-penalized Hard and double-rewarded Easy, drifting the EF much
+    # faster than SM-2 intends).
+    q_map = {2: 2, 3: 4, 4: 5}  # Hard=2, Good=4, Easy=5 on the SM-2 scale
     q = q_map.get(rating, 4)
     new_ef = easiness_factor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-    new_ef = max(MIN_EF, new_ef)
+    new_ef = max(MIN_EF, min(3.0, new_ef))
 
     # Calculate new interval
     new_repetitions = repetitions + 1
@@ -148,13 +151,12 @@ def calculate_next_review(
     else:
         new_interval = round(interval_days * new_ef)
 
-    # Adjust interval based on rating
+    # Adjust interval based on rating (the EF was already adjusted above —
+    # no second EF change here)
     if rating == 2:  # Hard
         new_interval = max(1, round(new_interval * 0.8))
-        new_ef = max(MIN_EF, new_ef - 0.15)
     elif rating == 4:  # Easy
         new_interval = round(new_interval * 1.3)
-        new_ef = min(3.0, new_ef + 0.15)  # Cap EF at 3.0
 
     next_review = now + timedelta(days=new_interval)
 
