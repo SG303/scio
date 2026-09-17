@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, flashcardsApi } from '@/services/api'
 import { cn, formatPricePerMillion } from '@/lib/utils'
+import { queryKeys } from '@/lib/constants'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
 
@@ -28,12 +29,12 @@ export default function CreateFlashcards() {
   const [error, setError] = useState<string | null>(null)
 
   const { data: documents = [] } = useQuery({
-    queryKey: ['documents'],
+    queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
 
   const { data: models = [] } = useQuery({
-    queryKey: ['models', true],
+    queryKey: queryKeys.modelsAll,
     queryFn: () => modelsApi.list(true),
   })
 

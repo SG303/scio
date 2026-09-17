@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { modelsApi } from '@/services/api'
 import { cn, formatPricePerMillion } from '@/lib/utils'
+import { queryKeys } from '@/lib/constants'
 
 export default function ModelsSettings() {
   const queryClient = useQueryClient()
@@ -19,14 +20,14 @@ export default function ModelsSettings() {
   })
 
   const { data: models = [], isLoading } = useQuery({
-    queryKey: ['models'],
+    queryKey: queryKeys.models,
     queryFn: () => modelsApi.list(false),
   })
 
   const createMutation = useMutation({
     mutationFn: modelsApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['models'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.models })
       setIsAddOpen(false)
       setFormData({ name: '', openrouter_id: '', description: '' })
     },
@@ -36,14 +37,14 @@ export default function ModelsSettings() {
     mutationFn: ({ id, data }: { id: number; data: { is_enabled: boolean } }) =>
       modelsApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['models'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.models })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: modelsApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['models'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.models })
     },
   })
 

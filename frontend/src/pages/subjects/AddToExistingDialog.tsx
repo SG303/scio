@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { modelsApi, subjectsApi } from '@/services/api'
 import { cn, formatPricePerMillion } from '@/lib/utils'
-import { QUESTION_COUNT_OPTIONS } from '@/lib/constants'
+import { QUESTION_COUNT_OPTIONS, queryKeys } from '@/lib/constants'
 import type { TestConfigInSubject, FlashcardDeckInSubject } from '@/types'
 
 const CARD_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30]
@@ -48,7 +48,7 @@ export default function AddToExistingDialog({
   const [error, setError] = useState<string | null>(null)
 
   const { data: models = [] } = useQuery({
-    queryKey: ['models', true],
+    queryKey: queryKeys.modelsAll,
     queryFn: () => modelsApi.list(true),
   })
 
@@ -59,8 +59,8 @@ export default function AddToExistingDialog({
       custom_prompt: customPrompt || undefined,
     }),
     onSuccess: (test) => {
-      queryClient.invalidateQueries({ queryKey: ['subject', subjectId.toString()] })
-      queryClient.invalidateQueries({ queryKey: ['subjects'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subject(subjectId.toString()) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       handleClose()
       navigate(`/test/${test.id}`)
     },
@@ -77,10 +77,10 @@ export default function AddToExistingDialog({
       custom_prompt: customPrompt || undefined,
     }),
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['subject', subjectId.toString()] })
-      queryClient.invalidateQueries({ queryKey: ['subjects'] })
-      queryClient.invalidateQueries({ queryKey: ['flashcard-cards', item.id.toString()] })
-      queryClient.invalidateQueries({ queryKey: ['flashcard-deck', item.id.toString()] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subject(subjectId.toString()) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(item.id.toString()) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(item.id.toString()) })
       handleClose()
       navigate(`/flashcards/${response.deck_id}`)
     },

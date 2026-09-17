@@ -16,6 +16,7 @@ import {
 import { testsApi } from '@/services/api'
 import { toast } from '@/components/Toaster'
 import { cn } from '@/lib/utils'
+import { queryKeys } from '@/lib/constants'
 
 export default function TakeTest() {
   const { testId } = useParams<{ testId: string }>()
@@ -33,7 +34,7 @@ export default function TakeTest() {
   const startAttempts = useRef(0)
 
   const { data: test, isLoading, error } = useQuery({
-    queryKey: ['test', testId],
+    queryKey: queryKeys.test(testId),
     queryFn: () => testsApi.get(parseInt(testId!)),
     enabled: !!testId,
     refetchInterval: false,
@@ -42,7 +43,7 @@ export default function TakeTest() {
   const startMutation = useMutation({
     mutationFn: () => testsApi.start(parseInt(testId!)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['test', testId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.test(testId) })
     },
   })
 
@@ -50,7 +51,7 @@ export default function TakeTest() {
     mutationFn: ({ questionId, answer }: { questionId: number; answer: number }) =>
       testsApi.submitAnswer(parseInt(testId!), questionId, answer),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['test', testId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.test(testId) })
     },
     onError: () => {
       // M2: the answer stays selected locally and is re-sent later
@@ -62,8 +63,8 @@ export default function TakeTest() {
     mutationFn: () => testsApi.submit(parseInt(testId!)),
     onSuccess: async () => {
       // Invalidate and wait for cache to clear before navigating
-      await queryClient.invalidateQueries({ queryKey: ['test', testId] })
-      await queryClient.invalidateQueries({ queryKey: ['tests'] })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.test(testId) })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tests })
       navigate(`/results/${testId}`, { replace: true })
     },
     onError: () => {
