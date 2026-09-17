@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Sparkles, Loader2, FileText, CheckCircle2, Coins } from 'lucide-react'
@@ -25,6 +25,7 @@ export default function CreateTest() {
   const [isGenerating, setIsGenerating] = useState(false)
   // P6.2: live progress instead of an endless spinner
   const { progress, start: startProgress, cancel: cancelProgress, reset: resetProgress } = useGenerationProgress()
+  const generationAbortRef = useRef<AbortController | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const { data: documents = [] } = useQuery({
@@ -53,18 +54,30 @@ export default function CreateTest() {
     // P6.2: token lets the backend report batch progress while we wait
     const progressToken = crypto.randomUUID()
     startProgress(progressToken)
+    const abortController = new AbortController()
+    generationAbortRef.current = abortController
 
     try {
       // P5.2: config + test in one call — a failed generation no longer
       // leaves an empty config behind
-      const test = await testsApi.createAndGenerate({ ...formData }, progressToken)
+      const test = await testsApi.createAndGenerate(
+        { ...formData },
+        progressToken,
+        abortController.signal,
+      )
 
       // Navigate to the test
       navigate(`/test/${test.id}`)
     } catch (err) {
+      if (abortController.signal.aborted) {
+        setError('Generation cancelled.')
+        return
+      }
       setError(err instanceof Error ? err.message : 'Failed to generate test')
       setIsGenerating(false)
     } finally {
+      generationAbortRef.current = null
+      setIsGenerating(false)
       resetProgress()
     }
   }
@@ -72,7 +85,13 @@ export default function CreateTest() {
   // P6.2: stop waiting — the backend aborts at the next batch boundary
   // and discards the partial result
   const handleCancelGeneration = async () => {
-    await cancelProgress()
+    const accepted = await cancelProgress()
+    if (accepted) {
+      generationAbortRef.current?.abort()
+      setError('Generation cancelled.')
+    } else {
+      setError('Generation has already finished and can no longer be cancelled.')
+    }
   }
 
   const canProceedStep2 = formData.title && formData.ai_model_id > 0

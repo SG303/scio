@@ -38,6 +38,15 @@ class GenerationCancelled(Exception):
     """Raised inside a generation when the user cancelled it."""
 
 
+def _raise_cancelled(token: str) -> None:
+    _entries[token] = {
+        "status": "cancelled",
+        "message": _CANCELLED_MESSAGE,
+        "updated_at": time.time(),
+    }
+    raise GenerationCancelled(_CANCELLED_MESSAGE)
+
+
 def new_token() -> str:
     """Create a fresh progress token."""
     return uuid.uuid4().hex
@@ -61,12 +70,7 @@ def update(
             entry[key] = value
     entry["updated_at"] = time.time()
     if entry.get("cancel_requested"):
-        _entries[token] = {
-            "status": "cancelled",
-            "message": _CANCELLED_MESSAGE,
-            "updated_at": time.time(),
-        }
-        raise GenerationCancelled(_CANCELLED_MESSAGE)
+        _raise_cancelled(token)
 
 
 def get(token: str) -> Optional[dict]:
@@ -82,14 +86,22 @@ def get(token: str) -> Optional[dict]:
     return result
 
 
-def cancel(token: str) -> bool:
-    """Flag a running generation as cancelled (returns True if it existed)."""
+def cancel(token: str) -> Optional[str]:
+    """Request cancellation of a running generation.
+
+    Returns ``"cancellation_requested"`` only for a currently running
+    generation, its terminal status for an already finished one, or ``None``
+    for an unknown token. This lets callers avoid claiming a completed/failed
+    generation was cancelled.
+    """
     entry = _entries.get(token)
     if entry is None:
-        return False
+        return None
+    if entry.get("status") != "running":
+        return entry.get("status")
     entry["cancel_requested"] = True
     entry["updated_at"] = time.time()
-    return True
+    return "cancellation_requested"
 
 
 def fail(token: str, message: str) -> None:
@@ -101,6 +113,11 @@ def fail(token: str, message: str) -> None:
 
 
 def complete(token: str, done: int, total: Optional[int] = None) -> None:
+    # A cancellation can arrive after the last batch reported progress but
+    # before the route persists its generated result. Do not let that race
+    # turn a requested cancellation into a completed generation.
+    if _entries.get(token, {}).get("cancel_requested"):
+        _raise_cancelled(token)
     _entries[token] = {
         "status": "completed",
         "done": done,

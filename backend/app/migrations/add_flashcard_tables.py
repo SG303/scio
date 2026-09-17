@@ -85,6 +85,7 @@ def migrate(db_path: str = None):
                 CREATE TABLE flashcard_reviews (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     card_id INTEGER NOT NULL REFERENCES flashcards(id),
+                    session_id INTEGER REFERENCES study_sessions(id),
                     rating INTEGER NOT NULL,
                     time_taken_ms INTEGER,
                     state_before VARCHAR(20),
@@ -94,6 +95,7 @@ def migrate(db_path: str = None):
             """)
             cursor.execute("CREATE INDEX ix_flashcard_reviews_id ON flashcard_reviews(id)")
             cursor.execute("CREATE INDEX ix_flashcard_reviews_card_id ON flashcard_reviews(card_id)")
+            cursor.execute("CREATE INDEX ix_flashcard_reviews_session_id ON flashcard_reviews(session_id)")
             cursor.execute("CREATE INDEX ix_flashcard_reviews_reviewed_at ON flashcard_reviews(reviewed_at)")
             print("Created 'flashcard_reviews' table")
         else:
@@ -142,6 +144,24 @@ def migrate(db_path: str = None):
             else:
                 print(f"'study_sessions.{column}' already exists")
 
+        # P1: Reviews created before this release did not retain their owning
+        # study session. Add the nullable column idempotently for existing
+        # databases; historic reviews stay available for analytics.
+        cursor.execute("PRAGMA table_info(flashcard_reviews)")
+        review_columns = {row[1] for row in cursor.fetchall()}
+        if "session_id" not in review_columns:
+            cursor.execute(
+                "ALTER TABLE flashcard_reviews "
+                "ADD COLUMN session_id INTEGER REFERENCES study_sessions(id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS ix_flashcard_reviews_session_id "
+                "ON flashcard_reviews(session_id)"
+            )
+            print("Added 'session_id' column to 'flashcard_reviews'")
+        else:
+            print("'flashcard_reviews.session_id' already exists")
+
         conn.commit()
         print("Migration completed successfully!")
     finally:
@@ -150,4 +170,3 @@ def migrate(db_path: str = None):
 
 if __name__ == "__main__":
     migrate()
-

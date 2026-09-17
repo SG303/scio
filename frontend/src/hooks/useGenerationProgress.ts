@@ -44,13 +44,20 @@ export function useGenerationProgress() {
     void poll()
   }
 
-  const cancel = async () => {
+  const cancel = async (): Promise<boolean> => {
     const token = activeTokenRef.current
-    if (!token) return
+    if (!token) return false
     try {
       await generationApi.cancel(token)
+      // The server aborts cooperatively at the next batch boundary. Reflect
+      // the accepted request immediately instead of leaving a stale spinner.
+      setProgress({ status: 'cancelled', message: 'Cancellation requested' })
+      stopPolling()
+      activeTokenRef.current = null
+      return true
     } catch {
       // already finished — nothing to cancel
+      return false
     }
   }
 

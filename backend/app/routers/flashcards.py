@@ -820,6 +820,23 @@ async def submit_review(
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
 
+    # Resolve the session before changing any card state. This avoids orphaned
+    # review records when a stale/mismatched session id was supplied.
+    session = None
+    if session_id is not None:
+        result = await db.execute(
+            select(StudySession).where(StudySession.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            raise HTTPException(status_code=404, detail="Study session not found")
+        if session.completed_at:
+            raise HTTPException(status_code=400, detail="Study session already completed")
+        if session.deck_id is not None and session.deck_id != card.deck_id:
+            raise HTTPException(
+                status_code=400, detail="Card does not belong to the study session deck"
+            )
+
     # Store old state for review record
     old_state = card.state
     old_interval = card.interval_days
@@ -848,6 +865,7 @@ async def submit_review(
     # Create review record
     review_record = FlashcardReview(
         card_id=card_id,
+        session_id=session.id if session else None,
         rating=review.rating,
         time_taken_ms=review.time_taken_ms,
         state_before=old_state,
@@ -856,33 +874,26 @@ async def submit_review(
     db.add(review_record)
 
     # Update session if provided
-    if session_id is not None:
-        result = await db.execute(
-            select(StudySession).where(StudySession.id == session_id)
-        )
-        session = result.scalar_one_or_none()
-        if session:
-            # Track studied card
-            cards_studied = set()
-            if session.cards_studied_json:
-                try:
-                    cards_studied = set(json.loads(session.cards_studied_json))
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            cards_studied.add(card_id)
-            session.cards_studied_json = json.dumps(list(cards_studied))
+    if session:
+        # Track studied card
+        cards_studied = set()
+        if session.cards_studied_json:
+            try:
+                cards_studied = set(json.loads(session.cards_studied_json))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        cards_studied.add(card_id)
+        session.cards_studied_json = json.dumps(list(cards_studied))
 
-            # Always stamp the study date so the daily new-card quota resets
-            # correctly the next day — even when this session only touched
-            # review/relearning cards and no new ones
-            session.study_date = utc_now().date()
+        # Always stamp the study date so the daily new-card quota resets
+        # correctly the next day — even when this session only touched
+        # review/relearning cards and no new ones
+        session.study_date = utc_now().date()
 
-            if (
-                old_state == "new" and review.rating >= 2
-            ):  # Rating >= Hard counts as reviewed
-                session.new_cards_reviewed_today = (
-                    session.new_cards_reviewed_today or 0
-                ) + 1
+        if old_state == "new" and review.rating >= 2:  # Rating >= Hard counts as reviewed
+            session.new_cards_reviewed_today = (
+                session.new_cards_reviewed_today or 0
+            ) + 1
 
     await db.commit()
     await db.refresh(card)
@@ -936,24 +947,12 @@ async def complete_session(
     if session.completed_at:
         raise HTTPException(status_code=400, detail="Session already completed")
 
-    # Calculate session stats from reviews made during session
+    # Reviews carry their session ID. Time-window filtering would attribute a
+    # review made in an overlapping session for the same deck to this session.
     result = await db.execute(
-        select(FlashcardReview).where(
-            and_(
-                FlashcardReview.reviewed_at >= session.started_at,
-                FlashcardReview.reviewed_at <= utc_now(),
-            )
-        )
+        select(FlashcardReview).where(FlashcardReview.session_id == session.id)
     )
     reviews = result.scalars().all()
-
-    # If deck_id is set, filter to that deck's cards
-    if session.deck_id:
-        result = await db.execute(
-            select(Flashcard.id).where(Flashcard.deck_id == session.deck_id)
-        )
-        deck_card_ids = set(row[0] for row in result.fetchall())
-        reviews = [r for r in reviews if r.card_id in deck_card_ids]
 
     session.completed_at = utc_now()
     session.total_time_ms = completion.total_time_ms
