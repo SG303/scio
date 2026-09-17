@@ -34,7 +34,9 @@ import type {
   AddCardsRequest,
   CreateAndGenerateTestRequest,
   CreateAndGenerateDeckRequest,
-  CreateAndGenerateDeckResponse
+  CreateAndGenerateDeckResponse,
+  ImportCardsResult,
+  FlashcardAnalytics
 } from '@/types'
 
 const API_BASE = '/api'
@@ -57,6 +59,27 @@ async function fetchApi<T>(
   }
 
   return response.json()
+}
+
+// P6.2: generation progress tracking
+export interface GenerationProgress {
+  status: 'running' | 'completed' | 'failed' | 'cancelled'
+  stage?: string
+  batch?: number
+  batches_total?: number
+  done?: number
+  total?: number
+  message?: string
+}
+
+export const generationApi = {
+  getProgress: (token: string) =>
+    fetchApi<GenerationProgress>(`/generation/progress/${token}`),
+
+  cancel: (token: string) =>
+    fetchApi<{ status: string }>(`/generation/progress/${token}/cancel`, {
+      method: 'POST',
+    }),
 }
 
 // AI Models
@@ -143,8 +166,8 @@ export const testsApi = {
   listConfigs: () =>
     fetchApi<TestConfig[]>('/tests/configs'),
   
-  generate: (configId: number, options?: GenerateFromTemplateRequest) =>
-    fetchApi<Test>(`/tests/generate/${configId}`, {
+  generate: (configId: number, options?: GenerateFromTemplateRequest, progressToken?: string) =>
+    fetchApi<Test>(`/tests/generate/${configId}${progressToken ? `?progress_token=${progressToken}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(options || {}),
     }),
@@ -153,9 +176,9 @@ export const testsApi = {
   getConfigScores: (configId: number, limit = 20) =>
     fetchApi<number[]>(`/tests/configs/${configId}/scores?limit=${limit}`),
 
-  // P5.2: config + test in one call — failed generation leaves no config behind
-  createAndGenerate: (data: CreateAndGenerateTestRequest) =>
-    fetchApi<Test>('/tests/create-and-generate', {
+  // P6.2: combined create + generate with progress token
+  createAndGenerate: (data: CreateAndGenerateTestRequest, progressToken?: string) =>
+    fetchApi<Test>(`/tests/create-and-generate${progressToken ? `?progress_token=${progressToken}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -204,8 +227,9 @@ export const testsApi = {
   deleteTemplate: (id: number) =>
     fetchApi<void>(`/tests/templates/${id}`, { method: 'DELETE' }),
   
-  generateFromTemplate: (templateId: number, numQuestions?: number) =>
-    fetchApi<Test>(`/tests/generate/${templateId}`, {
+  // P6.2: optional progress token for live progress while generating
+  generateFromTemplate: (templateId: number, numQuestions?: number, progressToken?: string) =>
+    fetchApi<Test>(`/tests/generate/${templateId}${progressToken ? `?progress_token=${progressToken}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ num_questions: numQuestions }),
     }),
@@ -242,6 +266,41 @@ export const flashcardsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // P6.1: export a deck as Anki .apkg or CSV — triggers a browser download
+  exportDeck: async (deckId: number, format: 'apkg' | 'csv', deckTitle: string) => {
+    const response = await fetch(`${API_BASE}/flashcards/decks/${deckId}/export?format=${format}`, {
+      method: 'POST',
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Export failed' }))
+      throw new Error(error.detail || 'Export failed')
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${deckTitle.replace(/[^\w\-. ]/g, '_') || 'deck'}.${format}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  },
+
+  // P6.1: import cards from a CSV file (columns: front,back,state)
+  importCards: async (deckId: number, file: File): Promise<ImportCardsResult> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_BASE}/flashcards/decks/${deckId}/import`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Import failed' }))
+      throw new Error(error.detail || 'Import failed')
+    }
+    return response.json()
+  },
 
   generateCards: (deckId: number, data: GenerateFlashcardsRequest) =>
     fetchApi<GenerateFlashcardsResponse>(`/flashcards/decks/${deckId}/generate`, {
@@ -309,6 +368,9 @@ export const flashcardsApi = {
     fetchApi<StudySession>(`/flashcards/sessions/${sessionId}`),
   
   // Stats
+  // P6.3: aggregated analytics for the stats page
+  getAnalytics: () => fetchApi<FlashcardAnalytics>('/flashcards/analytics'),
+
   getGlobalStats: () =>
     fetchApi<GlobalFlashcardStats>('/flashcards/stats'),
 

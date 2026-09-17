@@ -20,6 +20,7 @@ export const queryKeys = {
   flashcardCards: (id: QueryId) => ['flashcard-cards', String(id ?? '')] as const,
   flashcardStats: ['flashcard-stats'] as const,
   streak: ['streak'] as const,
+  analytics: ['analytics'] as const,
   incompleteSession: (deckId: QueryId) => ['incomplete-session', String(deckId ?? '')] as const,
   studyQueue: (deckId: QueryId, sessionId: number | null) =>
     ['study-queue', String(deckId ?? ''), sessionId] as const,

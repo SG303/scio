@@ -8,6 +8,14 @@ import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
+import {
+  cacheStudyQueue,
+  getCachedStudyQueue,
+  flushOfflineReviews,
+  isNetworkError,
+  queueOfflineReview,
+  removeQueuedReviews,
+} from '@/lib/offlineQueue'
 
 // P2.2: a review that failed to save — offered to the user with a retry
 // button for exactly this card and rating
@@ -58,6 +66,8 @@ export default function StudySession() {
     easy: 0,
   })
   const [isTransitioning, setIsTransitioning] = useState(false)
+  // P6.4: ratings are queued locally while offline
+  const [isOffline, setIsOffline] = useState(false)
   const [saveError, setSaveError] = useState<SaveError | null>(null)
   const [exitFailed, setExitFailed] = useState(false)
   // P2.3: real interval of the last rated card (from ReviewResponse)
@@ -123,6 +133,15 @@ export default function StudySession() {
     queryFn: () => flashcardsApi.getStudyQueue(parseInt(deckId!), sessionId || undefined),
     enabled: !!deckId && !!sessionId,
   })
+
+  // P6.4: cache queue / offline fallback
+  useEffect(() => {
+    if (studyQueue) cacheStudyQueue(deckId!, studyQueue)
+  }, [studyQueue, deckId])
+
+  const cachedQueue = getCachedStudyQueue(deckId!)
+  // A failed queue load with a cached copy = offline studying
+  const effectiveQueue = studyQueue ?? (error && cachedQueue ? cachedQueue : null)
 
   // Fetch deck info for title
   const { data: deck } = useQuery({
@@ -216,10 +235,10 @@ export default function StudySession() {
   // P2.2: a failed submitReview must not freeze the session — the card
   // becomes interactive again and an inline retry banner appears instead.
   const handleRate = async (rating: 1 | 2 | 3 | 4) => {
-    if (!studyQueue || currentIndex >= studyQueue.cards.length || isTransitioning) return
+    if (!effectiveQueue || currentIndex >= effectiveQueue.cards.length || isTransitioning) return
     if (exitRequestedRef.current) return // M4: no writes after exit
 
-    const card = studyQueue.cards[currentIndex]
+    const card = effectiveQueue.cards[currentIndex]
     const timeTakenMs = Date.now() - cardStartTime.current
 
     // Start transition animation
@@ -234,12 +253,29 @@ export default function StudySession() {
       })
       // P2.3: show the real SM-2 interval for this card after rating
       setNextReviewHint(formatNextReview(response.next_review_at, response.interval_days))
-    } catch {
-      // Review not saved — unfreeze the card and offer a retry for exactly
-      // this card; the rating is only counted once it was actually saved
-      setIsTransitioning(false)
-      setSaveError({ cardId: card.id, rating })
-      return
+      setIsOffline(false)
+      // P6.4: this card was rated live — a stale offline queue entry for
+      // it would re-apply an older rating on flush, so drop it
+      removeQueuedReviews([card.id])
+    } catch (err) {
+      if (isNetworkError(err)) {
+        // P6.4: offline — remember the rating locally and continue
+        // studying; it is replayed in order once the connection returns
+        queueOfflineReview({
+          cardId: card.id,
+          rating,
+          timeTakenMs,
+          sessionId: sessionId ?? null,
+        })
+        setIsOffline(true)
+        setNextReviewHint(null)
+      } else {
+        // Review not saved — unfreeze the card and offer a retry for exactly
+        // this card; the rating is only counted once it was actually saved
+        setIsTransitioning(false)
+        setSaveError({ cardId: card.id, rating })
+        return
+      }
     }
 
     setSaveError(null)
@@ -254,7 +290,7 @@ export default function StudySession() {
 
   // Post-rating flow: stats, animation, next card or session completion
   const advanceAfterRating = async (rating: 1 | 2 | 3 | 4) => {
-    if (!studyQueue) return
+    if (!effectiveQueue) return
 
     // Update local stats
     setSessionStats((prev) => ({
@@ -273,7 +309,7 @@ export default function StudySession() {
     if (exitRequestedRef.current) return
 
     // Move to next card or complete session
-    if (currentIndex + 1 >= studyQueue.cards.length) {
+    if (currentIndex + 1 >= effectiveQueue.cards.length) {
       // Session complete
       const totalTimeMs = Date.now() - sessionStartTime.current
 
@@ -296,7 +332,7 @@ export default function StudySession() {
         state: {
           deckId: parseInt(deckId!),
           deckTitle: deck?.title || 'Study Session',
-          cardsReviewed: studyQueue.cards.length,
+          cardsReviewed: effectiveQueue.cards.length,
           stats: {
             ...sessionStats,
             [ratingStatsKey(rating)]: sessionStats[ratingStatsKey(rating)] + 1,
@@ -337,10 +373,18 @@ export default function StudySession() {
     navigate(`/flashcards/${deckId}`)
   }
 
+  // P6.4: replay offline-queued reviews when the connection is back
+  useEffect(() => {
+    const flush = () => void flushOfflineReviews()
+    flush()
+    window.addEventListener('online', flush)
+    return () => window.removeEventListener('online', flush)
+  }, [])
+
   // P4.1: Esc exits the session — active only while a queue is loaded.
   // Re-subscribed each render so it always closes over the current handlers.
   useEffect(() => {
-    if (!studyQueue || studyQueue.cards.length === 0) return
+    if (!effectiveQueue || effectiveQueue.cards.length === 0) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -384,7 +428,7 @@ export default function StudySession() {
     )
   }
 
-  if (error || startFailed || !studyQueue) {
+  if ((error && !cachedQueue) || startFailed || !effectiveQueue) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center">
         <h2 className="text-xl font-semibold mb-2">Failed to load study session</h2>
@@ -398,7 +442,7 @@ export default function StudySession() {
     )
   }
 
-  if (studyQueue.cards.length === 0) {
+  if (effectiveQueue.cards.length === 0) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center p-4">
         <div className="text-center">
@@ -417,8 +461,8 @@ export default function StudySession() {
     )
   }
 
-  const card = studyQueue.cards[currentIndex]
-  const progress = ((currentIndex + 1) / studyQueue.cards.length) * 100
+  const card = effectiveQueue.cards[currentIndex]
+  const progress = ((currentIndex + 1) / effectiveQueue.cards.length) * 100
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
@@ -435,9 +479,17 @@ export default function StudySession() {
           {deck?.title || 'Study Session'}
         </h1>
 
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-muted-foreground flex items-center gap-2">
+          {isOffline && (
+            <span
+              className="text-orange-400 text-xs"
+              title="Ratings are saved locally and synced once you're back online"
+            >
+              Offline — saved locally
+            </span>
+          )}
           <span className="font-medium text-foreground">{currentIndex + 1}</span>
-          <span> / {studyQueue.cards.length}</span>
+          <span> / {effectiveQueue.cards.length}</span>
         </div>
       </header>
 

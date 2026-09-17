@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, NavLink, Link } from 'react-router-dom'
-import { FileText, Settings, Home, ClipboardList, Layers, FolderOpen, Sparkles } from 'lucide-react'
+import { FileText, Settings, Home, ClipboardList, Layers, FolderOpen, Sparkles, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Dashboard from '@/pages/Dashboard'
@@ -10,6 +10,7 @@ import Results from '@/pages/Results'
 import ModelsSettings from '@/pages/ModelsSettings'
 import TestTemplates from '@/pages/TestTemplates'
 import TestHistory from '@/pages/TestHistory'
+import Stats from '@/pages/Stats'
 import FlashcardDecks from '@/pages/flashcards/FlashcardDecks'
 import CreateFlashcards from '@/pages/flashcards/CreateFlashcards'
 import DeckDetail from '@/pages/flashcards/DeckDetail'
@@ -24,6 +25,7 @@ const navItems = [
   { to: '/documents', icon: FileText, label: 'Documents' },
   { to: '/tests', icon: ClipboardList, label: 'Tests' },
   { to: '/templates', icon: Sparkles, label: 'Templates' },
+  { to: '/stats', icon: BarChart3, label: 'Stats' },
   { to: '/flashcards', icon: Layers, label: 'Flashcards' },
   { to: '/settings', icon: Settings, label: 'AI Models' },
 ]
@@ -103,6 +105,7 @@ function App() {
             <Route path="/documents" element={<Documents />} />
             <Route path="/tests" element={<TestHistory />} />
             <Route path="/templates" element={<TestTemplates />} />
+            <Route path="/stats" element={<Stats />} />
             <Route path="/create" element={<CreateTest />} />
             <Route path="/test/:testId" element={<TakeTest />} />
             <Route path="/results/:testId" element={<Results />} />

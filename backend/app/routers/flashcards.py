@@ -5,14 +5,19 @@ Implements all endpoints for flashcard deck management, card operations,
 study sessions, and spaced repetition functionality.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 import json
+import csv
+import io
+import re
+
+import genanki
 
 from app.database import get_db
 from app.models import (
@@ -24,6 +29,8 @@ from app.models import (
     AIModel,
     Test,
     Question,
+    Subject,
+    TestConfig,
 )
 from app.schemas.flashcard import (
     FlashcardDeckCreate,
@@ -45,6 +52,12 @@ from app.schemas.flashcard import (
     CreateFromTestResponse,
     CreateAndGenerateDeckRequest,
     CreateAndGenerateDeckResponse,
+    ImportCardsResult,
+    ReviewsPerDay,
+    DeckAnswerTime,
+    SubjectScorePoint,
+    SubjectScoreSeries,
+    FlashcardAnalytics,
     DeckStats,
     GlobalStats,
     StreakResponse,
@@ -212,6 +225,246 @@ async def delete_deck(deck_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return {"message": "Deck deleted successfully"}
+
+
+# ============== Analytics (P6.3) ==============
+
+
+@router.get("/analytics", response_model=FlashcardAnalytics)
+async def get_flashcard_analytics(db: AsyncSession = Depends(get_db)):
+    """P6.3: aggregated study numbers for the stats page.
+
+    All values come from SQL COUNT/AVG/GROUP BY — no card or review
+    objects are materialized.
+    """
+    now = utc_now()
+
+    # Reviews per day for the last 14 days (including today)
+    days = 14
+    start = (now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    result = await db.execute(
+        select(
+            func.date(FlashcardReview.reviewed_at).label("day"),
+            func.count(FlashcardReview.id),
+        )
+        .where(FlashcardReview.reviewed_at >= start)
+        .group_by("day")
+    )
+    counts_by_day = {str(day): count for day, count in result.all()}
+
+    reviews_per_day = [
+        ReviewsPerDay(
+            date=(start + timedelta(days=i)).date().isoformat(),
+            reviews=counts_by_day.get((start + timedelta(days=i)).date().isoformat(), 0),
+        )
+        for i in range(days)
+    ]
+
+    # Card state distribution across all decks
+    result = await db.execute(
+        select(Flashcard.state, func.count(Flashcard.id)).group_by(Flashcard.state)
+    )
+    counts_by_state = dict(result.all())
+    state_distribution = {
+        "new": counts_by_state.get("new", 0),
+        "learning": counts_by_state.get("learning", 0)
+        + counts_by_state.get("relearning", 0),
+        "review": counts_by_state.get("review", 0),
+    }
+
+    # Global average answer time
+    result = await db.execute(
+        select(func.avg(FlashcardReview.time_taken_ms)).where(
+            FlashcardReview.time_taken_ms.isnot(None)
+        )
+    )
+    avg_answer_time_ms = result.scalar_one()
+
+    # Average answer time per deck
+    result = await db.execute(
+        select(
+            FlashcardDeck.id,
+            FlashcardDeck.title,
+            func.avg(FlashcardReview.time_taken_ms),
+            func.count(FlashcardReview.id),
+        )
+        .join(Flashcard, Flashcard.deck_id == FlashcardDeck.id)
+        .join(FlashcardReview, FlashcardReview.card_id == Flashcard.id)
+        .group_by(FlashcardDeck.id)
+        .order_by(FlashcardDeck.title)
+    )
+    per_deck = [
+        DeckAnswerTime(
+            deck_id=deck_id,
+            deck_title=title,
+            avg_time_ms=round(avg_ms, 0) if avg_ms is not None else None,
+            review_count=review_count,
+        )
+        for deck_id, title, avg_ms, review_count in result.all()
+    ]
+
+    # Completed test scores per subject (chronological)
+    result = await db.execute(
+        select(Subject.id, Subject.title, Test.id, Test.score, Test.completed_at)
+        .join(TestConfig, Test.config_id == TestConfig.id)
+        .join(Subject, TestConfig.subject_id == Subject.id)
+        .where(and_(Test.status == "completed", Test.score.isnot(None)))
+        .order_by(Subject.id, Test.completed_at)
+    )
+    series_by_subject: dict = {}
+    for subject_id, subject_title, test_id, score, completed_at in result.all():
+        series = series_by_subject.setdefault(
+            subject_id,
+            SubjectScoreSeries(subject_id=subject_id, subject_title=subject_title, points=[]),
+        )
+        series.points.append(
+            SubjectScorePoint(
+                test_id=test_id,
+                date=(completed_at.date().isoformat() if completed_at else None),
+                score=score,
+            )
+        )
+    # drop subjects without usable dates
+    subject_scores = [
+        s for s in series_by_subject.values() if all(p.date for p in s.points)
+    ]
+
+    return FlashcardAnalytics(
+        reviews_per_day=reviews_per_day,
+        state_distribution=state_distribution,
+        avg_answer_time_ms=round(avg_answer_time_ms, 0)
+        if avg_answer_time_ms is not None
+        else None,
+        per_deck=per_deck,
+        subject_scores=subject_scores,
+    )
+
+
+# ============== Deck Export / Import (P6.1) ==============
+
+# Stable Anki model for all Scio exports (id must be random-but-fixed)
+_SCIO_ANKI_MODEL = genanki.Model(
+    1607392319001,
+    "Scio Basic",
+    fields=[{"name": "Front"}, {"name": "Back"}],
+    templates=[
+        {
+            "name": "Card 1",
+            "qfmt": "{{Front}}",
+            "afmt": '{{FrontSide}}<hr id="answer">{{Back}}',
+        }
+    ],
+)
+
+
+def _safe_filename(title: str) -> str:
+    """Filesystem-safe name derived from a deck title."""
+    safe = re.sub(r"[^\w\-. ]", "_", title).strip().rstrip(".")
+    return safe or "deck"
+
+
+@router.post("/decks/{deck_id}/export")
+async def export_deck(
+    deck_id: int,
+    format: str = Query(..., pattern="^(apkg|csv)$"),
+    db: AsyncSession = Depends(get_db),
+):
+    """P6.1: export a deck as Anki .apkg or CSV (front,back,state)."""
+    result = await db.execute(select(FlashcardDeck).where(FlashcardDeck.id == deck_id))
+    deck = result.scalar_one_or_none()
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+
+    result = await db.execute(
+        select(Flashcard)
+        .where(Flashcard.deck_id == deck_id)
+        .order_by(Flashcard.id)
+    )
+    cards = result.scalars().all()
+
+    filename = _safe_filename(deck.title)
+
+    if format == "apkg":
+        anki_deck = genanki.Deck(2059400110 + deck_id, deck.title)
+        for card in cards:
+            anki_deck.add_note(
+                genanki.Note(model=_SCIO_ANKI_MODEL, fields=[card.front, card.back])
+            )
+        buf = io.BytesIO()
+        genanki.Package(anki_deck).write_to_file(buf)
+        data = buf.getvalue()
+        return Response(
+            content=data,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.apkg"'},
+        )
+
+    # CSV export: same columns the import expects
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["front", "back", "state"])
+    for card in cards:
+        writer.writerow([card.front, card.back, card.state])
+    return Response(
+        content=buf.getvalue().encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
+    )
+
+
+@router.post("/decks/{deck_id}/import", response_model=ImportCardsResult)
+async def import_cards(
+    deck_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """P6.1: import cards from a CSV with the columns front,back,state.
+
+    Cards are always imported as new (state column is ignored), rows
+    without front and back are skipped.
+    """
+    result = await db.execute(select(FlashcardDeck).where(FlashcardDeck.id == deck_id))
+    deck = result.scalar_one_or_none()
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded CSV")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames or "front" not in reader.fieldnames or "back" not in reader.fieldnames:
+        raise HTTPException(
+            status_code=400, detail="CSV must have the columns: front, back, state"
+        )
+
+    cards_imported = 0
+    rows_skipped = 0
+    for row in reader:
+        front = (row.get("front") or "").strip()
+        back = (row.get("back") or "").strip()
+        if not front or not back:
+            rows_skipped += 1
+            continue
+        db.add(
+            Flashcard(
+                deck_id=deck_id,
+                front=front,
+                back=back,
+                state="new",
+                source_type="imported",
+            )
+        )
+        cards_imported += 1
+
+    if cards_imported:
+        await db.commit()
+
+    return ImportCardsResult(cards_imported=cards_imported, rows_skipped=rows_skipped)
 
 
 # ============== Card Generation ==============
