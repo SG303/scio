@@ -2,10 +2,11 @@
 Unit tests for the AI response parsers.
 
 These cover the highest-risk backend paths: turning LLM JSON responses
-into test questions and flashcards. Tests marked CURRENT pin documented
-bugs (B1/B2 from the code review, fixed in roadmap Phase 1): they freeze
-today's behaviour so the fixes cannot change anything unnoticed — each
-must be flipped when its roadmap package lands.
+into test questions and flashcards. P1.1/P1.2 behaviours are pinned by
+dedicated regression tests (invalid answer keys are discarded, repair
+regexes stay inside choices arrays, structured-output objects are
+unwrapped). The remaining CURRENT test pins B10b (unanswered questions
+count as wrong in fromTest) until roadmap package P1.3 lands.
 """
 import json
 
@@ -64,18 +65,18 @@ class TestParseQuestionsResponse:
         questions = parse_questions_response(content, num_choices=2)
         assert questions[0]["choices"] == ["Paris", "Berlin"]
 
-    def test_CURRENT_single_letter_dict_keys_are_mangled(self):
-        """B2 (roadmap P1.2): choices given as {"A": "Paris", "B": "Berlin"}
-        are destroyed by the global regex fix (sub1 rewrites single-capital
-        key-value pairs), making the JSON unparseable. P1.2 must make this
-        input produce ["Paris", "Berlin"].
-        """
+    def test_single_letter_dict_choices_parse_correctly(self):
+        """P1.2 regression: choices as {"A": "Paris", "B": "Berlin"} were
+        destroyed by the former global regex fixes (unparseable garbage).
+        With repairs scoped to broken choices arrays, valid dict choices
+        parse and convert by sorted key."""
         content = json.dumps(
             [{"question": "Q1", "choices": {"A": "Paris", "B": "Berlin"},
               "correct_answer": 0}]
         )
-        with pytest.raises(ValueError):
-            parse_questions_response(content, num_choices=2)
+        questions = parse_questions_response(content, num_choices=2)
+        assert questions[0]["choices"] == ["Paris", "Berlin"]
+        assert questions[0]["correct_answer"] == 0
 
     def test_letter_choice_prefixes_removed(self):
         content = json.dumps(
@@ -193,18 +194,60 @@ class TestParseQuestionsResponse:
         questions = parse_questions_response(content, num_choices=4)
         assert [x["correct_answer"] for x in questions] == [0, 3]
 
-    def test_CURRENT_explanation_with_letter_colon_pattern_survives(self):
-        """B2 regression guard: an explanation containing `X: "text"` must
-        not be mangled by the global regex fixes. This test documents the
-        inputs P1.2 must keep working after moving the regexes into the
-        fallback path.
-        """
-        tricky = 'The mapping is B: "Bearer" in the Authorization header'
+    def test_explanation_with_letter_colon_pattern_survives_verbatim(self):
+        """P1.2 regression guard (briefing case c): patterns like
+        `X: "text"` inside explanations must never be rewritten by the
+        repair regexes — they now run only inside broken choices arrays."""
+        tricky = 'The mapping is B: "Bearer" and A: "Apfel" in the header'
         content = json.dumps([q("Q1", explanation=tricky)])
         questions = parse_questions_response(content, num_choices=4)
-        # Current code path mangles or preserves this depending on regex
-        # order — after P1.2 the explanation must survive verbatim:
-        assert "Bearer" in questions[0]["explanation"]
+        assert questions[0]["explanation"] == tricky
+
+    def test_explanation_starting_with_letter_prefix_survives_verbatim(self):
+        """P1.2: the old global sub3 stripped leading 'A. ' from ANY
+        string, including explanations. Explanations must survive
+        verbatim; only actual choices get prefix-cleaned."""
+        tricky = "A. The capital of France is Paris."
+        content = json.dumps([q("Q1", explanation=tricky)])
+        questions = parse_questions_response(content, num_choices=4)
+        assert questions[0]["explanation"] == tricky
+
+    def test_structured_output_object_format_accepted(self):
+        """With response_format json_object (P1.2), models return
+        {"questions": [...]} — the parser must unwrap it."""
+        content = json.dumps({"questions": [q("Q1", correct=1), q("Q2", correct=2)]})
+        questions = parse_questions_response(content, num_choices=4)
+        assert len(questions) == 2
+        assert questions[0]["correct_answer"] == 1
+
+    def test_broken_choices_array_repaired_in_fallback(self):
+        """P1.2: choices written as invalid JSON (["A": "text"]) are still
+        repaired — but only inside the choices array, and only after the
+        first parse attempt failed."""
+        content = (
+            '[{"question": "Q1", "choices": ["A": "Paris", "B": "Berlin", '
+            '"C": "Madrid", "D": "Rome"], "correct_answer": 0, '
+            '"explanation": "E"}]'
+        )
+        questions = parse_questions_response(content, num_choices=4)
+        assert len(questions) == 1
+        assert questions[0]["choices"] == ["Paris", "Berlin", "Madrid", "Rome"]
+        assert questions[0]["correct_answer"] == 0
+
+    def test_broken_json_explanation_not_rewritten_by_repair(self):
+        """P1.2: with invalid JSON, the repair pass must stay inside the
+        choices array — an explanation containing '"A": "Apfel"' must
+        not be rewritten to 'Apfel' by the repair."""
+        content = (
+            '[{"question": "Q1", "choices": ["Alpha", "Beta", "Gamma", "Delta"], '
+            '"correct_answer": 0, "explanation": "The mapping is "A": "Apfel" here"}]'
+        )
+        questions = parse_questions_response(content, num_choices=4)
+        # Falls back to manual extraction; the question and its answer
+        # key survive
+        assert len(questions) == 1
+        assert questions[0]["question"] == "Q1"
+        assert questions[0]["correct_answer"] == 0
 
 
 class TestExtractQuestionsFallback:
@@ -271,6 +314,13 @@ class TestParseFlashcardsResponse:
 
     def test_alternate_keys_q_a(self):
         content = json.dumps([{"q": "F1", "a": "B1"}])
+        cards = parse_flashcards_response(content)
+        assert cards == [{"front": "F1", "back": "B1"}]
+
+    def test_structured_output_object_format_accepted(self):
+        """With response_format json_object (P1.2), models return
+        {"flashcards": [...]} — the parser must unwrap it."""
+        content = json.dumps({"flashcards": [{"front": "F1", "back": "B1"}]})
         cards = parse_flashcards_response(content)
         assert cards == [{"front": "F1", "back": "B1"}]
 
