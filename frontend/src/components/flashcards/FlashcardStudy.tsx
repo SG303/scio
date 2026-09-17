@@ -125,7 +125,8 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
         <p className="text-center text-sm text-muted-foreground mb-3">
           How well did you know this? <span className="hidden sm:inline">(press 1–4)</span>
         </p>
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+        {/* P6.4: two columns on phones — larger touch targets; 4 across from sm up */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           <Button
             variant="outline"
             className="flex flex-col h-auto py-3 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
