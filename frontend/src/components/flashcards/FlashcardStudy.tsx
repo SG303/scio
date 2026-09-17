@@ -13,6 +13,18 @@ interface FlashcardStudyProps {
 export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyProps) {
   const [isFlipped, setIsFlipped] = useState(false)
 
+  // P2.3: honest interval hints. The previous hardcoded numbers
+  // (<10m/1d/3d/7d) contradicted the actual SM-2 scheduling — the real
+  // interval depends on the card's history and is shown after the rating
+  // (next_review_at), so these labels stay qualitative on purpose. Only
+  // "Again" is deterministic: it always resets to the 1-minute step.
+  const intervalHints: Record<1 | 2 | 3 | 4, string> = {
+    1: '1m',
+    2: 'shorter',
+    3: 'normal',
+    4: 'longer',
+  }
+
   const handleRate = (rating: 1 | 2 | 3 | 4) => {
     onRate(rating)
     // Don't reset flip state immediately - let the transition animation handle it
@@ -93,7 +105,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
             disabled={isSubmitting}
           >
             <span className="font-semibold text-red-400">Again</span>
-            <span className="text-xs text-muted-foreground">&lt;10m</span>
+            <span className="text-xs text-muted-foreground">{intervalHints[1]}</span>
           </Button>
           <Button
             variant="outline"
@@ -102,7 +114,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
             disabled={isSubmitting}
           >
             <span className="font-semibold text-orange-400">Hard</span>
-            <span className="text-xs text-muted-foreground">1d</span>
+            <span className="text-xs text-muted-foreground">{intervalHints[2]}</span>
           </Button>
           <Button
             variant="outline"
@@ -111,7 +123,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
             disabled={isSubmitting}
           >
             <span className="font-semibold text-blue-400">Good</span>
-            <span className="text-xs text-muted-foreground">3d</span>
+            <span className="text-xs text-muted-foreground">{intervalHints[3]}</span>
           </Button>
           <Button
             variant="outline"
@@ -120,7 +132,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
             disabled={isSubmitting}
           >
             <span className="font-semibold text-emerald-400">Easy</span>
-            <span className="text-xs text-muted-foreground">7d</span>
+            <span className="text-xs text-muted-foreground">{intervalHints[4]}</span>
           </Button>
         </div>
       </div>
