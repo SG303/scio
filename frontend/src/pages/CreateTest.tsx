@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Sparkles, Loader2, FileText, CheckCircle2, Coins } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,16 +34,6 @@ export default function CreateTest() {
     queryFn: () => modelsApi.list(true),
   })
 
-  const createConfigMutation = useMutation({
-    mutationFn: testsApi.createConfig,
-  })
-
-  const generateMutation = useMutation({
-    mutationFn: async (configId: number) => {
-      return testsApi.generate(configId)
-    },
-  })
-
   const handleDocumentToggle = (docId: number) => {
     setFormData((prev) => ({
       ...prev,
@@ -58,12 +48,10 @@ export default function CreateTest() {
     setIsGenerating(true)
 
     try {
-      // First create the config
-      const config = await createConfigMutation.mutateAsync(formData)
-      
-      // Then generate the test
-      const test = await generateMutation.mutateAsync(config.id)
-      
+      // P5.2: config + test in one call — a failed generation no longer
+      // leaves an empty config behind
+      const test = await testsApi.createAndGenerate({ ...formData })
+
       // Navigate to the test
       navigate(`/test/${test.id}`)
     } catch (err) {

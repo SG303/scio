@@ -38,6 +38,9 @@ class AIModel(Base):
     openrouter_id = Column(String(255), nullable=False, unique=True)
     description = Column(Text, nullable=True)
     is_enabled = Column(Boolean, default=True)
+    # P5.3f: seeded default models can be replaced on re-seed without
+    # touching user-added models
+    is_default = Column(Boolean, default=False, server_default="0")
     created_at = Column(DateTime, default=utc_now)
 
     # Relationships

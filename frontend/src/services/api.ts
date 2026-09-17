@@ -31,7 +31,10 @@ import type {
   GenerateTestInSubjectRequest,
   GenerateFlashcardsInSubjectRequest,
   AddQuestionsRequest,
-  AddCardsRequest
+  AddCardsRequest,
+  CreateAndGenerateTestRequest,
+  CreateAndGenerateDeckRequest,
+  CreateAndGenerateDeckResponse
 } from '@/types'
 
 const API_BASE = '/api'
@@ -145,6 +148,17 @@ export const testsApi = {
       method: 'POST',
       body: JSON.stringify(options || {}),
     }),
+
+  // P5.1: score history for the template sparkline
+  getConfigScores: (configId: number, limit = 20) =>
+    fetchApi<number[]>(`/tests/configs/${configId}/scores?limit=${limit}`),
+
+  // P5.2: config + test in one call — failed generation leaves no config behind
+  createAndGenerate: (data: CreateAndGenerateTestRequest) =>
+    fetchApi<Test>('/tests/create-and-generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   
   start: (testId: number) =>
     fetchApi<Test>(`/tests/${testId}/start`, { method: 'POST' }),
@@ -222,6 +236,13 @@ export const flashcardsApi = {
     fetchApi<void>(`/flashcards/decks/${deckId}`, { method: 'DELETE' }),
   
   // Card generation
+  // P5.2: deck + cards in one call — failed generation leaves no deck behind
+  createAndGenerateDeck: (data: CreateAndGenerateDeckRequest) =>
+    fetchApi<CreateAndGenerateDeckResponse>('/flashcards/create-and-generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   generateCards: (deckId: number, data: GenerateFlashcardsRequest) =>
     fetchApi<GenerateFlashcardsResponse>(`/flashcards/decks/${deckId}/generate`, {
       method: 'POST',

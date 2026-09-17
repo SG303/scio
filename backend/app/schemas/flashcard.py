@@ -157,6 +157,19 @@ class GenerateFlashcardsResponse(BaseModel):
     cards: List[FlashcardResponse]
 
 
+class CreateAndGenerateDeckRequest(FlashcardDeckCreate):
+    """P5.2: create a deck and generate its first cards in one transaction —
+    a failed generation leaves no empty deck behind."""
+    num_cards: int
+    topic: Optional[str] = None
+
+
+class CreateAndGenerateDeckResponse(BaseModel):
+    """Schema for the combined create-and-generate response."""
+    deck: FlashcardDeckResponse
+    cards_generated: int
+
+
 # ============== Test Integration Schemas ==============
 
 class CreateFromTestRequest(BaseModel):

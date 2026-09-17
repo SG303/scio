@@ -178,7 +178,7 @@ async def generate_test_questions(
                 return questions[:num_questions]
         except Exception as e:
             # Log and continue to fallback strategy
-            print(f"Single-call generation failed, falling back to batches: {e}")
+            logger.warning("Single-call generation failed, falling back to batches: %s", e)
     
     # Strategy 2: Medium batches (25 questions each)
     # More reliable than single call, still much more efficient than small batches
@@ -193,7 +193,7 @@ async def generate_test_questions(
         if len(all_questions) >= num_questions * 0.8:
             return all_questions[:num_questions]
     except Exception as e:
-        print(f"Medium batch generation failed, falling back to small batches: {e}")
+        logger.warning("Medium batch generation failed, falling back to small batches: %s", e)
     
     # Strategy 3: Small batches (10 questions each) - most reliable fallback
     SMALL_BATCH_SIZE = 10
@@ -509,8 +509,9 @@ async def verify_question_integrity(
 ) -> Dict[str, Any]:
     """Verify if a question and its answer key are logically sound"""
     
-    # We use a specific lightweight model as requested
-    VERIFICATION_MODEL = "google/gemini-2.5-flash-lite"
+    # P5.3c: verification model is configurable via settings (default stays
+    # a fast, cheap model)
+    VERIFICATION_MODEL = settings.verification_model
     
     prompt = f"""You are a quality assurance assistant for an exam system. 
 Please review this multiple-choice question to verify if the "Marked Correct Answer" is actually correct and if the question makes sense.
