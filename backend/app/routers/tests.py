@@ -228,6 +228,10 @@ async def create_and_generate_test(
     )
 
     # AI call first — nothing is persisted if it fails
+    if progress_token:
+        generation_progress.update(
+            progress_token, status="running", stage="Starting generation"
+        )
     try:
         questions_data = await generate_test_questions(
             documents=documents,
@@ -238,6 +242,8 @@ async def create_and_generate_test(
             custom_prompt=request.custom_prompt,
             on_progress=_progress_reporter(progress_token),
         )
+        if progress_token:
+            generation_progress.complete(progress_token, len(questions_data), num_questions)
     except GenerationCancelled:
         raise HTTPException(status_code=400, detail="Generation cancelled")
     except ValueError as e:
@@ -252,9 +258,6 @@ async def create_and_generate_test(
         raise HTTPException(
             status_code=500, detail="Failed to generate test. Please try again."
         )
-
-    if progress_token:
-        generation_progress.complete(progress_token, len(questions_data), num_questions)
 
     # Persist config + test + questions in a single commit
     db_config = TestConfig(
@@ -352,6 +355,10 @@ async def generate_test(
     existing_questions = [q.question_text for q in existing_result.scalars().all()]
     
     # Generate questions using AI
+    if progress_token:
+        generation_progress.update(
+            progress_token, status="running", stage="Starting generation"
+        )
     try:
         questions_data = await generate_test_questions(
             documents=documents,
@@ -363,6 +370,8 @@ async def generate_test(
             existing_questions=existing_questions if existing_questions else None,
             on_progress=_progress_reporter(progress_token),
         )
+        if progress_token:
+            generation_progress.complete(progress_token, len(questions_data), num_questions)
     except GenerationCancelled:
         raise HTTPException(status_code=400, detail="Generation cancelled")
     except ValueError as e:
@@ -378,9 +387,6 @@ async def generate_test(
             generation_progress.fail(progress_token, "Generation failed")
         raise HTTPException(status_code=500, detail="Failed to generate test. Please try again or contact support.")
 
-    if progress_token:
-        generation_progress.complete(progress_token, len(questions_data), num_questions)
-    
     # Create test
     test = Test(
         config_id=config.id,

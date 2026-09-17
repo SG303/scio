@@ -77,7 +77,7 @@ export const generationApi = {
     fetchApi<GenerationProgress>(`/generation/progress/${token}`),
 
   cancel: (token: string) =>
-    fetchApi<{ status: string }>(`/generation/progress/${token}/cancel`, {
+    fetchApi<{ status: 'cancellation_requested' }>(`/generation/progress/${token}/cancel`, {
       method: 'POST',
     }),
 }
@@ -177,10 +177,15 @@ export const testsApi = {
     fetchApi<number[]>(`/tests/configs/${configId}/scores?limit=${limit}`),
 
   // P6.2: combined create + generate with progress token
-  createAndGenerate: (data: CreateAndGenerateTestRequest, progressToken?: string) =>
+  createAndGenerate: (
+    data: CreateAndGenerateTestRequest,
+    progressToken?: string,
+    signal?: AbortSignal,
+  ) =>
     fetchApi<Test>(`/tests/create-and-generate${progressToken ? `?progress_token=${progressToken}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(data),
+      signal,
     }),
   
   start: (testId: number) =>
@@ -228,10 +233,16 @@ export const testsApi = {
     fetchApi<void>(`/tests/templates/${id}`, { method: 'DELETE' }),
   
   // P6.2: optional progress token for live progress while generating
-  generateFromTemplate: (templateId: number, numQuestions?: number, progressToken?: string) =>
+  generateFromTemplate: (
+    templateId: number,
+    numQuestions?: number,
+    progressToken?: string,
+    signal?: AbortSignal,
+  ) =>
     fetchApi<Test>(`/tests/generate/${templateId}${progressToken ? `?progress_token=${progressToken}` : ''}`, {
       method: 'POST',
       body: JSON.stringify({ num_questions: numQuestions }),
+      signal,
     }),
 }
 
@@ -439,4 +450,3 @@ export const subjectsApi = {
       body: JSON.stringify(data),
     }),
 }
-

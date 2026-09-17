@@ -241,6 +241,12 @@ class FlashcardReview(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     card_id = Column(Integer, ForeignKey("flashcards.id"), nullable=False, index=True)
+    # A review belongs to exactly one optional study session. Persisting this
+    # relation prevents overlapping sessions of the same deck from sharing
+    # their completion statistics.
+    session_id = Column(
+        Integer, ForeignKey("study_sessions.id"), nullable=True, index=True
+    )
 
     rating = Column(Integer, nullable=False)  # 1=Again, 2=Hard, 3=Good, 4=Easy
     time_taken_ms = Column(Integer, nullable=True)  # How long user took to answer
@@ -253,6 +259,7 @@ class FlashcardReview(Base):
 
     # Relationships
     card = relationship("Flashcard", back_populates="reviews")
+    session = relationship("StudySession", back_populates="reviews")
 
 
 class StudySession(Base):
@@ -289,3 +296,4 @@ class StudySession(Base):
 
     # Relationships
     deck = relationship("FlashcardDeck", back_populates="study_sessions")
+    reviews = relationship("FlashcardReview", back_populates="session")

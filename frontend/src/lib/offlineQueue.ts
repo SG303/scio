@@ -31,6 +31,18 @@ export function isNetworkError(err: unknown): boolean {
   return err instanceof TypeError
 }
 
+/**
+ * A cached queue is sufficient to start a local-only learning session after a
+ * reload. Restrict this to real network failures so a 404/permission error is
+ * not masked as offline mode.
+ */
+export function canStartOfflineStudy(
+  sessionCheckError: unknown,
+  cachedQueue: StudyQueueResponse | null,
+): boolean {
+  return isNetworkError(sessionCheckError) && cachedQueue !== null
+}
+
 // ---------- study queue cache ----------
 
 export function cacheStudyQueue(deckId: string | number, queue: StudyQueueResponse): void {

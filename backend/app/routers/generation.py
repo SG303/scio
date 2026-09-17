@@ -35,6 +35,12 @@ async def cancel_generation(token: str):
     already waiting on OpenRouter finishes in the background and its
     result is discarded.
     """
-    if not generation_progress.cancel(token):
+    cancellation_status = generation_progress.cancel(token)
+    if cancellation_status is None:
         raise HTTPException(status_code=404, detail="Unknown or expired progress token")
-    return {"status": "cancelled"}
+    if cancellation_status != "cancellation_requested":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Generation is already {cancellation_status}",
+        )
+    return {"status": cancellation_status}

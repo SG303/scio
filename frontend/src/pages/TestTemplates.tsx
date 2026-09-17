@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/Toaster'
@@ -64,6 +64,7 @@ export default function TestTemplates() {
   const [isGenerating, setIsGenerating] = useState(false)
   // P6.2: live progress instead of an endless spinner
   const { progress, start: startProgress, cancel: cancelProgress, reset: resetProgress } = useGenerationProgress()
+  const generationAbortRef = useRef<AbortController | null>(null)
   
   // State for expanded templates (to show custom prompt)
   const [expandedTemplates, setExpandedTemplates] = useState<Set<number>>(new Set())
@@ -144,11 +145,12 @@ export default function TestTemplates() {
   })
   
   const generateMutation = useMutation({
-    mutationFn: ({ templateId, numQuestions, progressToken }: {
+    mutationFn: ({ templateId, numQuestions, progressToken, signal }: {
       templateId: number
       numQuestions: number
       progressToken?: string
-    }) => testsApi.generateFromTemplate(templateId, numQuestions, progressToken),
+      signal?: AbortSignal
+    }) => testsApi.generateFromTemplate(templateId, numQuestions, progressToken, signal),
     onSuccess: (test) => {
       setShowGenerateDialog(false)
       setIsGenerating(false)
@@ -232,16 +234,23 @@ export default function TestTemplates() {
     // P6.2: token lets the backend report batch progress while we wait
     const progressToken = crypto.randomUUID()
     startProgress(progressToken)
+    const abortController = new AbortController()
+    generationAbortRef.current = abortController
     try {
       await generateMutation.mutateAsync({
         templateId: selectedTemplate.id,
         numQuestions: generateNumQuestions,
         progressToken,
+        signal: abortController.signal,
       })
     } catch {
-      // generateMutation.onError already resets isGenerating
-      toast.error('Could not generate the test. Please try again.')
+      if (!abortController.signal.aborted) {
+        // generateMutation.onError already resets isGenerating
+        toast.error('Could not generate the test. Please try again.')
+      }
     } finally {
+      generationAbortRef.current = null
+      setIsGenerating(false)
       resetProgress()
     }
   }
@@ -249,7 +258,13 @@ export default function TestTemplates() {
   // P6.2: stop waiting — the backend aborts at the next batch boundary
   // and discards the partial result
   const handleCancelGeneration = async () => {
-    await cancelProgress()
+    const accepted = await cancelProgress()
+    if (accepted) {
+      generationAbortRef.current?.abort()
+      toast.success('Cancellation requested.')
+    } else {
+      toast.error('Generation has already finished and can no longer be cancelled.')
+    }
   }
   
   const toggleExpanded = (templateId: number) => {

@@ -13,6 +13,7 @@ import {
   getCachedStudyQueue,
   flushOfflineReviews,
   isNetworkError,
+  canStartOfflineStudy,
   queueOfflineReview,
   removeQueuedReviews,
 } from '@/lib/offlineQueue'
@@ -96,7 +97,12 @@ export default function StudySession() {
   // P2.1: isLoading is exposed — a new session must never start while this
   // check is still loading (that race created ghost sessions and conflicting
   // resume prompts).
-  const { data: incompleteSession, isLoading: sessionChecking } = useQuery({
+  const cachedQueue = deckId ? getCachedStudyQueue(deckId) : null
+  const {
+    data: incompleteSession,
+    isLoading: sessionChecking,
+    error: incompleteSessionError,
+  } = useQuery({
     queryKey: queryKeys.incompleteSession(deckId),
     queryFn: () => flashcardsApi.getIncompleteSession(parseInt(deckId!)),
     enabled: !!deckId,
@@ -109,8 +115,19 @@ export default function StudySession() {
 
   // Handle incomplete session detection (P2.1: only after the check resolved)
   useEffect(() => {
-    if (sessionChecking || !incompleteSession) return
+    if (sessionChecking) return
     if (sessionId || pendingSessionId || decisionMade.current) return
+
+    // P1: a previous online queue is enough to resume learning locally after
+    // a reload without a network connection. There is intentionally no server
+    // session ID in this mode; queued reviews sync when connectivity returns.
+    if (canStartOfflineStudy(incompleteSessionError, cachedQueue)) {
+      decisionMade.current = true
+      setIsOffline(true)
+      return
+    }
+
+    if (!incompleteSession) return
 
     if (incompleteSession.has_incomplete_session) {
       setPendingSessionId(incompleteSession.session_id || null)
@@ -121,7 +138,14 @@ export default function StudySession() {
       startAttempted.current = true
       startSessionMutation.mutate()
     }
-  }, [incompleteSession, sessionChecking, sessionId, pendingSessionId])
+  }, [
+    cachedQueue,
+    incompleteSession,
+    incompleteSessionError,
+    pendingSessionId,
+    sessionChecking,
+    sessionId,
+  ])
 
   // Fetch study queue
   const {
@@ -139,9 +163,16 @@ export default function StudySession() {
     if (studyQueue) cacheStudyQueue(deckId!, studyQueue)
   }, [studyQueue, deckId])
 
-  const cachedQueue = getCachedStudyQueue(deckId!)
-  // A failed queue load with a cached copy = offline studying
-  const effectiveQueue = studyQueue ?? (error && cachedQueue ? cachedQueue : null)
+  // A failed queue load with a cached copy, or a fresh offline launch with a
+  // failed session check, can both use the cached queue.
+  const effectiveQueue = studyQueue ?? (
+    cachedQueue && (
+      canStartOfflineStudy(incompleteSessionError, cachedQueue)
+      || isNetworkError(error)
+    )
+      ? cachedQueue
+      : null
+  )
 
   // Fetch deck info for title
   const { data: deck } = useQuery({
@@ -420,7 +451,11 @@ export default function StudySession() {
   // A failed session start must surface as an error, not an endless spinner.
   const startFailed = startSessionMutation.isError
 
-  if (sessionChecking || (!sessionId && !startFailed) || isLoading) {
+  if (
+    sessionChecking
+    || (!sessionId && !canStartOfflineStudy(incompleteSessionError, cachedQueue) && !startFailed && !incompleteSessionError)
+    || isLoading
+  ) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -428,7 +463,12 @@ export default function StudySession() {
     )
   }
 
-  if ((error && !cachedQueue) || startFailed || !effectiveQueue) {
+  if (
+    (error && !effectiveQueue)
+    || (incompleteSessionError && !canStartOfflineStudy(incompleteSessionError, cachedQueue))
+    || startFailed
+    || !effectiveQueue
+  ) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center">
         <h2 className="text-xl font-semibold mb-2">Failed to load study session</h2>
@@ -565,4 +605,3 @@ export default function StudySession() {
     </div>
   )
 }
-
