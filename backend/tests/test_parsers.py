@@ -2,11 +2,11 @@
 Unit tests for the AI response parsers.
 
 These cover the highest-risk backend paths: turning LLM JSON responses
-into test questions and flashcards. P1.1/P1.2 behaviours are pinned by
-dedicated regression tests (invalid answer keys are discarded, repair
+into test questions and flashcards. P1.1/P1.2/P1.3 behaviours are pinned
+by dedicated regression tests (invalid answer keys are discarded, repair
 regexes stay inside choices arrays, structured-output objects are
-unwrapped). The remaining CURRENT test pins B10b (unanswered questions
-count as wrong in fromTest) until roadmap package P1.3 lands.
+unwrapped, unanswered questions are excluded from wrong-only conversion,
+duplicates are filtered per deck).
 """
 import json
 
@@ -398,12 +398,58 @@ class TestCreateFlashcardsFromQuestions:
         cards = create_flashcards_from_questions(questions, wrong_only=False)
         assert len(cards) == 2
 
-    def test_CURRENT_unanswered_counts_as_wrong(self):
-        """Documents roadmap bug B10b: is_correct=None is falsy, so
-        unanswered questions become flashcards under wrong_only=True.
-        P1.3 will change this to exclude unanswered questions.
-        """
+    def test_unanswered_questions_are_excluded(self):
+        """P1.3 (B10b): unanswered questions (is_correct=None,
+        user_answer=None) must not become flashcards under
+        wrong_only=True — None is falsy and used to fall through."""
         from app.services.flashcard_generator import create_flashcards_from_questions
         questions = [self._question(is_correct=None, user_answer=None)]
         cards = create_flashcards_from_questions(questions, wrong_only=True)
-        assert len(cards) == 1  # TODO(P1.3): must become 0
+        assert len(cards) == 0
+
+    def test_answered_wrong_is_still_included(self):
+        """Guard: the B10b fix must not drop genuinely wrong answers."""
+        from app.services.flashcard_generator import create_flashcards_from_questions
+        questions = [
+            self._question(is_correct=False, user_answer=1),
+            self._question(is_correct=None, user_answer=None),
+        ]
+        cards = create_flashcards_from_questions(questions, wrong_only=True)
+        assert len(cards) == 1
+        assert "Correct" in cards[0]["back"]
+
+    def test_unanswered_included_when_all_questions(self):
+        """wrong_only=False keeps taking every question, including
+        unanswered ones — that is explicit user intent."""
+        from app.services.flashcard_generator import create_flashcards_from_questions
+        questions = [self._question(is_correct=None, user_answer=None)]
+        cards = create_flashcards_from_questions(questions, wrong_only=False)
+        assert len(cards) == 1
+
+    def test_filter_existing_cards_removes_duplicates(self):
+        """P1.3: importing the same test into an existing deck twice
+        must not create duplicate cards."""
+        from app.services.flashcard_generator import filter_existing_cards
+        cards_data = [
+            {"front": "Q1", "back": "A1", "source_question_id": 10},
+            {"front": "Q2", "back": "A2", "source_question_id": 11},
+        ]
+        kept, skipped = filter_existing_cards(cards_data, existing_source_question_ids=[10])
+        assert [c["front"] for c in kept] == ["Q2"]
+        assert skipped == 1
+
+    def test_filter_existing_cards_without_matches(self):
+        from app.services.flashcard_generator import filter_existing_cards
+        cards_data = [{"front": "Q1", "back": "A1", "source_question_id": 10}]
+        kept, skipped = filter_existing_cards(cards_data, existing_source_question_ids=[])
+        assert len(kept) == 1
+        assert skipped == 0
+
+    def test_filter_existing_cards_ignores_cards_without_source(self):
+        """Manually created cards (source_question_id=None) must never be
+        filtered — only the test-import path is duplicate-protected."""
+        from app.services.flashcard_generator import filter_existing_cards
+        cards_data = [{"front": "Q1", "back": "A1", "source_question_id": None}]
+        kept, skipped = filter_existing_cards(cards_data, existing_source_question_ids=[10])
+        assert len(kept) == 1
+        assert skipped == 0
