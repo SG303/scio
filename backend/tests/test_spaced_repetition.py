@@ -238,3 +238,43 @@ class TestInvariants:
             for rating in (1, 2, 3, 4):
                 next_review = run(state, rating)[5]
                 assert next_review > utc_now()
+
+
+# ============== Ghost-Session Detection (P2.1) ==============
+
+
+class TestHasRatedCards:
+    """P2.1: get_incomplete_session must ignore sessions with 0 rated cards —
+    they are leftovers from accidental starts, not sessions worth resuming."""
+
+    def _session(self, cards_studied_json):
+        from app.models import StudySession
+
+        s = StudySession(deck_id=1)
+        s.cards_studied_json = cards_studied_json
+        return s
+
+    def test_none_is_not_rated(self):
+        from app.services.spaced_repetition import _has_rated_cards
+
+        assert _has_rated_cards(self._session(None)) is False
+
+    def test_empty_string_is_not_rated(self):
+        from app.services.spaced_repetition import _has_rated_cards
+
+        assert _has_rated_cards(self._session("")) is False
+
+    def test_empty_array_is_not_rated(self):
+        from app.services.spaced_repetition import _has_rated_cards
+
+        assert _has_rated_cards(self._session("[]")) is False
+
+    def test_invalid_json_is_not_rated(self):
+        from app.services.spaced_repetition import _has_rated_cards
+
+        assert _has_rated_cards(self._session("not json {{{")) is False
+
+    def test_cards_present_is_rated(self):
+        from app.services.spaced_repetition import _has_rated_cards
+
+        assert _has_rated_cards(self._session("[1, 2, 3]")) is True
