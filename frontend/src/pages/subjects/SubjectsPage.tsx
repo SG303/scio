@@ -8,11 +8,11 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
-  Loader2,
   FolderOpen,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { QueryState } from '@/components/QueryState'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +31,7 @@ import { subjectsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import type { SubjectListItem } from '@/types'
 import CreateSubjectDialog from './CreateSubjectDialog'
+import { queryKeys } from '@/lib/constants'
 
 export default function SubjectsPage() {
   const queryClient = useQueryClient()
@@ -38,15 +39,15 @@ export default function SubjectsPage() {
   const [editingSubject, setEditingSubject] = useState<SubjectListItem | null>(null)
   const [deletingSubject, setDeletingSubject] = useState<SubjectListItem | null>(null)
 
-  const { data: subjects = [], isLoading } = useQuery({
-    queryKey: ['subjects'],
+  const { data: subjects = [], isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.subjects,
     queryFn: subjectsApi.list,
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => subjectsApi.delete(id, false),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subjects'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       setDeletingSubject(null)
     },
   })
@@ -62,11 +63,12 @@ export default function SubjectsPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <QueryState loading />
+  }
+
+  // P3.3: a failed query is an error, not "no subjects yet"
+  if (error) {
+    return <QueryState error={error} onRetry={() => refetch()} />
   }
 
   return (

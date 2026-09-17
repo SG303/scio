@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
+import { queryKeys } from '@/lib/constants'
 
 // P2.2: a review that failed to save — offered to the user with a retry
 // button for exactly this card and rating
@@ -79,7 +80,7 @@ export default function StudySession() {
   // check is still loading (that race created ghost sessions and conflicting
   // resume prompts).
   const { data: incompleteSession, isLoading: sessionChecking } = useQuery({
-    queryKey: ['incomplete-session', deckId],
+    queryKey: queryKeys.incompleteSession(deckId),
     queryFn: () => flashcardsApi.getIncompleteSession(parseInt(deckId!)),
     enabled: !!deckId,
   })
@@ -111,14 +112,14 @@ export default function StudySession() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['study-queue', deckId, sessionId],
+    queryKey: queryKeys.studyQueue(deckId, sessionId),
     queryFn: () => flashcardsApi.getStudyQueue(parseInt(deckId!), sessionId || undefined),
     enabled: !!deckId && !!sessionId,
   })
 
   // Fetch deck info for title
   const { data: deck } = useQuery({
-    queryKey: ['flashcard-deck', deckId],
+    queryKey: queryKeys.flashcardDeck(deckId),
     queryFn: () => flashcardsApi.getDeck(parseInt(deckId!)),
     enabled: !!deckId,
   })
@@ -143,7 +144,7 @@ export default function StudySession() {
       timeTakenMs: number
     }) => flashcardsApi.submitReview(cardId, rating, timeTakenMs, sessionId || undefined),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
     },
   })
 
@@ -151,6 +152,14 @@ export default function StudySession() {
   const completeSessionMutation = useMutation({
     mutationFn: ({ sessionId, totalTimeMs }: { sessionId: number; totalTimeMs: number }) =>
       flashcardsApi.completeSession(sessionId, totalTimeMs),
+    onSuccess: () => {
+      // P3.2: after a session ends, the deck's due counts and the global
+      // stats must be fresh — the session end is the single moment where
+      // these views change, so invalidate here instead of on every rating
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardStats })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
+    },
   })
 
   // Handle resume

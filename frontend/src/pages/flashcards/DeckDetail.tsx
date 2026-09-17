@@ -9,10 +9,10 @@ import {
   Sparkles,
   BookOpen,
   MoreVertical,
-  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { QueryState } from '@/components/QueryState'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -32,6 +32,7 @@ import {
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import type { Flashcard } from '@/types'
+import { queryKeys } from '@/lib/constants'
 
 export default function DeckDetail() {
   const { deckId } = useParams<{ deckId: string }>()
@@ -44,15 +45,25 @@ export default function DeckDetail() {
   const [newCard, setNewCard] = useState({ front: '', back: '' })
 
   // Fetch deck
-  const { data: deck, isLoading: deckLoading } = useQuery({
-    queryKey: ['flashcard-deck', deckId],
+  const {
+    data: deck,
+    isLoading: deckLoading,
+    error: deckError,
+    refetch: refetchDeck,
+  } = useQuery({
+    queryKey: queryKeys.flashcardDeck(deckId),
     queryFn: () => flashcardsApi.getDeck(parseInt(deckId!)),
     enabled: !!deckId,
   })
 
   // Fetch cards
-  const { data: cards = [], isLoading: cardsLoading } = useQuery({
-    queryKey: ['flashcard-cards', deckId],
+  const {
+    data: cards = [],
+    isLoading: cardsLoading,
+    error: cardsError,
+    refetch: refetchCards,
+  } = useQuery({
+    queryKey: queryKeys.flashcardCards(deckId),
     queryFn: () => flashcardsApi.listCards(parseInt(deckId!)),
     enabled: !!deckId,
   })
@@ -62,8 +73,8 @@ export default function DeckDetail() {
     mutationFn: ({ front, back }: { front: string; back: string }) =>
       flashcardsApi.createCard(parseInt(deckId!), { front, back }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flashcard-cards', deckId] })
-      queryClient.invalidateQueries({ queryKey: ['flashcard-deck', deckId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(deckId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
       setIsAddingCard(false)
       setNewCard({ front: '', back: '' })
     },
@@ -74,7 +85,7 @@ export default function DeckDetail() {
     mutationFn: ({ cardId, front, back }: { cardId: number; front: string; back: string }) =>
       flashcardsApi.updateCard(cardId, { front, back }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flashcard-cards', deckId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(deckId) })
       setEditingCard(null)
     },
   })
@@ -83,8 +94,10 @@ export default function DeckDetail() {
   const deleteCardMutation = useMutation({
     mutationFn: flashcardsApi.deleteCard,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flashcard-cards', deckId] })
-      queryClient.invalidateQueries({ queryKey: ['flashcard-deck', deckId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(deckId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
+      // P3.2: the deck list shows card counts — refresh it as well
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
       setDeletingCardId(null)
     },
   })
@@ -126,10 +139,19 @@ export default function DeckDetail() {
   }
 
   if (deckLoading || cardsLoading) {
+    return <QueryState loading />
+  }
+
+  // P3.3: a failed query is an error, not an empty deck
+  if (deckError || cardsError) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <QueryState
+        error={deckError || cardsError}
+        onRetry={() => {
+          refetchDeck()
+          refetchCards()
+        }}
+      />
     )
   }
 

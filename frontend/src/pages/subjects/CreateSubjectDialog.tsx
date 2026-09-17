@@ -16,6 +16,7 @@ import {
 import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
 import { cn, formatPricePerMillion } from '@/lib/utils'
 import type { SubjectListItem } from '@/types'
+import { queryKeys } from '@/lib/constants'
 
 interface CreateSubjectDialogProps {
   open: boolean
@@ -38,19 +39,19 @@ export default function CreateSubjectDialog({
   })
 
   const { data: documents = [] } = useQuery({
-    queryKey: ['documents'],
+    queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
 
   const { data: models = [] } = useQuery({
-    queryKey: ['models', true],
+    queryKey: queryKeys.modelsAll,
     queryFn: () => modelsApi.list(true),
   })
 
   const createMutation = useMutation({
     mutationFn: subjectsApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subjects'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       handleClose()
     },
   })
@@ -59,7 +60,7 @@ export default function CreateSubjectDialog({
     mutationFn: ({ id, data }: { id: number; data: { title: string; description: string | null; ai_model_id: number | null; document_ids: number[] | null } }) =>
       subjectsApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subjects'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       handleClose()
     },
   })
