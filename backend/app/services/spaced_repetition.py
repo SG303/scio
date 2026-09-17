@@ -384,14 +384,19 @@ async def get_incomplete_session(
 ) -> Optional[StudySession]:
     """
     Get the most recent incomplete session for a deck from today.
-    Returns None if no incomplete session exists.
+
+    Sessions without any rated cards (empty cards_studied_json) are ignored:
+    they are leftovers from accidental starts or immediate exits, not
+    sessions worth resuming. This makes old ghost sessions disappear
+    automatically (P2.1).
 
     Args:
         db: Database session
         deck_id: ID of the deck
 
     Returns:
-        StudySession if incomplete session found, None otherwise
+        StudySession if an incomplete session with at least one rated card
+        exists, None otherwise
     """
     now = utc_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -406,10 +411,25 @@ async def get_incomplete_session(
             )
         )
         .order_by(StudySession.started_at.desc())
-        .limit(1)
+        .limit(10)
     )
 
-    return result.scalar_one_or_none()
+    for session in result.scalars():
+        if _has_rated_cards(session):
+            return session
+
+    return None
+
+
+def _has_rated_cards(session: StudySession) -> bool:
+    """True if the session has at least one rated card recorded."""
+    if not session.cards_studied_json:
+        return False
+    try:
+        cards = json.loads(session.cards_studied_json)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    return bool(cards)
 
 
 async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
