@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { testsApi } from '@/services/api'
+import { toast } from '@/components/Toaster'
 import { cn } from '@/lib/utils'
 
 export default function TakeTest() {
@@ -22,9 +23,14 @@ export default function TakeTest() {
   const queryClient = useQueryClient()
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
+  // P3.1 (M2): answers are kept locally — if a save fails, the selection
+  // survives and is re-sent with the next answer or on submit
+  const [localAnswers, setLocalAnswers] = useState<Record<number, number>>({})
   
   // Track if we've already attempted to start the test to prevent multiple calls
   const hasAttemptedStart = useRef(false)
+  // P3.1: cap automatic start retries so a down backend can't loop forever
+  const startAttempts = useRef(0)
 
   const { data: test, isLoading, error } = useQuery({
     queryKey: ['test', testId],
@@ -46,6 +52,10 @@ export default function TakeTest() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test', testId] })
     },
+    onError: () => {
+      // M2: the answer stays selected locally and is re-sent later
+      toast.error('Could not save your answer. It will be sent again automatically.')
+    },
   })
 
   const submitMutation = useMutation({
@@ -55,6 +65,9 @@ export default function TakeTest() {
       await queryClient.invalidateQueries({ queryKey: ['test', testId] })
       await queryClient.invalidateQueries({ queryKey: ['tests'] })
       navigate(`/results/${testId}`, { replace: true })
+    },
+    onError: () => {
+      toast.error('Could not submit the test. Please try again.')
     },
   })
 
@@ -66,10 +79,15 @@ export default function TakeTest() {
       !hasAttemptedStart.current
     ) {
       hasAttemptedStart.current = true
+      startAttempts.current += 1
       startMutation.mutate(undefined, {
         onError: (error) => {
           console.error('Failed to start test:', error)
-          hasAttemptedStart.current = false // Allow retry on error
+          if (startAttempts.current < 3) {
+            hasAttemptedStart.current = false // Allow retry on error
+          } else {
+            toast.error('Could not start the test. Please reload the page.')
+          }
         }
       })
     }
@@ -99,11 +117,17 @@ export default function TakeTest() {
 
   const questions = test.questions
   const question = questions[currentQuestion]
-  const answeredCount = questions.filter((q) => q.user_answer !== null).length
+  // M2: local answer takes precedence — it is the user's latest selection
+  const answeredCount = questions.filter(
+    (q) => localAnswers[q.id] !== undefined || q.user_answer !== null
+  ).length
   const progress = (answeredCount / questions.length) * 100
+  const currentAnswer = question ? localAnswers[question.id] ?? question.user_answer : null
 
   const handleAnswer = (choiceIndex: number) => {
     if (!question) return
+    // M2: keep the answer locally so it survives a failed save
+    setLocalAnswers((prev) => ({ ...prev, [question.id]: choiceIndex }))
     answerMutation.mutate({ questionId: question.id, answer: choiceIndex })
   }
 
@@ -111,8 +135,20 @@ export default function TakeTest() {
     setShowSubmitDialog(true)
   }
 
-  const handleConfirmSubmit = () => {
+  const handleConfirmSubmit = async () => {
     setShowSubmitDialog(false)
+    // M2: re-send answers whose save failed earlier before submitting
+    const unsaved = questions.filter(
+      (q) => localAnswers[q.id] !== undefined && q.user_answer !== localAnswers[q.id]
+    )
+    try {
+      for (const q of unsaved) {
+        await answerMutation.mutateAsync({ questionId: q.id, answer: localAnswers[q.id] })
+      }
+    } catch {
+      toast.error('Some answers could not be saved. Please try submitting again.')
+      return
+    }
     submitMutation.mutate()
   }
 
@@ -159,7 +195,7 @@ export default function TakeTest() {
               'w-10 h-10 rounded-lg text-sm font-medium transition-all',
               i === currentQuestion
                 ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
-                : q.user_answer !== null
+                : localAnswers[q.id] !== undefined || q.user_answer !== null
                 ? 'bg-success/20 text-success border border-success/30'
                 : 'bg-muted hover:bg-muted/80'
             )}
@@ -188,7 +224,7 @@ export default function TakeTest() {
                   disabled={answerMutation.isPending}
                   className={cn(
                     'w-full flex items-center gap-4 p-4 rounded-lg border text-left transition-all',
-                    question.user_answer === choice.index
+                    currentAnswer === choice.index
                       ? 'border-primary bg-primary/10 ring-1 ring-primary'
                       : 'hover:bg-muted/50 hover:border-muted-foreground/30'
                   )}
@@ -196,7 +232,7 @@ export default function TakeTest() {
                   <div
                     className={cn(
                       'w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-medium transition-colors',
-                      question.user_answer === choice.index
+                      currentAnswer === choice.index
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-muted-foreground/30'
                     )}
