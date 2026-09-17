@@ -4,13 +4,15 @@ Flashcard AI Generator service.
 This module handles AI-powered generation of flashcards from documents or topics,
 similar to the test_generator but optimized for Q&A flashcard format.
 """
-import httpx
 import json
 import re
-import math
+import logging
 from typing import List, Dict, Any, Optional
 from app.config import get_settings
 from app.models import Document, Question
+from app.services.openrouter_client import chat_completion_json
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -29,19 +31,22 @@ def build_flashcard_prompt(
         custom_prompt = None
     
     # Output format instructions
-    output_format = """OUTPUT FORMAT - Return ONLY a valid JSON array like this example:
-[
-  {"front": "What is the capital of France?", "back": "Paris"},
-  {"front": "What does HTTP stand for?", "back": "HyperText Transfer Protocol"},
-  {"front": "Explain the concept of polymorphism in OOP", "back": "Polymorphism allows objects of different classes to be treated as objects of a common parent class. It enables one interface to be used for different data types."}
-]
+    output_format = """OUTPUT FORMAT - Return ONLY a valid JSON object like this example:
+{
+  "flashcards": [
+    {"front": "What is the capital of France?", "back": "Paris"},
+    {"front": "What does HTTP stand for?", "back": "HyperText Transfer Protocol"},
+    {"front": "Explain the concept of polymorphism in OOP", "back": "Polymorphism allows objects of different classes to be treated as objects of a common parent class. It enables one interface to be used for different data types."}
+  ]
+}
 
 CRITICAL RULES:
+- The top level must be a JSON object with a single key "flashcards" containing the array of cards
 - Each flashcard must have exactly two fields: "front" and "back"
 - "front" is the question or prompt shown to the learner
 - "back" is the answer that should be recalled
 - Keep answers concise but complete
-- Return ONLY the JSON array, no markdown, no extra text"""
+- Return ONLY the JSON object, no markdown, no extra text"""
     
     # Build prompt based on whether we have documents
     if documents:
@@ -209,46 +214,17 @@ async def _generate_batch(
     
     prompt = build_flashcard_prompt(documents, num_cards, topic, custom_prompt, existing_fronts)
     
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            f"{settings.openrouter_base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:8000",
-                "X-Title": "Scio"
-            },
-            json={
-                "model": model_id,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are an expert educational content creator. Always respond with valid JSON only, no markdown formatting."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "temperature": 0.7,
-            }
-        )
-        
-        if response.status_code != 200:
-            error_detail = response.text
-            raise ValueError(f"OpenRouter API error ({response.status_code}): {error_detail}")
-        
-        data = response.json()
-        
-        if "error" in data:
-            raise ValueError(f"OpenRouter error: {data['error']}")
-        
-        content = data["choices"][0]["message"]["content"]
-        
-        # Parse the JSON response
-        flashcards = parse_flashcards_response(content)
-        
-        return flashcards
+    content = await chat_completion_json(
+        model_id=model_id,
+        system_prompt="You are an expert educational content creator. Always respond with valid JSON only, no markdown formatting.",
+        user_prompt=prompt,
+        temperature=0.7,
+    )
+
+    # Parse the JSON response
+    flashcards = parse_flashcards_response(content)
+
+    return flashcards
 
 
 def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
@@ -279,6 +255,9 @@ def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
         except Exception:
             raise ValueError(f"Failed to parse AI response as JSON: {str(e)}\nResponse: {content[:500]}")
     
+    if isinstance(flashcards, dict):
+        # Structured output format: {"flashcards": [...]}
+        flashcards = flashcards.get("flashcards")
     if not isinstance(flashcards, list):
         raise ValueError("AI response is not a list of flashcards")
     
