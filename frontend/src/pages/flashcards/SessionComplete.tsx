@@ -1,39 +1,97 @@
-import { useLocation, useNavigate, Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useLocation, useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, ArrowRight, Home, RotateCcw } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { QueryState } from '@/components/QueryState'
+import { flashcardsApi } from '@/services/api'
+import { queryKeys } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
-interface SessionStats {
-  again: number
-  hard: number
-  good: number
-  easy: number
-}
-
 interface LocationState {
-  deckId: number
-  deckTitle: string
-  cardsReviewed: number
-  stats: SessionStats
-  totalTimeMs: number
+  deckId?: number
+  deckTitle?: string
 }
 
+/**
+ * P4.4: the completion screen survives a refresh — the session is loaded
+ * from the backend via the `?session=<id>` search parameter, with the
+ * location state only as a fallback for the deck title.
+ */
 export default function SessionComplete() {
+  const [searchParams] = useSearchParams()
   const location = useLocation()
   const navigate = useNavigate()
   const state = location.state as LocationState | null
 
-  if (!state) {
-    // No session data, redirect to flashcards
-    navigate('/flashcards')
+  const sessionId = searchParams.get('session')
+  const sessionIdNum = sessionId ? parseInt(sessionId) : null
+
+  const {
+    data: session,
+    isLoading: sessionLoading,
+    error: sessionError,
+  } = useQuery({
+    queryKey: ['flashcard-session', sessionIdNum],
+    queryFn: () => flashcardsApi.getSession(sessionIdNum!),
+    enabled: sessionIdNum !== null,
+    retry: false,
+  })
+
+  // Fallback deck title from the navigation state, else fetch via deck query
+  const deckId = session?.deck_id ?? state?.deckId ?? null
+  const {
+    data: deck,
+    isLoading: deckLoading,
+  } = useQuery({
+    queryKey: queryKeys.flashcardDeck(deckId ?? undefined),
+    queryFn: () => flashcardsApi.getDeck(deckId!),
+    enabled: deckId !== null && !state?.deckTitle,
+    retry: false,
+  })
+
+  // No session ID and no state: nothing to show here
+  useEffect(() => {
+    if (sessionIdNum === null && !state) {
+      navigate('/flashcards', { replace: true })
+    }
+  }, [sessionIdNum, state, navigate])
+
+  if (sessionIdNum === null && state) {
+    // Legacy navigation without session ID — nothing to load; go back
     return null
   }
 
-  const { deckId, deckTitle, cardsReviewed, stats, totalTimeMs } = state
+  if (!sessionIdNum) {
+    return null
+  }
+
+  const waitingForDeck = deckId !== null && !state?.deckTitle && deckLoading
+  if (sessionLoading || waitingForDeck) {
+    return <QueryState loading />
+  }
+
+  if (sessionError || !session) {
+    return (
+      <QueryState
+        error={sessionError}
+        onRetry={() => navigate('/flashcards')}
+      />
+    )
+  }
+
+  const deckTitle = state?.deckTitle ?? deck?.title ?? 'Study Session'
+  const cardsReviewed = session.cards_reviewed
+  const stats = {
+    again: session.cards_again,
+    hard: session.cards_hard,
+    good: session.cards_good,
+    easy: session.cards_easy,
+  }
 
   // Calculate time
-  const totalSeconds = Math.round(totalTimeMs / 1000)
+  const totalSeconds = Math.round(session.total_time_ms / 1000)
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
@@ -123,12 +181,14 @@ export default function SessionComplete() {
 
         {/* Actions */}
         <div className="flex flex-col gap-3 pt-4">
-          <Button asChild size="lg">
-            <Link to={`/flashcards/${deckId}/study`}>
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Study More
-            </Link>
-          </Button>
+          {deckId !== null && (
+            <Button asChild size="lg">
+              <Link to={`/flashcards/${deckId}/study`}>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Study More
+              </Link>
+            </Button>
+          )}
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" asChild>
               <Link to="/flashcards">
@@ -148,4 +208,3 @@ export default function SessionComplete() {
     </div>
   )
 }
-

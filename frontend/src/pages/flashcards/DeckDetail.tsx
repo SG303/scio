@@ -13,7 +13,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
+import { deckIsStudiable, deckStudyCount } from '@/lib/decks'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
@@ -40,6 +42,9 @@ export default function DeckDetail() {
   const queryClient = useQueryClient()
 
   const [isAddingCard, setIsAddingCard] = useState(false)
+  // P4.3: deck settings (title, description, new_cards_per_day)
+  const [isEditingDeck, setIsEditingDeck] = useState(false)
+  const [deckForm, setDeckForm] = useState({ title: '', description: '', new_cards_per_day: 20 })
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null)
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null)
   const [newCard, setNewCard] = useState({ front: '', back: '' })
@@ -138,6 +143,26 @@ export default function DeckDetail() {
     }
   }
 
+  // P4.3: save deck settings — invalidates the deck and the deck list
+  const updateDeckMutation = useMutation({
+    mutationFn: (data: { title: string; description: string; new_cards_per_day: number }) =>
+      flashcardsApi.updateDeck(parseInt(deckId!), data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
+      setIsEditingDeck(false)
+    },
+  })
+
+  const handleOpenEditDeck = () => {
+    setDeckForm({
+      title: deck?.title ?? '',
+      description: deck?.description ?? '',
+      new_cards_per_day: deck?.new_cards_per_day ?? 20,
+    })
+    setIsEditingDeck(true)
+  }
+
   if (deckLoading || cardsLoading) {
     return <QueryState loading />
   }
@@ -184,10 +209,16 @@ export default function DeckDetail() {
             <Plus className="h-4 w-4 mr-2" />
             Add Card
           </Button>
-          <Button asChild disabled={deck.due_cards === 0 && deck.new_cards === 0}>
+          {/* P4.3: deck settings incl. daily new-card limit */}
+          <Button variant="outline" onClick={handleOpenEditDeck}>
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit Deck
+          </Button>
+          {/* P4.3: honest count — remaining new cards respect today's deck-wide quota */}
+          <Button asChild disabled={!deckIsStudiable(deck)}>
             <Link to={`/flashcards/${deckId}/study`}>
               <BookOpen className="h-4 w-4 mr-2" />
-              Study ({deck.due_cards + Math.min(deck.new_cards, deck.new_cards_per_day)})
+              Study ({deckStudyCount(deck)})
             </Link>
           </Button>
         </div>
@@ -366,6 +397,71 @@ export default function DeckDetail() {
             </Button>
             <Button onClick={handleUpdateCard} disabled={updateCardMutation.isPending}>
               {updateCardMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* P4.3: Edit Deck Dialog — title, description, daily new-card limit */}
+      <Dialog open={isEditingDeck} onOpenChange={setIsEditingDeck}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Deck</DialogTitle>
+            <DialogDescription>
+              Change the deck's title, description and how many new cards are
+              introduced per day.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="deck-title">Title</Label>
+              <Input
+                id="deck-title"
+                value={deckForm.title}
+                onChange={(e) => setDeckForm((prev) => ({ ...prev, title: e.target.value }))}
+                maxLength={255}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="deck-description">Description</Label>
+              <Textarea
+                id="deck-description"
+                value={deckForm.description}
+                onChange={(e) =>
+                  setDeckForm((prev) => ({ ...prev, description: e.target.value }))
+                }
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="deck-new-cards">New cards per day</Label>
+              <Input
+                id="deck-new-cards"
+                type="number"
+                min={1}
+                max={100}
+                value={deckForm.new_cards_per_day}
+                onChange={(e) =>
+                  setDeckForm((prev) => ({
+                    ...prev,
+                    new_cards_per_day: Math.max(1, Math.min(100, Number(e.target.value) || 1)),
+                  }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                How many unseen cards a day of studying may introduce (1–100).
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditingDeck(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => updateDeckMutation.mutate(deckForm)}
+              disabled={updateDeckMutation.isPending || !deckForm.title.trim()}
+            >
+              {updateDeckMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

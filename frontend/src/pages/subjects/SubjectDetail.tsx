@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
+import { deckIsStudiable } from '@/lib/decks'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -351,7 +352,8 @@ export default function SubjectDetail() {
                       </div>
                     </Link>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" asChild>
+                      {/* P4.3: disabled when today's quota is actually empty */}
+                      <Button variant="outline" size="sm" asChild disabled={!deckIsStudiable(deck)}>
                         <Link to={`/flashcards/${deck.id}/study`}>
                           <BookOpen className="h-4 w-4 mr-1" />
                           Study

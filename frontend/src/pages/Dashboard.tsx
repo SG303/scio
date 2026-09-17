@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { FileText, GraduationCap, Clock, CheckCircle2, ArrowRight, Plus, Sparkles, Layers, Flame } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { QueryState } from '@/components/QueryState'
 import { documentsApi, testsApi, flashcardsApi } from '@/services/api'
 import { formatDate, getScoreColor } from '@/lib/utils'
@@ -39,10 +40,21 @@ export default function Dashboard() {
     queryFn: flashcardsApi.getGlobalStats,
   })
 
+  // P4.2: streak, daily goal progress and what's due today
+  const {
+    data: streak,
+    isLoading: streakLoading,
+    error: streakError,
+    refetch: refetchStreak,
+  } = useQuery({
+    queryKey: queryKeys.streak,
+    queryFn: flashcardsApi.getStreak,
+  })
+
   // P3.3: a down backend must not look like an empty account — show an
   // error with retry instead of all-zero stats
-  const anyLoading = documentsLoading || testsLoading || statsLoading
-  const anyError = documentsError || testsError || statsError
+  const anyLoading = documentsLoading || testsLoading || statsLoading || streakLoading
+  const anyError = documentsError || testsError || statsError || streakError
   if (anyLoading || anyError) {
     return (
       <QueryState
@@ -52,6 +64,7 @@ export default function Dashboard() {
           refetchDocuments()
           refetchTests()
           refetchStats()
+          refetchStreak()
         }}
       />
     )
@@ -162,6 +175,42 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* P4.2: Streak & Daily Goal Widget */}
+      {streak && (
+        <Card className="opacity-0 animate-fade-in stagger-5 border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-transparent">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                <Flame className="h-5 w-5 text-orange-500" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">
+                  {streak.current_streak > 0
+                    ? `${streak.current_streak}-Day Streak`
+                    : 'Start a new streak today'}
+                </CardTitle>
+                <CardDescription>
+                  {streak.longest_streak > 0 && <>Longest: {streak.longest_streak} days · </>}
+                  {streak.due_today > 0 ? `${streak.due_today} cards due today` : 'Nothing due today'}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-muted-foreground">Daily goal</span>
+              <span className="font-medium">
+                {streak.reviews_today}/{streak.daily_goal} cards today
+              </span>
+            </div>
+            <Progress
+              value={Math.min(100, (streak.reviews_today / streak.daily_goal) * 100)}
+              className="h-2"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Flashcards Due Today Widget */}
       {flashcardStats && flashcardStats.total_cards > 0 && (
