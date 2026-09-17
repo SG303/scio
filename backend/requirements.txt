@@ -23,3 +23,6 @@ python-magic==0.4.27
 python-dateutil==2.8.2
 aiofiles==23.2.1
 
+# Anki export (P6.1)
+genanki==0.13.1
+
