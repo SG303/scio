@@ -117,6 +117,8 @@ export interface FlashcardDeckWithStats extends FlashcardDeck {
   due_cards: number
   learning_cards: number
   review_cards: number
+  due_reviews: number
+  new_available: number
 }
 
 export interface Flashcard {
@@ -179,6 +181,15 @@ export interface GlobalFlashcardStats {
   due_today: number
   due_reviews: number
   new_available: number
+}
+
+// P4.2: streak and daily goal statistics
+export interface StreakStats {
+  current_streak: number
+  longest_streak: number
+  reviews_today: number
+  daily_goal: number
+  due_today: number
 }
 
 export interface StudyQueueResponse {
@@ -269,6 +280,8 @@ export interface FlashcardDeckInSubject {
   learning_cards: number
   review_cards: number
   due_cards: number
+  due_reviews: number
+  new_available: number
   created_at: string
 }
 
