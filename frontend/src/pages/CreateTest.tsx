@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
+import { useGenerationProgress, describeProgress } from '@/hooks/useGenerationProgress'
 import { cn, calculateEstimatedCost, formatPricePerMillion, calculateTestGenerationTokens } from '@/lib/utils'
 import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 
@@ -22,6 +23,8 @@ export default function CreateTest() {
     document_ids: [] as number[],
   })
   const [isGenerating, setIsGenerating] = useState(false)
+  // P6.2: live progress instead of an endless spinner
+  const { progress, start: startProgress, cancel: cancelProgress, reset: resetProgress } = useGenerationProgress()
   const [error, setError] = useState<string | null>(null)
 
   const { data: documents = [] } = useQuery({
@@ -47,17 +50,29 @@ export default function CreateTest() {
     setError(null)
     setIsGenerating(true)
 
+    // P6.2: token lets the backend report batch progress while we wait
+    const progressToken = crypto.randomUUID()
+    startProgress(progressToken)
+
     try {
       // P5.2: config + test in one call — a failed generation no longer
       // leaves an empty config behind
-      const test = await testsApi.createAndGenerate({ ...formData })
+      const test = await testsApi.createAndGenerate({ ...formData }, progressToken)
 
       // Navigate to the test
       navigate(`/test/${test.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate test')
       setIsGenerating(false)
+    } finally {
+      resetProgress()
     }
+  }
+
+  // P6.2: stop waiting — the backend aborts at the next batch boundary
+  // and discards the partial result
+  const handleCancelGeneration = async () => {
+    await cancelProgress()
   }
 
   const canProceedStep2 = formData.title && formData.ai_model_id > 0
@@ -469,8 +484,12 @@ export default function CreateTest() {
             </div>
 
             {isGenerating && (
-              <div className="text-center text-sm text-muted-foreground">
-                <p>This may take a minute depending on the AI model...</p>
+              <div className="text-center text-sm text-muted-foreground space-y-2">
+                {/* P6.2: real progress from the backend when available */}
+                <p>{describeProgress(progress) ?? 'This may take a minute depending on the AI model...'}</p>
+                <Button variant="outline" size="sm" onClick={handleCancelGeneration}>
+                  Cancel
+                </Button>
               </div>
             )}
           </CardContent>
