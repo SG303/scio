@@ -37,6 +37,7 @@ import { documentsApi, modelsApi, testsApi } from '@/services/api'
 import { cn, calculateEstimatedCost, formatPricePerMillion, calculateTestGenerationTokens, formatDate, getScoreColor } from '@/lib/utils'
 import { TEMPLATE_QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 import { ScoreSparkline } from '@/components/ScoreSparkline'
+import { useGenerationProgress, describeProgress } from '@/hooks/useGenerationProgress'
 import type { TestConfig } from '@/types'
 
 export default function TestTemplates() {
@@ -61,6 +62,8 @@ export default function TestTemplates() {
   const [selectedTemplate, setSelectedTemplate] = useState<TestConfig | null>(null)
   const [generateNumQuestions, setGenerateNumQuestions] = useState(10)
   const [isGenerating, setIsGenerating] = useState(false)
+  // P6.2: live progress instead of an endless spinner
+  const { progress, start: startProgress, cancel: cancelProgress, reset: resetProgress } = useGenerationProgress()
   
   // State for expanded templates (to show custom prompt)
   const [expandedTemplates, setExpandedTemplates] = useState<Set<number>>(new Set())
@@ -141,8 +144,11 @@ export default function TestTemplates() {
   })
   
   const generateMutation = useMutation({
-    mutationFn: ({ templateId, numQuestions }: { templateId: number; numQuestions: number }) =>
-      testsApi.generateFromTemplate(templateId, numQuestions),
+    mutationFn: ({ templateId, numQuestions, progressToken }: {
+      templateId: number
+      numQuestions: number
+      progressToken?: string
+    }) => testsApi.generateFromTemplate(templateId, numQuestions, progressToken),
     onSuccess: (test) => {
       setShowGenerateDialog(false)
       setIsGenerating(false)
@@ -223,15 +229,27 @@ export default function TestTemplates() {
   const handleGenerate = async () => {
     if (!selectedTemplate) return
     setIsGenerating(true)
+    // P6.2: token lets the backend report batch progress while we wait
+    const progressToken = crypto.randomUUID()
+    startProgress(progressToken)
     try {
       await generateMutation.mutateAsync({
         templateId: selectedTemplate.id,
         numQuestions: generateNumQuestions,
+        progressToken,
       })
     } catch {
       // generateMutation.onError already resets isGenerating
       toast.error('Could not generate the test. Please try again.')
+    } finally {
+      resetProgress()
     }
+  }
+
+  // P6.2: stop waiting — the backend aborts at the next batch boundary
+  // and discards the partial result
+  const handleCancelGeneration = async () => {
+    await cancelProgress()
   }
   
   const toggleExpanded = (templateId: number) => {
@@ -882,23 +900,34 @@ export default function TestTemplates() {
             )}
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowGenerateDialog(false)} disabled={isGenerating}>
-              Cancel
-            </Button>
-            <Button onClick={handleGenerate} disabled={isGenerating}>
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate
-                </>
-              )}
-            </Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            {/* P6.2: real progress from the backend while waiting */}
+            {isGenerating && (
+              <p className="text-sm text-muted-foreground text-center">
+                {describeProgress(progress) ?? 'This may take a minute depending on the AI model...'}
+              </p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={isGenerating ? handleCancelGeneration : () => setShowGenerateDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleGenerate} disabled={isGenerating}>
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate
+                  </>
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
