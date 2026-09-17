@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -35,12 +35,40 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
     setIsFlipped(!isFlipped)
   }
 
+  // P4.1: the flip surface is a real button — keyboard operable (Space/Enter
+  // via the native button semantics) and announced by screen readers
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault()
+      handleFlip()
+    }
+  }
+
+  // P4.1: rate with keys 1–4 — only after the answer was revealed and
+  // while no save is in flight
+  useEffect(() => {
+    if (!isFlipped || isSubmitting) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key >= '1' && e.key <= '4') {
+        e.preventDefault()
+        handleRate(Number(e.key) as 1 | 2 | 3 | 4)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isFlipped, isSubmitting])
+
   return (
     <div className="flex flex-col items-center w-full">
       {/* The Flipping Card */}
       <div
-        className="w-full max-w-2xl aspect-[4/3] sm:aspect-[3/2] perspective-1000 cursor-pointer"
+        role="button"
+        tabIndex={0}
+        aria-pressed={isFlipped}
+        aria-label={isFlipped ? 'Hide answer' : 'Show answer'}
+        className="w-full max-w-2xl aspect-[4/3] sm:aspect-[3/2] perspective-1000 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-2xl"
         onClick={handleFlip}
+        onKeyDown={handleKeyDown}
       >
         <div
           className={cn(
@@ -60,7 +88,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
             <p className="text-xl sm:text-2xl font-medium text-white leading-relaxed">
               {card.front}
             </p>
-            <p className="absolute bottom-6 text-sm text-slate-400">Tap to reveal answer</p>
+            <p className="absolute bottom-6 text-sm text-slate-400">Tap or press Space to reveal answer</p>
           </div>
 
           {/* Back Face */}
@@ -95,7 +123,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
         )}
       >
         <p className="text-center text-sm text-muted-foreground mb-3">
-          How well did you know this?
+          How well did you know this? <span className="hidden sm:inline">(press 1–4)</span>
         </p>
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
           <Button

@@ -4,6 +4,7 @@ import { Plus, Layers, Trash2, BookOpen, Sparkles, MoreVertical } from 'lucide-r
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
+import { deckIsStudiable, deckStudyCount } from '@/lib/decks'
 import { Progress } from '@/components/ui/progress'
 import {
   DropdownMenu,
@@ -168,10 +169,11 @@ export default function FlashcardDecks() {
 
                   {/* Due Badge & Study Button */}
                   <div className="flex items-center justify-between pt-2">
-                    {deck.due_cards > 0 ? (
+                    {/* P4.3: honest count — what a fresh queue would deliver now */}
+                    {deckIsStudiable(deck) ? (
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                          {deck.due_cards} due
+                          {deckStudyCount(deck)} due
                         </span>
                       </div>
                     ) : (
@@ -179,7 +181,7 @@ export default function FlashcardDecks() {
                     )}
                     <Button
                       size="sm"
-                      disabled={deck.due_cards === 0 && deck.new_cards === 0}
+                      disabled={!deckIsStudiable(deck)}
                       asChild
                     >
                       <Link to={`/flashcards/${deck.id}/study`}>

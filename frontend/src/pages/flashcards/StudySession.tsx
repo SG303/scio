@@ -159,6 +159,8 @@ export default function StudySession() {
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardStats })
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
+      // P4.2: the streak widget counts completed sessions
+      queryClient.invalidateQueries({ queryKey: queryKeys.streak })
     },
   })
 
@@ -284,8 +286,9 @@ export default function StudySession() {
         }
       }
 
-      // Navigate to completion screen
-      navigate(`/flashcards/session-complete`, {
+      // P4.4: navigate with the session ID so the completion screen survives
+      // a refresh (it loads its data from the backend instead of state)
+      navigate(`/flashcards/session-complete?session=${sessionId}`, {
         state: {
           deckId: parseInt(deckId!),
           deckTitle: deck?.title || 'Study Session',
@@ -330,6 +333,20 @@ export default function StudySession() {
     }
     navigate(`/flashcards/${deckId}`)
   }
+
+  // P4.1: Esc exits the session — active only while a queue is loaded.
+  // Re-subscribed each render so it always closes over the current handlers.
+  useEffect(() => {
+    if (!studyQueue || studyQueue.cards.length === 0) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        handleExit()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   // Resume prompt
   if (showResumePrompt) {
@@ -411,7 +428,6 @@ export default function StudySession() {
           <ArrowLeft className="h-5 w-5" />
           <span className="hidden sm:inline">Exit</span>
         </button>
-
         <h1 className="font-medium text-sm truncate max-w-[200px]">
           {deck?.title || 'Study Session'}
         </h1>

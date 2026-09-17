@@ -94,6 +94,35 @@ export default function TakeTest() {
     }
   }, [test?.status, startMutation.isPending])
 
+  // P4.1: keyboard shortcuts — 1-4 select an answer, Enter goes to the next
+  // question (or opens submit on the last one). Active while the test is
+  // in progress; re-subscribed each render for a fresh closure.
+  useEffect(() => {
+    if (showSubmitDialog || !test || test.status !== 'in_progress') return
+    const onKey = (e: KeyboardEvent) => {
+      const questions = test.questions
+      const question = questions[currentQuestion]
+      if (!question) return
+      if (e.key >= '1' && e.key <= '4') {
+        const idx = Number(e.key) - 1
+        if (idx < question.choices.length && !answerMutation.isPending) {
+          e.preventDefault()
+          setLocalAnswers((prev) => ({ ...prev, [question.id]: idx }))
+          answerMutation.mutate({ questionId: question.id, answer: idx })
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (currentQuestion < questions.length - 1) {
+          setCurrentQuestion((prev) => prev + 1)
+        } else {
+          setShowSubmitDialog(true)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -161,6 +190,7 @@ export default function TakeTest() {
           <h1 className="text-xl font-bold">{test.config_title || `Test #${test.id}`}</h1>
           <p className="text-sm text-muted-foreground">
             Question {currentQuestion + 1} of {questions.length}
+            <span className="hidden sm:inline"> · Tip: press 1–4 to answer, Enter for next</span>
           </p>
         </div>
         <Button

@@ -19,6 +19,7 @@ export const queryKeys = {
   flashcardDeck: (id: QueryId) => ['flashcard-deck', String(id ?? '')] as const,
   flashcardCards: (id: QueryId) => ['flashcard-cards', String(id ?? '')] as const,
   flashcardStats: ['flashcard-stats'] as const,
+  streak: ['streak'] as const,
   incompleteSession: (deckId: QueryId) => ['incomplete-session', String(deckId ?? '')] as const,
   studyQueue: (deckId: QueryId, sessionId: number | null) =>
     ['study-queue', String(deckId ?? ''), sessionId] as const,
