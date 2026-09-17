@@ -322,9 +322,6 @@ async def delete_subject(
             await db.delete(deck)
     else:
         # Just unlink materials from subject
-        await db.execute(
-            select(TestConfig).where(TestConfig.subject_id == subject_id)
-        )
         test_result = await db.execute(
             select(TestConfig).where(TestConfig.subject_id == subject_id)
         )

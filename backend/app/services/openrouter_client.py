@@ -78,7 +78,7 @@ async def _post(client: httpx.AsyncClient, payload: Dict[str, Any]) -> httpx.Res
         headers={
             "Authorization": f"Bearer {settings.openrouter_api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:8000",
+            "HTTP-Referer": settings.http_referer,
             "X-Title": "Scio",
         },
         json=payload,

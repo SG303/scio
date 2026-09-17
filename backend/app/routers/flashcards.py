@@ -43,6 +43,8 @@ from app.schemas.flashcard import (
     GenerateFlashcardsResponse,
     CreateFromTestRequest,
     CreateFromTestResponse,
+    CreateAndGenerateDeckRequest,
+    CreateAndGenerateDeckResponse,
     DeckStats,
     GlobalStats,
     StreakResponse,
@@ -213,6 +215,84 @@ async def delete_deck(deck_id: int, db: AsyncSession = Depends(get_db)):
 
 
 # ============== Card Generation ==============
+
+
+@router.post("/create-and-generate", response_model=CreateAndGenerateDeckResponse)
+async def create_and_generate_deck(
+    request: CreateAndGenerateDeckRequest, db: AsyncSession = Depends(get_db)
+):
+    """P5.2: create a deck and generate its first cards in one commit.
+
+    The AI generation runs before anything is written, so a failed
+    generation leaves no empty deck behind.
+    """
+    if not request.ai_model_id:
+        raise HTTPException(status_code=400, detail="An AI model is required to generate cards")
+
+    result = await db.execute(select(AIModel).where(AIModel.id == request.ai_model_id))
+    ai_model = result.scalar_one_or_none()
+    if not ai_model:
+        raise HTTPException(status_code=404, detail="AI model not found")
+    if not ai_model.is_enabled:
+        raise HTTPException(status_code=400, detail="AI model is not enabled")
+
+    documents = []
+    if request.document_ids:
+        result = await db.execute(
+            select(Document).where(Document.id.in_(request.document_ids))
+        )
+        documents = list(result.scalars().all())
+        found_ids = {d.id for d in documents}
+        missing_ids = set(request.document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(
+                status_code=404, detail=f"Document(s) not found: {missing_ids}"
+            )
+
+    # AI call first — nothing is persisted if it fails
+    topic = request.topic or request.title
+    try:
+        cards_data = await generate_flashcards(
+            documents=documents,
+            num_cards=request.num_cards,
+            model_id=ai_model.openrouter_id,
+            topic=topic,
+            custom_prompt=request.custom_prompt,
+        )
+    except ValueError as e:
+        logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate flashcards: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to generate flashcards. Please try again."
+        )
+
+    # Persist deck + cards in a single commit
+    deck_fields = request.model_dump(exclude={"num_cards", "topic"})
+    deck = FlashcardDeck(**deck_fields)
+    db.add(deck)
+    await db.flush()
+
+    for card_data in cards_data:
+        db.add(
+            Flashcard(
+                deck_id=deck.id,
+                front=card_data["front"],
+                back=card_data["back"],
+                source_type="ai_generated",
+            )
+        )
+
+    await db.commit()
+    await db.refresh(deck)
+
+    return CreateAndGenerateDeckResponse(
+        deck=FlashcardDeckResponse.model_validate(deck),
+        cards_generated=len(cards_data),
+    )
 
 
 @router.post("/decks/{deck_id}/generate", response_model=GenerateFlashcardsResponse)
