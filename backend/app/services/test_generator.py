@@ -1,10 +1,13 @@
 import httpx
 import json
+import logging
 import re
 import math
 from typing import List, Dict, Any
 from app.config import get_settings
 from app.models import Document
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -387,8 +390,11 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
             choices.append(f"Choice {len(choices) + 1}")
         choices = choices[:num_choices]
         
-        # Get correct answer
-        correct = q.get("correct_answer", 0)
+        # Get correct answer. An invalid key discards the question
+        # instead of silently clamping it to a valid index — a clamped
+        # index marks a WRONG answer as correct (roadmap P1.1).
+        raw_correct = q.get("correct_answer")
+        correct: Any = raw_correct
         if isinstance(correct, str):
             # Convert letter to index (A=0, B=1, etc.)
             if len(correct) == 1 and correct.upper() in "ABCDEFGH":
@@ -397,8 +403,18 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
                 try:
                     correct = int(correct)
                 except ValueError:
-                    correct = 0
-        correct = max(0, min(int(correct), num_choices - 1))
+                    correct = None
+        if isinstance(correct, bool):
+            correct = None
+        elif isinstance(correct, float):
+            correct = int(correct)
+        if not isinstance(correct, int) or not (0 <= correct < len(choices)):
+            logger.warning(
+                "Discarding question with invalid correct_answer (raw=%r, "
+                "resolved=%r, num_choices=%d): %s",
+                raw_correct, correct, len(choices), str(q["question"])[:80],
+            )
+            continue
         
         validated_questions.append({
             "question": str(q["question"]),
@@ -459,13 +475,24 @@ def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str,
         if exp_match:
             explanation = exp_match.group(1)
         
-        if question_text and choices:
-            questions.append({
-                "question": question_text,
-                "choices": choices[:num_choices],
-                "correct_answer": min(correct, len(choices) - 1),
-                "explanation": explanation
-            })
+        stored_choices = choices[:num_choices] if choices else []
+        if question_text and stored_choices:
+            # An invalid key discards the block instead of clamping it —
+            # and the key must be valid for the STORED (truncated)
+            # choice list (roadmap P1.1)
+            if 0 <= correct < len(stored_choices):
+                questions.append({
+                    "question": question_text,
+                    "choices": stored_choices,
+                    "correct_answer": correct,
+                    "explanation": explanation
+                })
+            else:
+                logger.warning(
+                    "Fallback parser: discarding question with invalid "
+                    "correct_answer (raw=%r, stored_choices=%d): %s",
+                    correct, len(stored_choices), question_text[:80],
+                )
     
     if not questions:
         raise ValueError("Could not extract questions from response")
