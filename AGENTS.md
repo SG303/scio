@@ -34,7 +34,8 @@ backend/
     routers/             # HTTP-Endpunkte: documents, ai_models, tests, flashcards, subjects
     schemas/             # Pydantic-Request/Response-Modelle (ein Modul pro Domäne)
     services/            # Geschäftslogik: spaced_repetition (SM-2), test_generator,
-                         # flashcard_generator, document_parser, openrouter (Model-Cache)
+                         # flashcard_generator, document_parser, openrouter (Model-Cache),
+                         # openrouter_client (gemeinsamer JSON-API-Call mit response_format)
     migrations/          # idempotente Migrations-Skripte, laufen beim Startup (lifespan)
 frontend/
   src/
@@ -127,5 +128,5 @@ Zusätzlich gilt für jedes abgeschlossene Arbeitspaket: Der Besitzer prüft das
 - **Nicht tun:** Auth/Multi-User, neue Abhängigkeiten ohne Not, Änderungen an `components/ui/`, Umbau von SM-2-Konstanten ohne neue Tests, Aufrüstung auf anderes DB-System.
 - **Landmine 1:** `_build_interleaved_queue` existiert **doppelt** in `spaced_repetition.py` (erste Definition ist tot). Bei Arbeiten an der Study-Queue immer die zweite (aktive) Definition ändern; vollständige Entfernung ist Package P4.3.
 - **Landmine 2 (mit P1.1 behoben):** `test_generator.py` verwirft ungültige `correct_answer`-Indizes (ausserhalb `0..len(choices)-1`, nicht konvertierbar, fehlend) mit `logger.warning`, statt sie still auf einen gültigen Index zu klemmen. **Niemals Clamping-Muster (`max(0, min(...))`) auf Antwort-Schlüssel zurückbringen oder auf neue Codepfade kopieren** — ein geklemmter Schlüssel lehrt eine falsche Antwort als richtig.
-- **Landmine 3:** Regex-Substitutionen in `test_generator.py:334-338` laufen global über den AI-Response und können legitime Inhalte zerstören. Fix in P1.2; keine neuen globalen Regex-Fixes hinzufügen.
+- **Landmine 3 (mit P1.2 behoben):** Alle OpenRouter-Calls laufen über `app/services/openrouter_client.py` mit `response_format: json_object` (Automatisch-Retry ohne, falls ein Modell es nicht unterstützt). Reparatur-Regexes laufen **nur noch nach gescheitertem `json.loads`** und **nur innerhalb von `"choices": [...]`-Arrays** (`_repair_choices_arrays`). **Niemals globale Regex-Substitutionen über den AI-Response einbauen** — sie zerstören legitime Frage-/Erklärungsinhalte.
 - **Landmine 4:** Der AI-Call bei Generierung läuft aktuell innerhalb einer offenen DB-Transaktion (SQLite-Schreiblock bis zu 120 s). Keine weiteren Endpunkte nach diesem Muster bauen; Auflösung in P5.2.

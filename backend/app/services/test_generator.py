@@ -1,4 +1,3 @@
-import httpx
 import json
 import logging
 import re
@@ -6,6 +5,7 @@ import math
 from typing import List, Dict, Any
 from app.config import get_settings
 from app.models import Document
+from app.services.openrouter_client import chat_completion_json
 
 logger = logging.getLogger(__name__)
 
@@ -20,27 +20,30 @@ def build_prompt(documents: List[Document], num_questions: int, num_choices: int
         custom_prompt = None
     
     # Base output format instructions (always included)
-    output_format = f"""OUTPUT FORMAT - Return ONLY a valid JSON array like this example:
-[
-  {{
-    "question": "What is the capital of France?",
-    "choices": ["Paris", "London", "Berlin", "Madrid"],
-    "correct_answer": 0,
-    "explanation": "Paris is the capital city of France."
-  }},
-  {{
-    "question": "Which planet is closest to the Sun?",
-    "choices": ["Venus", "Mercury", "Mars", "Earth"],
-    "correct_answer": 1,
-    "explanation": "Mercury is the closest planet to the Sun."
-  }}
-]
+    output_format = f"""OUTPUT FORMAT - Return ONLY a valid JSON object like this example:
+{{
+  "questions": [
+    {{
+      "question": "What is the capital of France?",
+      "choices": ["Paris", "London", "Berlin", "Madrid"],
+      "correct_answer": 0,
+      "explanation": "Paris is the capital city of France."
+    }},
+    {{
+      "question": "Which planet is closest to the Sun?",
+      "choices": ["Venus", "Mercury", "Mars", "Earth"],
+      "correct_answer": 1,
+      "explanation": "Mercury is the closest planet to the Sun."
+    }}
+  ]
+}}
 
 CRITICAL RULES:
+- The top level must be a JSON object with a single key "questions" containing the array of questions
 - "choices" must be a simple JSON array of strings: ["choice1", "choice2", "choice3", "choice4"]
 - Do NOT use letter prefixes like "A:" or "B:" in choices
 - "correct_answer" is the 0-based index (0 for first choice, 1 for second, etc.)
-- Return ONLY the JSON array, no markdown, no extra text"""
+- Return ONLY the JSON object, no markdown, no extra text"""
     
     # Check if we have documents or just a topic
     if documents:
@@ -266,49 +269,47 @@ async def _generate_batch(
     
     prompt = build_prompt(documents, num_questions, num_choices, topic, custom_prompt, existing_questions)
     
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            f"{settings.openrouter_base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:8000",
-                "X-Title": "Scio"
-            },
-            json={
-                "model": model_id,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are an expert educational test creator. Always respond with valid JSON only, no markdown formatting."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "temperature": 0.7,
-                # "max_tokens": 4096  # Removed max_tokens to avoid Context Window limits for large documents
-            }
-        )
-        
-        if response.status_code != 200:
-            error_detail = response.text
-            print(f"OpenRouter API error response: {error_detail}") # Added logging
-            raise ValueError(f"OpenRouter API error ({response.status_code}): {error_detail}")
-        
-        data = response.json()
-        
-        if "error" in data:
-            print(f"OpenRouter error: {data['error']}") # Added logging
-            raise ValueError(f"OpenRouter error: {data['error']}")
-        
-        content = data["choices"][0]["message"]["content"]
-        
-        # Parse the JSON response
-        questions = parse_questions_response(content, num_choices)
-        
-        return questions
+    content = await chat_completion_json(
+        model_id=model_id,
+        system_prompt="You are an expert educational test creator. Always respond with valid JSON only, no markdown formatting.",
+        user_prompt=prompt,
+        temperature=0.7,
+        # max_tokens intentionally omitted: large documents need the full
+        # context window
+    )
+
+    # Parse the JSON response
+    questions = parse_questions_response(content, num_choices)
+
+    return questions
+
+
+def _repair_choices_arrays(content: str) -> str:
+    """Repair common AI formatting mistakes — but ONLY inside
+    `"choices": [...]` spans, never globally over the response.
+
+    The old global regexes rewrote any `X: "text"` pattern they found,
+    destroying legitimate question and explanation contents
+    (roadmap P1.2). Scoped to the choices array these rewrites are safe:
+    they normalise choices written as ["A": "text"], [A: "text"] or
+    ["A. text"] into plain string lists.
+    """
+    def _repair_span(match: Any) -> str:
+        repaired = match.group(0)
+        # Fix: ["A": "text", "B": "text"] -> ["text", "text"]
+        repaired = re.sub(r'"([A-Z])"\s*:\s*"([^"]*)"', r'"\2"', repaired)
+        # Fix: [A: "text", B: "text"] -> ["text", "text"]
+        repaired = re.sub(r'([A-Z])\s*:\s*"([^"]*)"', r'"\2"', repaired)
+        # Fix: letter prefixes like "A. text" or "A) text"
+        repaired = re.sub(r'"([A-Z])[.\)]\s*([^"]*)"', r'"\2"', repaired)
+        return repaired
+
+    return re.sub(
+        r'"choices"\s*:\s*\[[^\]]*\]',
+        _repair_span,
+        content,
+        flags=re.DOTALL,
+    )
 
 
 def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, Any]]:
@@ -332,23 +333,23 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
     if json_match:
         content = json_match.group()
     
-    # Fix common JSON formatting issues from AI responses
-    # Fix: "choices": ["A": "text", "B": "text"] -> "choices": ["text", "text"]
-    content = re.sub(r'"([A-Z])"\s*:\s*"([^"]*)"', r'"\2"', content)
-    # Fix: "choices": [A: "text", B: "text"] -> "choices": ["text", "text"]
-    content = re.sub(r'([A-Z])\s*:\s*"([^"]*)"', r'"\2"', content)
-    # Fix: choices with letter prefixes like "A. text" or "A) text"
-    content = re.sub(r'"([A-Z])[.\)]\s*([^"]*)"', r'"\2"', content)
-    
     try:
         questions = json.loads(content)
     except json.JSONDecodeError as e:
-        # Try a more aggressive fix - extract question objects manually
+        # Repair regexes run ONLY here, after the parse failed, and only
+        # inside "choices" arrays (roadmap P1.2)
         try:
-            questions = extract_questions_fallback(content, num_choices)
-        except Exception:
-            raise ValueError(f"Failed to parse AI response as JSON: {str(e)}\nResponse: {content[:500]}")
+            questions = json.loads(_repair_choices_arrays(content))
+        except json.JSONDecodeError:
+            # Try a more aggressive fix - extract question objects manually
+            try:
+                questions = extract_questions_fallback(content, num_choices)
+            except Exception:
+                raise ValueError(f"Failed to parse AI response as JSON: {str(e)}\nResponse: {content[:500]}")
     
+    if isinstance(questions, dict):
+        # Structured output format: {"questions": [...]}
+        questions = questions.get("questions")
     if not isinstance(questions, list):
         raise ValueError("AI response is not a list of questions")
     
@@ -540,41 +541,18 @@ OUTPUT JSON ONLY:
     if not settings.openrouter_api_key:
         raise ValueError("OpenRouter API key is not configured")
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{settings.openrouter_base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:8000",
-                "X-Title": "Scio"
-            },
-            json={
-                "model": VERIFICATION_MODEL,
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant that outputs only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.1, # Low temperature for more analytical results
-                "max_tokens": 500
-            }
-        )
-        
-        if response.status_code != 200:
-             # Fallback if the specific 'lite' model isn't available/working
-            raise ValueError(f"Verification API error ({response.status_code})")
-            
-        data = response.json()
-        
-        if "error" in data:
-             raise ValueError(f"OpenRouter error: {data['error']}")
-             
-        content = data["choices"][0]["message"]["content"]
-        
-        # Simple cleanup to ensure we get just the JSON
-        if "```" in content:
-            content = content.split("```")[1]
-            if content.strip().startswith("json"):
-                content = content.strip()[4:]
-        
-        return json.loads(content.strip())
+    content = await chat_completion_json(
+        model_id=VERIFICATION_MODEL,
+        system_prompt="You are a helpful assistant that outputs only valid JSON.",
+        user_prompt=prompt,
+        temperature=0.1,  # Low temperature for more analytical results
+        max_tokens=500,
+    )
+
+    # Simple cleanup to ensure we get just the JSON
+    if "```" in content:
+        content = content.split("```")[1]
+        if content.strip().startswith("json"):
+            content = content.strip()[4:]
+
+    return json.loads(content.strip())
