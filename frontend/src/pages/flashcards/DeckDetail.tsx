@@ -9,7 +9,10 @@ import {
   Sparkles,
   BookOpen,
   MoreVertical,
+  Download,
+  Upload,
 } from 'lucide-react'
+import { toast } from '@/components/Toaster'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
@@ -48,6 +51,9 @@ export default function DeckDetail() {
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null)
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null)
   const [newCard, setNewCard] = useState({ front: '', back: '' })
+  // P6.1: CSV import dialog
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
 
   // Fetch deck
   const {
@@ -71,6 +77,26 @@ export default function DeckDetail() {
     queryKey: queryKeys.flashcardCards(deckId),
     queryFn: () => flashcardsApi.listCards(parseInt(deckId!)),
     enabled: !!deckId,
+  })
+
+  // P6.1: export/import
+  const exportMutation = useMutation({
+    mutationFn: ({ format }: { format: 'apkg' | 'csv' }) =>
+      flashcardsApi.exportDeck(parseInt(deckId!), format, deck!.title),
+    onSuccess: () => toast.success('Export downloaded'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Export failed'),
+  })
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => flashcardsApi.importCards(parseInt(deckId!), file),
+    onSuccess: (result) => {
+      toast.success(`Imported ${result.cards_imported} cards${result.rows_skipped ? `, ${result.rows_skipped} rows skipped` : ''}`)
+      setShowImportDialog(false)
+      setImportFile(null)
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(deckId) })
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Import failed'),
   })
 
   // Create card mutation
@@ -208,6 +234,28 @@ export default function DeckDetail() {
           <Button variant="outline" onClick={() => setIsAddingCard(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Card
+          </Button>
+          {/* P6.1: export as Anki or CSV */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={exportMutation.isPending}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportMutation.mutate({ format: 'apkg' })}>
+                Anki deck (.apkg)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportMutation.mutate({ format: 'csv' })}>
+                CSV (.csv)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* P6.1: CSV import */}
+          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import
           </Button>
           {/* P4.3: deck settings incl. daily new-card limit */}
           <Button variant="outline" onClick={handleOpenEditDeck}>
@@ -486,6 +534,43 @@ export default function DeckDetail() {
               disabled={deleteCardMutation.isPending}
             >
               {deleteCardMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* P6.1: CSV Import Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Cards from CSV</DialogTitle>
+            <DialogDescription>
+              Upload a CSV with the columns <code>front</code>, <code>back</code> and{' '}
+              <code>state</code> (state is ignored — imported cards start as new). Rows without
+              front and back are skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            />
+            {importFile && (
+              <p className="text-sm text-muted-foreground">
+                {importFile.name} ({(importFile.size / 1024).toFixed(1)} kB)
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => importFile && importMutation.mutate(importFile)}
+              disabled={!importFile || importMutation.isPending}
+            >
+              {importMutation.isPending ? 'Importing...' : 'Import'}
             </Button>
           </DialogFooter>
         </DialogContent>

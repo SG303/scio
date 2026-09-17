@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
@@ -15,6 +15,19 @@ from app.schemas.test import (
     Choice, GenerateFromTemplateRequest, CreateAndGenerateRequest
 )
 from app.services.test_generator import generate_test_questions, verify_question_integrity
+from app.services import generation_progress
+from app.services.generation_progress import GenerationCancelled
+
+
+def _progress_reporter(token: Optional[str]):
+    """P6.2: build an on_progress callback for a generation token (or None)."""
+    if not token:
+        return None
+
+    def report(**kw):
+        generation_progress.update(token, status="running", **kw)
+
+    return report
 
 router = APIRouter(prefix="/api/tests", tags=["tests"])
 logger = logging.getLogger(__name__)
@@ -177,7 +190,9 @@ async def delete_test_template(template_id: int, db: AsyncSession = Depends(get_
 
 @router.post("/create-and-generate", response_model=TestResponse)
 async def create_and_generate_test(
-    request: CreateAndGenerateRequest, db: AsyncSession = Depends(get_db)
+    request: CreateAndGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    progress_token: Optional[str] = Query(None),
 ):
     """P5.2: create a config and generate its first test in one commit.
 
@@ -221,15 +236,25 @@ async def create_and_generate_test(
             model_id=ai_model.openrouter_id,
             topic=request.title,
             custom_prompt=request.custom_prompt,
+            on_progress=_progress_reporter(progress_token),
         )
+    except GenerationCancelled:
+        raise HTTPException(status_code=400, detail="Generation cancelled")
     except ValueError as e:
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
+        if progress_token:
+            generation_progress.fail(progress_token, str(e))
         raise HTTPException(status_code=500, detail=f"Failed to generate test: {str(e)}")
     except Exception as e:
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
+        if progress_token:
+            generation_progress.fail(progress_token, "Generation failed")
         raise HTTPException(
             status_code=500, detail="Failed to generate test. Please try again."
         )
+
+    if progress_token:
+        generation_progress.complete(progress_token, len(questions_data), num_questions)
 
     # Persist config + test + questions in a single commit
     db_config = TestConfig(
@@ -284,7 +309,8 @@ async def create_and_generate_test(
 async def generate_test(
     config_id: int,
     request: Optional[GenerateFromTemplateRequest] = Body(default=None),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    progress_token: Optional[str] = Query(None),
 ):
     """Generate a new test from a configuration or template"""
     # Get config with AI model
@@ -334,16 +360,26 @@ async def generate_test(
             model_id=config.ai_model.openrouter_id,
             topic=config.title,  # Pass title as topic for document-less generation
             custom_prompt=config.custom_prompt,  # Pass custom prompt if set
-            existing_questions=existing_questions if existing_questions else None
+            existing_questions=existing_questions if existing_questions else None,
+            on_progress=_progress_reporter(progress_token),
         )
+    except GenerationCancelled:
+        raise HTTPException(status_code=400, detail="Generation cancelled")
     except ValueError as e:
         # ValueError typically contains user-friendly messages (e.g., "API key not configured")
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
+        if progress_token:
+            generation_progress.fail(progress_token, str(e))
         raise HTTPException(status_code=500, detail=f"Failed to generate test: {str(e)}")
     except Exception as e:
         # Generic exceptions - log full error but return sanitized message
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
+        if progress_token:
+            generation_progress.fail(progress_token, "Generation failed")
         raise HTTPException(status_code=500, detail="Failed to generate test. Please try again or contact support.")
+
+    if progress_token:
+        generation_progress.complete(progress_token, len(questions_data), num_questions)
     
     # Create test
     test = Test(

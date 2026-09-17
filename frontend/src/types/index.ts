@@ -230,6 +230,45 @@ export interface CreateAndGenerateDeckResponse {
   cards_generated: number
 }
 
+// P6.1: result of a CSV import
+export interface ImportCardsResult {
+  cards_imported: number
+  rows_skipped: number
+}
+
+// P6.3: analytics
+export interface ReviewsPerDay {
+  date: string
+  reviews: number
+}
+
+export interface DeckAnswerTime {
+  deck_id: number
+  deck_title: string
+  avg_time_ms: number | null
+  review_count: number
+}
+
+export interface SubjectScorePoint {
+  test_id: number
+  date: string
+  score: number
+}
+
+export interface SubjectScoreSeries {
+  subject_id: number
+  subject_title: string
+  points: SubjectScorePoint[]
+}
+
+export interface FlashcardAnalytics {
+  reviews_per_day: ReviewsPerDay[]
+  state_distribution: { new: number; learning: number; review: number }
+  avg_answer_time_ms: number | null
+  per_deck: DeckAnswerTime[]
+  subject_scores: SubjectScoreSeries[]
+}
+
 export interface CreateFlashcard {
   front: string
   back: string

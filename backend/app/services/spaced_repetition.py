@@ -14,7 +14,7 @@ Rating Scale:
 from datetime import datetime, timedelta, timezone, date
 import json
 from typing import Tuple, List, Optional
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Flashcard, FlashcardDeck, StudySession
@@ -421,20 +421,23 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
     if not deck:
         return {}
 
+    # B15/P6.3: SQL aggregates instead of loading every card row
     # Count cards by state
     result = await db.execute(
-        select(Flashcard.state, Flashcard.id).where(Flashcard.deck_id == deck_id)
+        select(Flashcard.state, func.count(Flashcard.id))
+        .where(Flashcard.deck_id == deck_id)
+        .group_by(Flashcard.state)
     )
-    cards = result.all()
+    counts_by_state = dict(result.all())
 
-    total = len(cards)
-    new_count = sum(1 for s, _ in cards if s == "new")
-    learning_count = sum(1 for s, _ in cards if s in ("learning", "relearning"))
-    review_count = sum(1 for s, _ in cards if s == "review")
+    total = sum(counts_by_state.values())
+    new_count = counts_by_state.get("new", 0)
+    learning_count = counts_by_state.get("learning", 0) + counts_by_state.get("relearning", 0)
+    review_count = counts_by_state.get("review", 0)
 
     # Count due cards
     result = await db.execute(
-        select(Flashcard).where(
+        select(func.count(Flashcard.id)).where(
             and_(
                 Flashcard.deck_id == deck_id,
                 Flashcard.state != "new",
@@ -442,7 +445,7 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
             )
         )
     )
-    due_count = len(result.scalars().all())
+    due_count = result.scalar_one()
 
     # Cards due today including new cards up to the remaining daily quota
     # P4.3: subtract the new cards already introduced today (deck-wide), so
@@ -453,7 +456,7 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
 
     # Count mastered cards (review state with high EF and good interval)
     result = await db.execute(
-        select(Flashcard).where(
+        select(func.count(Flashcard.id)).where(
             and_(
                 Flashcard.deck_id == deck_id,
                 Flashcard.state == "review",
@@ -462,7 +465,7 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
             )
         )
     )
-    mastered_count = len(result.scalars().all())
+    mastered_count = result.scalar_one()
 
     return {
         "total_cards": total,
@@ -489,40 +492,54 @@ async def get_global_stats(db: AsyncSession) -> dict:
     now = utc_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    # B15/P6.3: SQL aggregates instead of loading every card row
     # Total cards due across all decks
     result = await db.execute(
-        select(Flashcard).where(
+        select(func.count(Flashcard.id)).where(
             and_(Flashcard.state != "new", Flashcard.next_review_at <= now)
         )
     )
-    due_reviews = len(result.scalars().all())
+    due_reviews = result.scalar_one()
 
     # Get all decks with their new card limits
     result = await db.execute(select(FlashcardDeck))
     decks = result.scalars().all()
 
-    total_new_available = 0
+    # New cards per deck in one aggregated query
+    result = await db.execute(
+        select(Flashcard.deck_id, func.count(Flashcard.id))
+        .where(Flashcard.state == "new")
+        .group_by(Flashcard.deck_id)
+    )
+    new_by_deck = dict(result.all())
+
+    # P4.3: new cards already introduced today, all decks in one query
     today = now.date()
-    for deck in decks:
-        # Count new cards in this deck
-        result = await db.execute(
-            select(Flashcard).where(
-                and_(Flashcard.deck_id == deck.id, Flashcard.state == "new")
-            )
+    result = await db.execute(
+        select(
+            StudySession.deck_id,
+            func.sum(StudySession.new_cards_reviewed_today),
         )
-        new_in_deck = len(result.scalars().all())
+        .where(StudySession.study_date == today)
+        .group_by(StudySession.deck_id)
+    )
+    new_reviewed_by_deck = {deck_id: total or 0 for deck_id, total in result.all()}
+
+    total_new_available = 0
+    for deck in decks:
+        new_in_deck = new_by_deck.get(deck.id, 0)
         # P4.3: remaining quota subtracts the new cards already introduced
         # today across this deck's sessions
-        new_reviewed_today = await get_deck_new_cards_today(db, deck.id, today)
+        new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
         total_new_available += max(
             0, min(new_in_deck, deck.new_cards_per_day) - new_reviewed_today
         )
 
     total_due = due_reviews + total_new_available
 
-    # Count total decks and cards
-    result = await db.execute(select(Flashcard))
-    total_cards = len(result.scalars().all())
+    # Count total cards
+    result = await db.execute(select(func.count(Flashcard.id)))
+    total_cards = result.scalar_one()
 
     return {
         "total_decks": len(decks),

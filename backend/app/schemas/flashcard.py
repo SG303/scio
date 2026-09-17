@@ -170,6 +170,46 @@ class CreateAndGenerateDeckResponse(BaseModel):
     cards_generated: int
 
 
+class ImportCardsResult(BaseModel):
+    """P6.1: result of a CSV import into a deck."""
+    cards_imported: int
+    rows_skipped: int
+
+
+# ============== Analytics Schemas (P6.3) ==============
+
+class ReviewsPerDay(BaseModel):
+    date: str  # YYYY-MM-DD
+    reviews: int
+
+
+class DeckAnswerTime(BaseModel):
+    deck_id: int
+    deck_title: str
+    avg_time_ms: Optional[float] = None
+    review_count: int
+
+
+class SubjectScorePoint(BaseModel):
+    test_id: int
+    date: str  # YYYY-MM-DD of completion
+    score: int
+
+
+class SubjectScoreSeries(BaseModel):
+    subject_id: int
+    subject_title: str
+    points: List[SubjectScorePoint]
+
+
+class FlashcardAnalytics(BaseModel):
+    reviews_per_day: List[ReviewsPerDay]
+    state_distribution: dict
+    avg_answer_time_ms: Optional[float] = None
+    per_deck: List[DeckAnswerTime]
+    subject_scores: List[SubjectScoreSeries]
+
+
 # ============== Test Integration Schemas ==============
 
 class CreateFromTestRequest(BaseModel):
