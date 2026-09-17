@@ -87,6 +87,18 @@ export interface CreateTestConfig {
   custom_prompt?: string | null
 }
 
+// P5.2: config + generated test in one call
+export interface CreateAndGenerateTestRequest {
+  title: string
+  num_questions: number
+  num_choices: number
+  ai_model_id: number
+  document_ids: number[]
+  is_template?: boolean
+  custom_prompt?: string | null
+  generate_num_questions?: number
+}
+
 export interface GenerateFromTemplateRequest {
   num_questions?: number
 }
@@ -205,6 +217,17 @@ export interface CreateFlashcardDeck {
   document_ids?: number[] | null
   custom_prompt?: string | null
   new_cards_per_day?: number
+}
+
+// P5.2: deck + generated cards in one call
+export interface CreateAndGenerateDeckRequest extends CreateFlashcardDeck {
+  num_cards: number
+  topic?: string | null
+}
+
+export interface CreateAndGenerateDeckResponse {
+  deck: FlashcardDeck
+  cards_generated: number
 }
 
 export interface CreateFlashcard {
