@@ -5,6 +5,8 @@
 # Database
 data/*.db
 data/*.db-journal
+backend/data/*.db
+backend/data/*.db-journal
 
 # Uploads
 uploads/*
