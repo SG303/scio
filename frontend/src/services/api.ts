@@ -14,6 +14,7 @@ import type {
   StudySession,
   ReviewResponse,
   GlobalFlashcardStats,
+  StreakStats,
   DeckStats,
   StudyQueueResponse,
   CreateFlashcardDeck,
@@ -289,6 +290,10 @@ export const flashcardsApi = {
   // Stats
   getGlobalStats: () =>
     fetchApi<GlobalFlashcardStats>('/flashcards/stats'),
+
+  // P4.2: streak and daily goal
+  getStreak: () =>
+    fetchApi<StreakStats>('/flashcards/streak'),
   
   getDeckStats: (deckId: number) =>
     fetchApi<DeckStats>(`/flashcards/decks/${deckId}/stats`),

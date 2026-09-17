@@ -45,6 +45,7 @@ from app.schemas.flashcard import (
     CreateFromTestResponse,
     DeckStats,
     GlobalStats,
+    StreakResponse,
     StudyQueueResponse,
 )
 from app.services.spaced_repetition import (
@@ -53,6 +54,7 @@ from app.services.spaced_repetition import (
     get_deck_stats,
     get_global_stats,
     get_incomplete_session,
+    get_streak_stats,
 )
 from app.services.flashcard_generator import (
     generate_flashcards,
@@ -99,6 +101,8 @@ async def list_decks(db: AsyncSession = Depends(get_db)):
                 due_cards=stats.get("due_today", 0),
                 learning_cards=stats.get("learning_cards", 0),
                 review_cards=stats.get("review_cards", 0),
+                due_reviews=stats.get("due_reviews", 0),
+                new_available=stats.get("new_available", 0),
             )
         )
 
@@ -162,6 +166,8 @@ async def get_deck(deck_id: int, db: AsyncSession = Depends(get_db)):
         new_cards_per_day=deck.new_cards_per_day,
         created_at=deck.created_at,
         updated_at=deck.updated_at,
+        due_reviews=stats.get("due_reviews", 0),
+        new_available=stats.get("new_available", 0),
         total_cards=stats.get("total_cards", 0),
         new_cards=stats.get("new_cards", 0),
         due_cards=stats.get("due_today", 0),
@@ -394,8 +400,6 @@ async def get_study_cards(
 
     # Get session data if provided
     cards_studied_json = None
-    new_cards_reviewed_today = 0
-    study_date = None
 
     if session_id is not None:
         result = await db.execute(
@@ -404,8 +408,23 @@ async def get_study_cards(
         session = result.scalar_one_or_none()
         if session:
             cards_studied_json = session.cards_studied_json
-            new_cards_reviewed_today = session.new_cards_reviewed_today or 0
-            study_date = session.study_date
+
+    # P4.3: the daily new-card limit is deck-wide — sum the counters of all
+    # of today's sessions of this deck instead of using only the resumed
+    # session's own counter, so several sessions share one daily limit
+    today = utc_now().date()
+    result = await db.execute(
+        select(StudySession).where(
+            and_(
+                StudySession.deck_id == deck_id,
+                StudySession.study_date == today,
+            )
+        )
+    )
+    new_cards_reviewed_today = sum(
+        (s.new_cards_reviewed_today or 0) for s in result.scalars().all()
+    )
+    study_date = today if new_cards_reviewed_today > 0 else None
 
     cards = await get_study_queue(
         db,
@@ -634,6 +653,14 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     """Get global flashcard statistics."""
     stats = await get_global_stats(db)
     return GlobalStats(**stats)
+
+
+@router.get("/streak", response_model=StreakResponse)
+async def get_streak(db: AsyncSession = Depends(get_db)):
+    """P4.2: study streak, daily goal progress and what's due today."""
+    streak = await get_streak_stats(db)
+    stats = await get_global_stats(db)
+    return StreakResponse(**streak, due_today=stats["due_today"])
 
 
 @router.get("/decks/{deck_id}/stats", response_model=DeckStats)

@@ -81,6 +81,8 @@ class FlashcardDeckInSubject(BaseModel):
     learning_cards: int = 0
     review_cards: int = 0
     due_cards: int = 0
+    due_reviews: int = 0
+    new_available: int = 0
     created_at: datetime
     
     class Config:

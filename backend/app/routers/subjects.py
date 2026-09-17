@@ -221,6 +221,8 @@ async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
             learning_cards=stats.get('learning_cards', 0),
             review_cards=stats.get('review_cards', 0),
             due_cards=stats.get('due_today', 0),
+            due_reviews=stats.get('due_reviews', 0),
+            new_available=stats.get('new_available', 0),
             created_at=deck.created_at
         ))
     
