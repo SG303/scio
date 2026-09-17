@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from '@/components/Toaster'
 import {
   FileText,
   Plus,
@@ -117,6 +118,7 @@ export default function TestTemplates() {
     },
     onError: () => {
       setDeletingTemplateId(null)
+      toast.error('Could not delete the template.')
     },
   })
   
@@ -155,19 +157,29 @@ export default function TestTemplates() {
     }))
   }
   
+  // P3.1 (M5): surface failures — previously these awaited mutations
+  // rejected unhandled and the dialog just stayed open
   const handleCreateTemplate = async () => {
-    await createMutation.mutateAsync({
-      ...formData,
-      custom_prompt: formData.custom_prompt || null,
-    })
+    try {
+      await createMutation.mutateAsync({
+        ...formData,
+        custom_prompt: formData.custom_prompt || null,
+      })
+    } catch {
+      toast.error('Could not create the template. Please try again.')
+    }
   }
   
   const handleUpdateTemplate = async () => {
     if (!editingTemplate) return
-    await updateMutation.mutateAsync({
-      id: editingTemplate.id,
-      data: formData,
-    })
+    try {
+      await updateMutation.mutateAsync({
+        id: editingTemplate.id,
+        data: formData,
+      })
+    } catch {
+      toast.error('Could not save the template. Please try again.')
+    }
   }
   
   const handleOpenEditDialog = (template: TestConfig) => {
@@ -193,10 +205,15 @@ export default function TestTemplates() {
   const handleGenerate = async () => {
     if (!selectedTemplate) return
     setIsGenerating(true)
-    await generateMutation.mutateAsync({
-      templateId: selectedTemplate.id,
-      numQuestions: generateNumQuestions,
-    })
+    try {
+      await generateMutation.mutateAsync({
+        templateId: selectedTemplate.id,
+        numQuestions: generateNumQuestions,
+      })
+    } catch {
+      // generateMutation.onError already resets isGenerating
+      toast.error('Could not generate the test. Please try again.')
+    }
   }
   
   const toggleExpanded = (templateId: number) => {
