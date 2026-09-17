@@ -34,6 +34,13 @@ function formatNextReview(nextReviewAt: string | null, intervalDays: number): st
   return 'under a minute'
 }
 
+// P5.2: single source of truth for the rating → stats-key mapping
+export type SessionStats = { again: number; hard: number; good: number; easy: number }
+
+export function ratingStatsKey(rating: 1 | 2 | 3 | 4): keyof SessionStats {
+  return rating === 1 ? 'again' : rating === 2 ? 'hard' : rating === 3 ? 'good' : 'easy'
+}
+
 export default function StudySession() {
   const { deckId } = useParams<{ deckId: string }>()
   const navigate = useNavigate()
@@ -252,10 +259,7 @@ export default function StudySession() {
     // Update local stats
     setSessionStats((prev) => ({
       ...prev,
-      again: prev.again + (rating === 1 ? 1 : 0),
-      hard: prev.hard + (rating === 2 ? 1 : 0),
-      good: prev.good + (rating === 3 ? 1 : 0),
-      easy: prev.easy + (rating === 4 ? 1 : 0),
+      [ratingStatsKey(rating)]: prev[ratingStatsKey(rating)] + 1,
     }))
 
     // Wait for exit animation to complete (P2.2: tracked so it can be
@@ -295,8 +299,7 @@ export default function StudySession() {
           cardsReviewed: studyQueue.cards.length,
           stats: {
             ...sessionStats,
-            [rating === 1 ? 'again' : rating === 2 ? 'hard' : rating === 3 ? 'good' : 'easy']:
-              sessionStats[rating === 1 ? 'again' : rating === 2 ? 'hard' : rating === 3 ? 'good' : 'easy'] + 1,
+            [ratingStatsKey(rating)]: sessionStats[ratingStatsKey(rating)] + 1,
           },
           totalTimeMs,
         },

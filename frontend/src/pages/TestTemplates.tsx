@@ -17,6 +17,7 @@ import {
   Clock,
   GraduationCap,
   ArrowRight,
+  TrendingUp,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ import {
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
 import { cn, calculateEstimatedCost, formatPricePerMillion, calculateTestGenerationTokens, formatDate, getScoreColor } from '@/lib/utils'
 import { TEMPLATE_QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
+import { ScoreSparkline } from '@/components/ScoreSparkline'
 import type { TestConfig } from '@/types'
 
 export default function TestTemplates() {
@@ -86,6 +88,22 @@ export default function TestTemplates() {
     queryKey: queryKeys.tests,
     queryFn: testsApi.list,
   })
+
+  // P5.1: score history per template for the sparkline cards.
+  // With few templates a query per template is cheap and keeps the code simple.
+  const { data: templatesWithTests = [] } = useQuery({
+    queryKey: ['templates-with-scores', templates],
+    queryFn: async () =>
+      Promise.all(
+        templates.map(async (tpl) => {
+          const scores = await testsApi.getConfigScores(tpl.id)
+          return { templateId: tpl.id, scores }
+        })
+      ),
+    enabled: templates.length > 0,
+    initialData: templates.map((tpl) => ({ templateId: tpl.id, scores: [] as number[] })),
+  })
+  const scoresByTemplate = new Map(templatesWithTests.map((t) => [t.templateId, t.scores]))
   
   // Mutations
   const createMutation = useMutation({
@@ -337,6 +355,23 @@ export default function TestTemplates() {
                       </span>
                     </div>
                     
+                    {(() => {
+                      // P5.1: score trend from completed tests of this template
+                      const scores = scoresByTemplate.get(template.id) ?? []
+                      return scores.length >= 2 ? (
+                        <div
+                          className="mt-3 flex items-center gap-2 text-primary"
+                          title="Score trend (recent tests)"
+                        >
+                          <TrendingUp className="h-4 w-4" />
+                          <ScoreSparkline scores={scores} />
+                          <span className="text-xs text-muted-foreground">
+                            {scores[scores.length - 1]}% last
+                          </span>
+                        </div>
+                      ) : null
+                    })()}
+                    
                     {template.custom_prompt && (
                       <div className="mt-3">
                         <button
@@ -409,7 +444,8 @@ export default function TestTemplates() {
             </div>
             {tests.length > 5 && (
               <Button variant="ghost" size="sm" asChild>
-                <Link to="/">
+                {/* P5.1: points to the real test history instead of the dashboard */}
+                <Link to="/tests">
                   View all
                   <ArrowRight className="h-4 w-4 ml-1" />
                 </Link>
