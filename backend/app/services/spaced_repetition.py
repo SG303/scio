@@ -28,6 +28,10 @@ MIN_EF = 1.3
 # Default easiness factor for new cards
 DEFAULT_EF = 2.5
 
+# P4.2: daily review goal for the dashboard streak widget (initially fixed;
+# making it user-configurable is a later roadmap item)
+DAILY_GOAL_REVIEWS = 30
+
 
 def utc_now() -> datetime:
     """Return current UTC time (timezone-aware)."""
@@ -246,42 +250,6 @@ async def get_learning_cards(db: AsyncSession, deck_id: int) -> List[Flashcard]:
     return list(result.scalars().all())
 
 
-def _build_interleaved_queue(
-    learning_cards: List[Flashcard],
-    review_cards: List[Flashcard],
-    new_cards: List[Flashcard],
-) -> List[Flashcard]:
-    """
-    Build study queue with learning cards interleaved.
-
-    Anki-style: Learning cards appear more frequently,
-    reviews and new cards are distributed throughout.
-
-    Args:
-        learning_cards: Cards in learning/relearning state
-        review_cards: Cards in review state
-        new_cards: New cards to introduce
-
-    Returns:
-        Interleaved list of cards for study
-    """
-    queue = []
-
-    queue.extend(review_cards)
-
-    queue.extend(new_cards)
-
-    if learning_cards and queue:
-        interval = max(1, len(queue) // (len(learning_cards) + 1))
-        for i, card in enumerate(learning_cards):
-            insert_pos = min((i + 1) * interval, len(queue))
-            queue.insert(insert_pos, card)
-    elif learning_cards:
-        queue = learning_cards
-
-    return queue
-
-
 async def get_study_queue(
     db: AsyncSession,
     deck_id: int,
@@ -444,6 +412,7 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
         Dictionary with deck statistics
     """
     now = utc_now()
+    today = now.date()
 
     # Get deck
     result = await db.execute(select(FlashcardDeck).where(FlashcardDeck.id == deck_id))
@@ -475,8 +444,11 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
     )
     due_count = len(result.scalars().all())
 
-    # Cards due today including new cards up to limit
-    new_today = min(new_count, deck.new_cards_per_day)
+    # Cards due today including new cards up to the remaining daily quota
+    # P4.3: subtract the new cards already introduced today (deck-wide), so
+    # the number matches what a fresh study queue would actually deliver
+    new_reviewed_today = await get_deck_new_cards_today(db, deck_id, today)
+    new_today = max(0, min(new_count, deck.new_cards_per_day) - new_reviewed_today)
     due_today = due_count + new_today
 
     # Count mastered cards (review state with high EF and good interval)
@@ -530,6 +502,7 @@ async def get_global_stats(db: AsyncSession) -> dict:
     decks = result.scalars().all()
 
     total_new_available = 0
+    today = now.date()
     for deck in decks:
         # Count new cards in this deck
         result = await db.execute(
@@ -538,7 +511,12 @@ async def get_global_stats(db: AsyncSession) -> dict:
             )
         )
         new_in_deck = len(result.scalars().all())
-        total_new_available += min(new_in_deck, deck.new_cards_per_day)
+        # P4.3: remaining quota subtracts the new cards already introduced
+        # today across this deck's sessions
+        new_reviewed_today = await get_deck_new_cards_today(db, deck.id, today)
+        total_new_available += max(
+            0, min(new_in_deck, deck.new_cards_per_day) - new_reviewed_today
+        )
 
     total_due = due_reviews + total_new_available
 
@@ -552,4 +530,133 @@ async def get_global_stats(db: AsyncSession) -> dict:
         "due_today": total_due,
         "due_reviews": due_reviews,
         "new_available": total_new_available,
+    }
+
+
+# ============== Streaks (P4.2) ==============
+
+
+async def get_deck_new_cards_today(
+    db: AsyncSession, deck_id: int, today: date
+) -> int:
+    """
+    P4.3: new cards already introduced today for a deck — summed over all
+    of the day's sessions, so the daily limit is deck-wide instead of
+    restarting with every session.
+
+    Args:
+        db: Database session
+        deck_id: ID of the deck
+        today: the reference date
+
+    Returns:
+        Number of new cards introduced today for this deck
+    """
+    result = await db.execute(
+        select(StudySession).where(
+            and_(
+                StudySession.deck_id == deck_id,
+                StudySession.study_date == today,
+            )
+        )
+    )
+    return sum((s.new_cards_reviewed_today or 0) for s in result.scalars().all())
+
+
+def compute_streak(
+    reviews_by_day: dict,
+    today: date,
+) -> Tuple[int, int]:
+    """
+    Compute current and longest study streak from daily review counts.
+
+    A day counts towards a streak if at least one review happened. The
+    current streak tolerates "today not studied yet": it counts down from
+    today if today has reviews, otherwise from yesterday — so a streak is
+    still alive in the evening before the first review of the day.
+
+    Args:
+        reviews_by_day: mapping of date -> number of reviews
+        today: the reference date (usually the current date)
+
+    Returns:
+        Tuple of (current_streak, longest_streak)
+    """
+    days = {day for day, count in reviews_by_day.items() if count > 0}
+
+    # Current streak: count consecutive days ending today (or yesterday)
+    cursor = today if today in days else today - timedelta(days=1)
+    current = 0
+    while cursor in days:
+        current += 1
+        cursor -= timedelta(days=1)
+
+    # Longest streak: longest run of consecutive days overall
+    longest = 0
+    run = 0
+    for day in sorted(days):
+        run = run + 1 if (day - timedelta(days=1)) in days else 1
+        longest = max(longest, run)
+
+    return current, longest
+
+
+def remaining_new_quota(
+    new_cards_limit: int,
+    new_cards_reviewed_today: int,
+    study_date: Optional[date],
+    today: date,
+) -> int:
+    """
+    P4.3: remaining new-card quota for a deck on a given day. The counter
+    is deck-wide (summed over all of the day's sessions by the caller), so
+    several sessions on one day share one daily limit.
+
+    Args:
+        new_cards_limit: deck's new_cards_per_day
+        new_cards_reviewed_today: new cards already introduced today (deck-wide)
+        study_date: the day the counter was last touched (None = untouched)
+        today: the reference date
+
+    Returns:
+        Remaining new cards allowed today
+    """
+    if study_date is None or study_date != today:
+        return new_cards_limit
+    return max(0, new_cards_limit - new_cards_reviewed_today)
+
+
+async def get_streak_stats(db: AsyncSession) -> dict:
+    """
+    P4.2: streak and daily-goal stats computed from completed sessions.
+
+    Args:
+        db: Database session
+
+    Returns:
+        Dictionary with current_streak, longest_streak, reviews_today
+        and daily_goal
+    """
+    result = await db.execute(
+        select(StudySession).where(StudySession.completed_at.isnot(None))
+    )
+    sessions = result.scalars().all()
+
+    now = utc_now()
+    today = now.date()
+
+    # Reviews per day: a session's day is its study_date if set (the day
+    # its daily-limit counter was last touched), else the day it completed
+    reviews_by_day: dict = {}
+    for session in sessions:
+        day = session.study_date or (session.completed_at or session.started_at).date()
+        reviews_by_day[day] = reviews_by_day.get(day, 0) + (session.cards_reviewed or 0)
+
+    current, longest = compute_streak(reviews_by_day, today)
+
+    return {
+        "current_streak": current,
+        "longest_streak": longest,
+        "reviews_today": reviews_by_day.get(today, 0),
+        "daily_goal": DAILY_GOAL_REVIEWS,
     }

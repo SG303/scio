@@ -48,6 +48,10 @@ class FlashcardDeckWithStats(FlashcardDeckResponse):
     due_cards: int = 0
     learning_cards: int = 0
     review_cards: int = 0
+    # P4.3: what a fresh study queue would deliver right now — used by the
+    # frontend to disable study buttons honestly
+    due_reviews: int = 0
+    new_available: int = 0
 
 
 # ============== Flashcard Schemas ==============
@@ -190,6 +194,15 @@ class GlobalStats(BaseModel):
     due_today: int
     due_reviews: int
     new_available: int
+
+
+class StreakResponse(BaseModel):
+    """P4.2: study streak and daily goal statistics."""
+    current_streak: int
+    longest_streak: int
+    reviews_today: int
+    daily_goal: int
+    due_today: int
 
 
 # ============== Study Queue Schemas ==============
