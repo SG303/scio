@@ -166,6 +166,7 @@ class CreateFromTestResponse(BaseModel):
     """Schema for test-to-flashcard conversion response."""
     deck_id: int
     cards_created: int
+    cards_skipped: int = Field(default=0, description="Cards skipped because the deck already has one for that source question")
     cards: List[FlashcardResponse]
 
 

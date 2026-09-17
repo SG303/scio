@@ -221,6 +221,8 @@ export interface CreateFromTestRequest {
 export interface CreateFromTestResponse {
   deck_id: number
   cards_created: number
+  /** Cards skipped because the deck already has one for that source question */
+  cards_skipped?: number
   cards: Flashcard[]
 }
 
