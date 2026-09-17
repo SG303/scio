@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { documentsApi } from '@/services/api'
 import { formatDate } from '@/lib/utils'
 import type { Document } from '@/types'
+import { queryKeys } from '@/lib/constants'
 
 const docTypeConfig = {
   exam_objectives: { label: 'Exam Objectives', icon: ListChecks, color: 'text-blue-400' },
@@ -32,14 +33,14 @@ export default function Documents() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const { data: documents = [], isLoading } = useQuery({
-    queryKey: ['documents'],
+    queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
 
   const createMutation = useMutation({
     mutationFn: documentsApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents })
       setIsAddOpen(false)
       resetForm()
     },
@@ -54,7 +55,7 @@ export default function Documents() {
     mutationFn: ({ title, docType, file }: { title: string; docType: string; file: File }) =>
       documentsApi.upload(title, docType, file),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents })
       setIsAddOpen(false)
       resetForm()
       setIsUploading(false)
@@ -68,7 +69,7 @@ export default function Documents() {
   const deleteMutation = useMutation({
     mutationFn: documentsApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents })
     },
   })
 

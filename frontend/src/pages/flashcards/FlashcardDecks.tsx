@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Plus, Layers, Trash2, BookOpen, Sparkles, MoreVertical } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { QueryState } from '@/components/QueryState'
 import { Progress } from '@/components/ui/progress'
 import {
   DropdownMenu,
@@ -21,20 +22,21 @@ import {
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
+import { queryKeys } from '@/lib/constants'
 
 export default function FlashcardDecks() {
   const queryClient = useQueryClient()
   const [deletingDeckId, setDeletingDeckId] = useState<number | null>(null)
 
-  const { data: decks = [], isLoading } = useQuery({
-    queryKey: ['flashcard-decks'],
+  const { data: decks = [], isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.flashcardDecks,
     queryFn: flashcardsApi.listDecks,
   })
 
   const deleteMutation = useMutation({
     mutationFn: flashcardsApi.deleteDeck,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
       setDeletingDeckId(null)
     },
   })
@@ -46,11 +48,12 @@ export default function FlashcardDecks() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
+    return <QueryState loading />
+  }
+
+  // P3.3: a failed query is an error, not an empty deck list
+  if (error) {
+    return <QueryState error={error} onRetry={() => refetch()} />
   }
 
   return (

@@ -9,13 +9,13 @@ import {
   Layers,
   MoreVertical,
   Trash2,
-  Loader2,
   BookOpen,
   TrendingUp,
   FileText,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { QueryState } from '@/components/QueryState'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils'
 import type { TestConfigInSubject, FlashcardDeckInSubject } from '@/types'
 import GenerateMaterialDialog from './GenerateMaterialDialog'
 import AddToExistingDialog from './AddToExistingDialog'
+import { queryKeys } from '@/lib/constants'
 
 export default function SubjectDetail() {
   const { subjectId } = useParams<{ subjectId: string }>()
@@ -49,8 +50,8 @@ export default function SubjectDetail() {
   const [deletingTest, setDeletingTest] = useState<TestConfigInSubject | null>(null)
   const [deletingDeck, setDeletingDeck] = useState<FlashcardDeckInSubject | null>(null)
 
-  const { data: subject, isLoading } = useQuery({
-    queryKey: ['subject', subjectId],
+  const { data: subject, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.subject(subjectId),
     queryFn: () => subjectsApi.get(parseInt(subjectId!)),
     enabled: !!subjectId,
   })
@@ -58,25 +59,33 @@ export default function SubjectDetail() {
   const deleteTestMutation = useMutation({
     mutationFn: (configId: number) => testsApi.deleteTemplate(configId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subject', subjectId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subject(subjectId) })
+      // P3.2: the deleted template also lives in the templates and tests
+      // lists — invalidate those views too
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tests })
       setDeletingTest(null)
     },
   })
 
   const deleteDeckMutation = useMutation({
     mutationFn: (deckId: number) => flashcardsApi.deleteDeck(deckId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subject', subjectId] })
+    onSuccess: (_result, deckId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.subject(subjectId) })
+      // P3.2: deck lists and a possibly cached deck detail must refresh
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
       setDeletingDeck(null)
     },
   })
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <QueryState loading />
+  }
+
+  // P3.3: distinguish a failed query from a subject that doesn't exist
+  if (error) {
+    return <QueryState error={error} onRetry={() => refetch()} />
   }
 
   if (!subject) {
