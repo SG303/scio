@@ -133,29 +133,65 @@ class TestParseQuestionsResponse:
         with pytest.raises(ValueError):
             parse_questions_response("I am sorry, I cannot create questions.", num_choices=4)
 
-    # ---- CURRENT BEHAVIOUUR pins (documented bugs B1/B2, fixed in P1.1/P1.2) ----
+    # ---- Invalid answer keys are discarded, never clamped (P1.1) ----
 
-    def test_CURRENT_invalid_index_is_clamped_not_rejected(self):
-        """B1 (roadmap P1.1): out-of-range correct_answer is silently clamped.
-
-        This documents today's dangerous behaviour; P1.1 will flip this
-        to 'question is discarded' and must update this test.
-        """
+    def test_invalid_index_discards_question(self):
+        """P1.1: an out-of-range correct_answer discards the question
+        instead of silently clamping it to the last choice (which marked
+        a wrong answer as correct)."""
         content = json.dumps(
             [{"question": "Q1", "choices": ["A", "B", "C", "D"],
               "correct_answer": 7}]
         )
-        questions = parse_questions_response(content, num_choices=4)
-        assert questions[0]["correct_answer"] == 3  # clamped to last choice
+        with pytest.raises(ValueError):
+            parse_questions_response(content, num_choices=4)
 
-    def test_CURRENT_non_numeric_correct_falls_back_to_zero(self):
-        """B1 companion: unparseable answer keys silently become index 0."""
+    def test_invalid_index_dropped_but_valid_ones_kept(self):
+        """P1.1: among several questions only the invalid ones are
+        dropped; count and order of the valid ones stay consistent."""
+        content = json.dumps([
+            q("Q1", correct=0),
+            {"question": "Q2", "choices": ["A", "B", "C", "D"],
+             "correct_answer": 9},
+            q("Q3", correct=2),
+        ])
+        questions = parse_questions_response(content, num_choices=4)
+        assert len(questions) == 2
+        assert [x["question"] for x in questions] == ["Q1", "Q3"]
+        assert [x["correct_answer"] for x in questions] == [0, 2]
+
+    def test_non_numeric_correct_discards_question(self):
         content = json.dumps(
             [{"question": "Q1", "choices": ["A", "B", "C", "D"],
               "correct_answer": "unknown"}]
         )
+        with pytest.raises(ValueError):
+            parse_questions_response(content, num_choices=4)
+
+    def test_missing_correct_answer_discards_question(self):
+        """A question without any answer key is unusable for a learning
+        app — it must not silently become index 0."""
+        content = json.dumps(
+            [{"question": "Q1", "choices": ["A", "B", "C", "D"]}]
+        )
+        with pytest.raises(ValueError):
+            parse_questions_response(content, num_choices=4)
+
+    def test_negative_index_discards_question(self):
+        content = json.dumps(
+            [{"question": "Q1", "choices": ["A", "B", "C", "D"],
+              "correct_answer": -1}]
+        )
+        with pytest.raises(ValueError):
+            parse_questions_response(content, num_choices=4)
+
+    def test_valid_index_at_boundaries_is_kept(self):
+        content = json.dumps([
+            q("First", correct=0),
+            q("Last", correct=3),
+        ])
         questions = parse_questions_response(content, num_choices=4)
-        assert questions[0]["correct_answer"] == 0
+        assert [x["correct_answer"] for x in questions] == [0, 3]
 
     def test_CURRENT_explanation_with_letter_colon_pattern_survives(self):
         """B2 regression guard: an explanation containing `X: "text"` must
@@ -193,6 +229,20 @@ class TestExtractQuestionsFallback:
             '"correct_answer": "B", "explanation": ""}'
         )
         questions = extract_questions_fallback(content, num_choices=2)
+        assert questions[0]["correct_answer"] == 1
+
+    def test_fallback_invalid_index_discards_block(self):
+        """P1.1: in the fallback path an out-of-range key discards the
+        block too (and is validated against the truncated choice list)."""
+        content = (
+            '[{"question": "Q1", "choices": ["Alpha", "Beta", "Gamma", "Delta"], '
+            '"correct_answer": 5, "explanation": "E"}, '
+            '{"question": "Q2", "choices": ["Alpha", "Beta"], '
+            '"correct_answer": 1, "explanation": ""}]'
+        )
+        questions = extract_questions_fallback(content, num_choices=2)
+        assert len(questions) == 1
+        assert questions[0]["question"] == "Q2"
         assert questions[0]["correct_answer"] == 1
 
     def test_fallback_no_questions_raises(self):
