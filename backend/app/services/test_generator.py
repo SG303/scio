@@ -145,7 +145,8 @@ async def generate_test_questions(
     model_id: str,
     topic: str = "",
     custom_prompt: str = None,
-    existing_questions: List[str] = None
+    existing_questions: List[str] = None,
+    on_progress=None
 ) -> List[Dict[str, Any]]:
     """
     Generate test questions using OpenRouter API.
@@ -160,11 +161,21 @@ async def generate_test_questions(
     
     # Start with any previously existing questions passed to the function
     current_existing = list(existing_questions) if existing_questions else []
+
+    async def report(**kw):
+        if on_progress is not None:
+            await on_progress(**kw)
     
     # Strategy 1: Try single call for all questions (most token-efficient)
     # This works well for most models - 60 questions = ~7,200 output tokens
     if num_questions <= 60:
         try:
+            await report(
+                stage="Generating questions",
+                done=0,
+                total=num_questions,
+                message="Generating all questions in a single call",
+            )
             questions = await _generate_batch(
                 documents, 
                 num_questions, 
@@ -188,7 +199,7 @@ async def generate_test_questions(
     try:
         all_questions = await _generate_with_batch_size(
             documents, num_questions, num_choices, model_id,
-            topic, custom_prompt, current_existing, MEDIUM_BATCH_SIZE
+            topic, custom_prompt, current_existing, MEDIUM_BATCH_SIZE, report
         )
         if len(all_questions) >= num_questions * 0.8:
             return all_questions[:num_questions]
@@ -199,7 +210,7 @@ async def generate_test_questions(
     SMALL_BATCH_SIZE = 10
     all_questions = await _generate_with_batch_size(
         documents, num_questions, num_choices, model_id,
-        topic, custom_prompt, current_existing, SMALL_BATCH_SIZE
+        topic, custom_prompt, current_existing, SMALL_BATCH_SIZE, report
     )
     
     return all_questions
@@ -213,7 +224,8 @@ async def _generate_with_batch_size(
     topic: str,
     custom_prompt: str,
     existing_questions: List[str],
-    batch_size: int
+    batch_size: int,
+    on_progress=None
 ) -> List[Dict[str, Any]]:
     """Generate questions using the specified batch size."""
     
@@ -222,6 +234,17 @@ async def _generate_with_batch_size(
     current_existing = list(existing_questions) if existing_questions else []
     
     for i in range(num_batches):
+        # P6.2: report batch progress between AI calls (also the point
+        # where a user cancellation is noticed and raises)
+        if on_progress is not None:
+            await on_progress(
+                stage="Generating questions",
+                batch=i + 1,
+                batches_total=num_batches,
+                done=len(all_questions),
+                total=num_questions,
+                message=f"Batch {i + 1} of {num_batches}",
+            )
         questions_in_batch = min(batch_size, num_questions - len(all_questions))
         
         if questions_in_batch <= 0:
