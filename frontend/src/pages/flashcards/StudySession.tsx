@@ -28,23 +28,35 @@ export default function StudySession() {
   const sessionStartTime = useRef<number>(Date.now())
   const cardStartTime = useRef<number>(Date.now())
 
-  // Check for incomplete session
-  const { data: incompleteSession } = useQuery({
+  // Check for incomplete session.
+  // P2.1: isLoading is exposed — a new session must never start while this
+  // check is still loading (that race created ghost sessions and conflicting
+  // resume prompts).
+  const { data: incompleteSession, isLoading: sessionChecking } = useQuery({
     queryKey: ['incomplete-session', deckId],
     queryFn: () => flashcardsApi.getIncompleteSession(parseInt(deckId!)),
     enabled: !!deckId,
   })
 
-  // Handle incomplete session detection
+  // P2.1: StrictMode guards — the effect below runs twice in dev, and a
+  // session must only ever be started (or prompted for) once per visit.
+  const decisionMade = useRef(false)
+  const startAttempted = useRef(false)
+
+  // Handle incomplete session detection (P2.1: only after the check resolved)
   useEffect(() => {
-    if (incompleteSession && incompleteSession.has_incomplete_session && !sessionId) {
+    if (sessionChecking || !incompleteSession) return
+    if (sessionId || pendingSessionId || decisionMade.current) return
+
+    if (incompleteSession.has_incomplete_session) {
       setPendingSessionId(incompleteSession.session_id || null)
       setCardsStudiedCount(incompleteSession.cards_studied_count || 0)
       setShowResumePrompt(true)
-    } else if (deckId && !sessionId && !pendingSessionId) {
+    } else if (!startAttempted.current) {
+      startAttempted.current = true
       startSessionMutation.mutate()
     }
-  }, [incompleteSession, deckId, sessionId, pendingSessionId])
+  }, [incompleteSession, sessionChecking, sessionId, pendingSessionId])
 
   // Fetch study queue
   const {
@@ -96,6 +108,7 @@ export default function StudySession() {
 
   // Handle resume
   const handleResume = () => {
+    decisionMade.current = true
     if (pendingSessionId) {
       setSessionId(pendingSessionId)
       setShowResumePrompt(false)
@@ -103,9 +116,23 @@ export default function StudySession() {
     }
   }
 
-  // Handle start fresh
-  const handleStartFresh = () => {
+  // Handle start fresh.
+  // P2.1: the old session must be completed before a new one starts,
+  // otherwise it lingers as an incomplete ghost session forever.
+  const handleStartFresh = async () => {
+    decisionMade.current = true
     setShowResumePrompt(false)
+    if (pendingSessionId) {
+      try {
+        await completeSessionMutation.mutateAsync({
+          sessionId: pendingSessionId,
+          totalTimeMs: 0,
+        })
+      } catch {
+        // Still start fresh — completing the old session is best-effort here
+        console.error('Failed to complete old session before starting fresh')
+      }
+    }
     setPendingSessionId(null)
     startSessionMutation.mutate()
   }
@@ -173,9 +200,10 @@ export default function StudySession() {
     }
   }
 
-  // Handle exit
+  // Handle exit — P2.1: always close the session, even if no card was rated
+  // (a session with 0 ratings must not survive as an incomplete ghost)
   const handleExit = async () => {
-    if (sessionId && currentIndex > 0) {
+    if (sessionId) {
       const totalTimeMs = Date.now() - sessionStartTime.current
       await completeSessionMutation.mutateAsync({
         sessionId,
@@ -205,7 +233,12 @@ export default function StudySession() {
     )
   }
 
-  if (isLoading) {
+  // P2.1: spinner while checking for an incomplete session or starting a new
+  // one — previously the error screen briefly flashed during this phase.
+  // A failed session start must surface as an error, not an endless spinner.
+  const startFailed = startSessionMutation.isError
+
+  if (sessionChecking || (!sessionId && !startFailed) || isLoading) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -213,7 +246,7 @@ export default function StudySession() {
     )
   }
 
-  if (error || !studyQueue) {
+  if (error || startFailed || !studyQueue) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center">
         <h2 className="text-xl font-semibold mb-2">Failed to load study session</h2>
