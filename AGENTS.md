@@ -44,10 +44,11 @@ frontend/
     services/api.ts      # Alle fetch-Aufrufe (fetchApi-Wrapper)
     lib/constants.ts    # Geteilte Konstanten (Query-Keys hierher auslagern)
     lib/utils.ts         # Helpers (u. a. Kostenschätzung)
-  package.json          # Scripts: dev / build / preview (typecheck+lint: siehe P0.3)
+  package.json          # Scripts: dev / build / preview / typecheck / lint
 Dockerfile              # Multi-Stage: Frontend-Build → Python-Image mit Static-Files
 docker-compose.yml.template
-.github/workflows/       # docker-build.yml, tests.yml (pytest bei jedem Push/PR; typecheck: siehe P0.3)
+frontend/eslint.config.js  # ESLint-Regeln; shadcn-Code in src/components/ui/ ist von bestimmten Regeln ausgenommen
+.github/workflows/       # docker-build.yml, tests.yml (pytest + frontend typecheck/lint bei jedem Push/PR)
 data/                   # SQLite-DB (runtime, git-ignored ausser .gitkeep)
 uploads/                # Hochgeladene Dokumente (runtime)
 ```
@@ -113,11 +114,11 @@ curl http://localhost:8001/api/health                 # Health-Check
 | Check | Befehl | Status |
 |-------|--------|--------|
 | Backend-Tests | `cd backend && pytest` | Verfügbar seit P0.2 (`backend/tests/`, Dependencies: `pip install -r requirements-dev.txt`). Läuft auch als GitHub-Actions-Job bei jedem Push/PR |
-| Frontend-Typecheck | `cd frontend && npm run typecheck` | **Wird mit P0.3 eingerichtet** — bis dahin: `npm run build` muss durchlaufen (enthält `tsc`) |
-| Lint | `cd frontend && npm run lint` | Wird mit P0.3 eingerichtet |
+| Frontend-Typecheck | `cd frontend && npm run typecheck` | Verfügbar seit P0.3 |
+| Lint | `cd frontend && npm run lint` | Verfügbar seit P0.3. Bestehende Warnungen sind bekannte, geplante Bugs (siehe `eslint.config.js`) und blockieren nicht |
 | Docker-Build | `docker build .` (nur bei Dockerfile/Compose-Änderungen) | Verfügbar |
 
-**Eiserne Regel: Niemals committen, wenn ein verfügbarer Check rot ist.** Sobald P0.2/P0.3 gemerged sind, gilt das für `pytest`, `typecheck` und `lint` ohne Ausnahme.
+**Eiserne Regel: Niemals committen, wenn ein verfügbarer Check rot ist.** Das gilt seit P0.2/P0.3 für `pytest`, `typecheck` und `lint` ohne Ausnahme.
 
 Zusätzlich gilt für jedes abgeschlossene Arbeitspaket: Der Besitzer prüft das Ergebnis **durch Benutzen der App** (Klick-Test). Liefere deshalb mit jeder Änderung eine einzeilige, nicht-technische Prüf-Anleitung („Studiere 5 Karten → nach Reload erscheint Resume-Prompt").
 

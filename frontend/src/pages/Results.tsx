@@ -25,12 +25,18 @@ import {
 import { testsApi, flashcardsApi } from '@/services/api'
 import { cn, formatScore, getScoreColor } from '@/lib/utils'
 
+interface VerificationResult {
+  status: 'likely_ok' | 'potential_issue'
+  confidence: 'high' | 'medium' | 'low'
+  analysis: string
+}
+
 export default function Results() {
   const { testId } = useParams<{ testId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const [verificationResults, setVerificationResults] = useState<Record<number, any>>({})
+  const [verificationResults, setVerificationResults] = useState<Record<number, VerificationResult>>({})
   const [verifying, setVerifying] = useState<Record<number, boolean>>({})
   const [showFlashcardDialog, setShowFlashcardDialog] = useState(false)
   const [selectedDeckId, setSelectedDeckId] = useState<string>('new')
