@@ -330,10 +330,12 @@ def create_flashcards_from_questions(
         List of flashcard data dictionaries
     """
     flashcards = []
-    
+
     for q in questions:
-        # Skip correct answers if wrong_only is True
-        if wrong_only and q.is_correct:
+        # Skip questions that were answered correctly or never answered at all
+        # (B10b fix: is_correct=None used to fall through here because None
+        # is falsy — unanswered questions must NOT become "wrong" cards)
+        if wrong_only and (q.is_correct or q.user_answer is None):
             continue
         
         # Get the correct answer text
@@ -359,6 +361,24 @@ def create_flashcards_from_questions(
             "source_type": "from_test",
             "source_question_id": q.id
         })
-    
+
     return flashcards
+
+
+def filter_existing_cards(
+    cards_data: List[Dict[str, Any]],
+    existing_source_question_ids: Any,
+) -> tuple:
+    """Remove cards whose source_question_id already has a card in the deck.
+
+    Duplicate protection for the from-test endpoint: importing the same
+    test twice into one deck must not create duplicate cards. Returns
+    (kept_cards, skipped_count).
+    """
+    existing = set(existing_source_question_ids)
+    kept = [
+        c for c in cards_data
+        if c.get("source_question_id") not in existing
+    ]
+    return kept, len(cards_data) - len(kept)
 

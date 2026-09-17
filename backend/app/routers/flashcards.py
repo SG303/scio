@@ -57,6 +57,7 @@ from app.services.spaced_repetition import (
 from app.services.flashcard_generator import (
     generate_flashcards,
     create_flashcards_from_questions,
+    filter_existing_cards,
 )
 
 router = APIRouter(prefix="/api/flashcards", tags=["flashcards"])
@@ -676,6 +677,15 @@ async def create_from_test(
         deck = result.scalar_one_or_none()
         if not deck:
             raise HTTPException(status_code=404, detail="Deck not found")
+        # Duplicate protection: a card per source question may only exist
+        # once per deck, so re-importing the same test never duplicates cards
+        existing_result = await db.execute(
+            select(Flashcard.source_question_id).where(
+                Flashcard.deck_id == deck.id,
+                Flashcard.source_question_id.isnot(None),
+            )
+        )
+        existing_ids = [row[0] for row in existing_result.all()]
     else:
         # Create new deck
         deck_title = (
@@ -685,17 +695,26 @@ async def create_from_test(
         deck = FlashcardDeck(title=deck_title)
         db.add(deck)
         await db.flush()
+        # New deck: no duplicates possible
+        existing_ids = []
 
     # Convert questions to flashcards
     cards_data = create_flashcards_from_questions(test.questions, request.wrong_only)
 
+    # Skip questions this deck already has cards for
+    cards_data, cards_skipped = filter_existing_cards(cards_data, existing_ids)
+
     if not cards_data:
-        raise HTTPException(
-            status_code=400,
-            detail="No questions to convert"
-            if request.wrong_only
-            else "No wrong answers to convert",
-        )
+        if request.wrong_only:
+            detail = (
+                f"No new cards to create: all eligible questions already "
+                f"have cards in this deck ({cards_skipped} skipped)"
+                if cards_skipped
+                else "No wrong answers to convert"
+            )
+        else:
+            detail = "No questions to convert"
+        raise HTTPException(status_code=400, detail=detail)
 
     # Create flashcard records
     created_cards = []
@@ -720,5 +739,6 @@ async def create_from_test(
     return CreateFromTestResponse(
         deck_id=deck.id,
         cards_created=len(created_cards),
+        cards_skipped=cards_skipped,
         cards=[FlashcardResponse.model_validate(c) for c in created_cards],
     )
