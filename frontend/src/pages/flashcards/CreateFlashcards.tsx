@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Sparkles, Loader2, FileText, CheckCircle2, Coins } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,15 +38,6 @@ export default function CreateFlashcards() {
     queryFn: () => modelsApi.list(true),
   })
 
-  const createDeckMutation = useMutation({
-    mutationFn: flashcardsApi.createDeck,
-  })
-
-  const generateMutation = useMutation({
-    mutationFn: ({ deckId, numCards }: { deckId: number; numCards: number }) =>
-      flashcardsApi.generateCards(deckId, { num_cards: numCards }),
-  })
-
   const handleDocumentToggle = (docId: number) => {
     setFormData((prev) => ({
       ...prev,
@@ -61,23 +52,19 @@ export default function CreateFlashcards() {
     setIsGenerating(true)
 
     try {
-      // First create the deck
-      const deck = await createDeckMutation.mutateAsync({
+      // P5.2: deck + cards in one call — a failed generation no longer
+      // leaves an empty deck behind
+      const result = await flashcardsApi.createAndGenerateDeck({
         title: formData.title,
         description: formData.description || undefined,
         ai_model_id: formData.ai_model_id,
         document_ids: formData.document_ids.length > 0 ? formData.document_ids : undefined,
         custom_prompt: formData.custom_prompt || undefined,
-      })
-
-      // Then generate the cards
-      await generateMutation.mutateAsync({
-        deckId: deck.id,
-        numCards: formData.num_cards,
+        num_cards: formData.num_cards,
       })
 
       // Navigate to the deck
-      navigate(`/flashcards/${deck.id}`)
+      navigate(`/flashcards/${result.deck.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create flashcard deck')
       setIsGenerating(false)

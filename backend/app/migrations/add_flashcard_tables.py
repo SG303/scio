@@ -112,14 +112,36 @@ def migrate(db_path: str = None):
                     cards_hard INTEGER DEFAULT 0,
                     cards_good INTEGER DEFAULT 0,
                     cards_easy INTEGER DEFAULT 0,
-                    total_time_ms INTEGER DEFAULT 0
+                    total_time_ms INTEGER DEFAULT 0,
+                    cards_studied_json TEXT,
+                    new_cards_reviewed_today INTEGER DEFAULT 0,
+                    study_date DATE
                 )
             """)
             cursor.execute("CREATE INDEX ix_study_sessions_id ON study_sessions(id)")
             print("Created 'study_sessions' table")
         else:
             print("'study_sessions' table already exists")
-        
+
+        # P5.3a: idempotently add columns that were introduced after the
+        # initial migration (protects existing installations from
+        # "no such column" errors when the ORM expects them)
+        cursor.execute("PRAGMA table_info(study_sessions)")
+        session_columns = {row[1] for row in cursor.fetchall()}
+        session_column_adds = {
+            "cards_studied_json": "TEXT",
+            "new_cards_reviewed_today": "INTEGER DEFAULT 0",
+            "study_date": "DATE",
+        }
+        for column, col_type in session_column_adds.items():
+            if column not in session_columns:
+                cursor.execute(
+                    f"ALTER TABLE study_sessions ADD COLUMN {column} {col_type}"
+                )
+                print(f"Added '{column}' column to 'study_sessions'")
+            else:
+                print(f"'study_sessions.{column}' already exists")
+
         conn.commit()
         print("Migration completed successfully!")
     finally:

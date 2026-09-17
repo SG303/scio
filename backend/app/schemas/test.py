@@ -51,6 +51,20 @@ class GenerateFromTemplateRequest(BaseModel):
     num_questions: Optional[int] = None  # Override the template's default
 
 
+class CreateAndGenerateRequest(BaseModel):
+    """P5.2: create a config and generate a test in one transaction —
+    a failed generation leaves no empty config behind."""
+    title: str
+    num_questions: int = 10
+    num_choices: int = 4
+    ai_model_id: int
+    document_ids: List[int]
+    is_template: bool = False
+    custom_prompt: Optional[str] = None
+    # optional override of num_questions for the generated test
+    generate_num_questions: Optional[int] = None
+
+
 class TestResponse(BaseModel):
     id: int
     config_id: int
