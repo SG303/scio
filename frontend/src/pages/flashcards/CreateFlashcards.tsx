@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, flashcardsApi } from '@/services/api'
-import { cn, formatPricePerMillion } from '@/lib/utils'
+import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
@@ -309,7 +309,7 @@ export default function CreateFlashcards() {
                         <h4 className="font-medium">{model.name}</h4>
                         {model.context_length && (
                           <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                            {Math.round(model.context_length / 1000)}k ctx
+                            {formatContextLength(model.context_length)} ctx
                           </span>
                         )}
                       </div>
