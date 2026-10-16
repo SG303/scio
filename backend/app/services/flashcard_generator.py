@@ -7,6 +7,7 @@ similar to the test_generator but optimized for Q&A flashcard format.
 import json
 import re
 import logging
+import math
 from typing import List, Dict, Any, Optional
 from app.config import get_settings
 from app.models import Document, Question
@@ -267,14 +268,17 @@ def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
         if not isinstance(card, dict):
             continue
         
-        front = card.get("front", "").strip()
-        back = card.get("back", "").strip()
+        # `(x or "")` instead of `x.get("k", "")`: an explicit JSON null
+        # would bypass the default and crash .strip() with AttributeError
+        # (same pattern as the CSV import in routers/flashcards.py)
+        front = (card.get("front") or "").strip()
+        back = (card.get("back") or "").strip()
         
         # Also try alternate keys
         if not front:
-            front = card.get("question", card.get("q", "")).strip()
+            front = (card.get("question") or card.get("q") or "").strip()
         if not back:
-            back = card.get("answer", card.get("a", "")).strip()
+            back = (card.get("answer") or card.get("a") or "").strip()
         
         if front and back:
             validated.append({

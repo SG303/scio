@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, Loader2, FileText, CheckCircle2, Coins } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, D
 
 export default function CreateTest() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     title: '',
@@ -65,6 +66,10 @@ export default function CreateTest() {
         progressToken,
         abortController.signal,
       )
+
+      // Refresh the tests list so it shows the new test when the user
+      // navigates back (staleTime 5 min would otherwise serve stale data)
+      queryClient.invalidateQueries({ queryKey: queryKeys.tests })
 
       // Navigate to the test
       navigate(`/test/${test.id}`)

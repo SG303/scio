@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
+import { toast } from '@/components/Toaster'
 import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
 import type { SubjectListItem } from '@/types'
 import { queryKeys } from '@/lib/constants'
@@ -54,6 +55,9 @@ export default function CreateSubjectDialog({
       queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       handleClose()
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to create subject')
+    },
   })
 
   const updateMutation = useMutation({
@@ -62,6 +66,9 @@ export default function CreateSubjectDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       handleClose()
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save subject')
     },
   })
 

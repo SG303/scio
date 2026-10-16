@@ -25,6 +25,7 @@ export default function Documents() {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [addMode, setAddMode] = useState<'text' | 'file'>('text')
+  const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
   const [formData, setFormData] = useState({
     title: '',
     doc_type: 'study_guide',
@@ -70,6 +71,11 @@ export default function Documents() {
     mutationFn: documentsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents })
+      setDeletingDocId(null)
+      toast.success('Document deleted')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete document')
     },
   })
 
@@ -286,8 +292,7 @@ export default function Documents() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteMutation.mutate(doc.id)}
-                          disabled={deleteMutation.isPending}
+                          onClick={() => setDeletingDocId(doc.id)}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -301,6 +306,31 @@ export default function Documents() {
           })}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deletingDocId !== null} onOpenChange={() => setDeletingDocId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Document</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this document? It will no longer be available as
+              context for generating tests. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingDocId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingDocId !== null && deleteMutation.mutate(deletingDocId)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

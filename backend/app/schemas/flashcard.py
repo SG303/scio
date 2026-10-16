@@ -160,7 +160,7 @@ class GenerateFlashcardsResponse(BaseModel):
 class CreateAndGenerateDeckRequest(FlashcardDeckCreate):
     """P5.2: create a deck and generate its first cards in one transaction —
     a failed generation leaves no empty deck behind."""
-    num_cards: int
+    num_cards: int = Field(ge=1, le=100)  # required, no default
     topic: Optional[str] = None
 
 
