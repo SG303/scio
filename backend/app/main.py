@@ -9,7 +9,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -89,6 +89,14 @@ async def health_check():
     return {"status": "healthy", "app": settings.app_name}
 
 
+# Registered after all real API routes so those keep matching first.
+@app.api_route("/api/{rest_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def api_fallback(rest_path: str) -> None:
+    # unknown /api/* paths must return a real 404 instead of falling
+    # through to the SPA catch-all below (which returns HTTP 200)
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
 # Serve frontend static files in production
 # The frontend build will be copied to /app/static
 static_dir = "/app/static"
@@ -97,16 +105,12 @@ if os.path.exists(static_dir):
     
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
-        # API routes are handled by routers above
-        if full_path.startswith("api/"):
-            return {"detail": "Not Found"}
-
         # P5.3b: path-traversal guard — only serve files that really live
         # inside the static directory (blocks ../ escapes and absolute paths)
         file_path = os.path.realpath(os.path.join(static_dir, full_path))
         static_root = os.path.realpath(static_dir)
         if os.path.commonpath([static_root, file_path]) != static_root:
-            return {"detail": "Not Found"}
+            raise HTTPException(status_code=404, detail="Not Found")
 
         if os.path.isfile(file_path):
             return FileResponse(file_path)
@@ -115,7 +119,7 @@ if os.path.exists(static_dir):
         index_path = f"{static_dir}/index.html"
         if os.path.exists(index_path):
             return FileResponse(index_path)
-        return {"detail": "Frontend not found"}
+        raise HTTPException(status_code=404, detail="Frontend not found")
 
 
 if __name__ == "__main__":
