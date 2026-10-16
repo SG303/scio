@@ -42,21 +42,34 @@ import type {
 
 const API_BASE = '/api'
 
+/**
+ * Error with the HTTP status attached, so callers can distinguish permanent
+ * failures (e.g. 404 for a deleted card) from message matching.
+ */
+export class ApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
     },
-    ...options,
   })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'An error occurred' }))
-    throw new Error(error.detail || 'Request failed')
+    throw new ApiError(error.detail || 'Request failed', response.status)
   }
 
   return response.json()
