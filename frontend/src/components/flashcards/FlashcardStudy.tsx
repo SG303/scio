@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -25,10 +25,15 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
     4: 'longer',
   }
 
-  const handleRate = (rating: 1 | 2 | 3 | 4) => {
-    onRate(rating)
-    // Don't reset flip state immediately - let the transition animation handle it
-  }
+  // Stable per onRate identity so the keyboard effect below can list it as
+  // a dependency: the 1–4 shortcut must always call the current onRate
+  const handleRate = useCallback(
+    (rating: 1 | 2 | 3 | 4) => {
+      onRate(rating)
+      // Don't reset flip state immediately - let the transition animation handle it
+    },
+    [onRate],
+  )
 
   // Reset flip state when card changes
   const handleFlip = () => {
@@ -56,7 +61,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isFlipped, isSubmitting])
+  }, [isFlipped, isSubmitting, handleRate])
 
   return (
     <div className="flex flex-col items-center w-full">

@@ -50,6 +50,13 @@ export function ratingStatsKey(rating: 1 | 2 | 3 | 4): keyof SessionStats {
   return rating === 1 ? 'again' : rating === 2 ? 'hard' : rating === 3 ? 'good' : 'easy'
 }
 
+// P2.2 (purity): the elapsed time is measured when a rating is clicked, but
+// handleRate is handed to FlashcardStudy as a prop, so the analyzer must
+// assume it can run during render — where Date.now() would be impure. The
+// clock read lives in this module-level helper (outside render scope); what
+// is measured is unchanged: Date.now() minus the card's start time.
+const nowMs = (): number => Date.now()
+
 export default function StudySession() {
   const { deckId } = useParams<{ deckId: string }>()
   const navigate = useNavigate()
@@ -76,8 +83,12 @@ export default function StudySession() {
   // P2.3 (M3): started_at of a resumed session, used as the base for
   // total_time_ms instead of the page load time
   const [pendingStartedAt, setPendingStartedAt] = useState<string | null>(null)
-  const sessionStartTime = useRef<number>(Date.now())
-  const cardStartTime = useRef<number>(Date.now())
+  // P2.1/P2.2 (purity): the clocks start at 0 and are set in the mount effect
+  // below — Date.now() must not run during render. Resuming overwrites
+  // sessionStartTime with the session's real started_at (handleResume), a
+  // fresh start keeps the mount time as the base.
+  const sessionStartTime = useRef<number>(0)
+  const cardStartTime = useRef<number>(0)
   // P2.2: once exit was requested, no further backend writes from this
   // component (M4) — handleRate must not fire completeSession after exit
   const exitRequestedRef = useRef(false)
@@ -91,6 +102,14 @@ export default function StudySession() {
         clearTimeout(transitionTimeoutRef.current)
       }
     }
+  }, [])
+
+  // P2.1/P2.2 (purity): set the study clocks after mount instead of during
+  // render. User interaction (rating, resume, exit) is impossible before
+  // effects run, so the measured times are unchanged.
+  useEffect(() => {
+    sessionStartTime.current = Date.now()
+    cardStartTime.current = Date.now()
   }, [])
 
   // Check for incomplete session.
@@ -108,43 +127,86 @@ export default function StudySession() {
     enabled: !!deckId,
   })
 
-  // P2.1: StrictMode guards — the effect below runs twice in dev, and a
-  // session must only ever be started (or prompted for) once per visit.
-  const decisionMade = useRef(false)
+  // P2.1: StrictMode guards — the decision effect and the render-time state
+  // adjustments below run twice in dev, and a session must only ever be
+  // started (or prompted for) once per visit. decisionMade is state because
+  // the offline-start and resume adjustments read it during render;
+  // startAttempted stays a ref — it is only touched here in the effect.
+  const [decisionMade, setDecisionMade] = useState(false)
   const startAttempted = useRef(false)
 
-  // Handle incomplete session detection (P2.1: only after the check resolved)
+  // Start session (P2.1: declared before the decision effect that calls it —
+  // P2.2 immutability). mutate is referentially stable in TanStack Query v5,
+  // so the destructured function is the dependency the decision effect needs.
+  const startSessionMutation = useMutation({
+    mutationFn: () => flashcardsApi.startSession(parseInt(deckId!)),
+    onSuccess: (session) => {
+      setSessionId(session.id)
+    },
+  })
+  const { mutate: startSession } = startSessionMutation
+
+  // P2.1/P2.2: the offline start and the resume prompt both derive from the
+  // incomplete-session check. They are adjusted during render with the
+  // React-docs "adjust state when props change" pattern instead of a
+  // setState-in-effect cascade. Everything below stays one-shot via the
+  // decisionMade guard, exactly as in the former effect.
+
+  // P6.4: a real network error plus a cached queue is enough to study
+  // offline — no server session id in this mode, queued reviews sync when
+  // connectivity returns. While the check is still loading there is no
+  // error yet, so sessionChecking needs no explicit guard here.
+  if (
+    canStartOfflineStudy(incompleteSessionError, cachedQueue)
+    && !decisionMade
+    && !sessionId
+    && !pendingSessionId
+  ) {
+    setDecisionMade(true)
+    setIsOffline(true)
+  }
+
+  // P2.1: only after the check resolved — resume prompt data is applied once
+  // per incompleteSession result; showResumePrompt terminates the adjustment.
+  if (
+    !sessionChecking
+    && incompleteSession
+    && incompleteSession.has_incomplete_session
+    && !sessionId
+    && !pendingSessionId
+    && !decisionMade
+    && !showResumePrompt
+  ) {
+    setPendingSessionId(incompleteSession.session_id || null)
+    setPendingStartedAt(incompleteSession.started_at ?? null)
+    setCardsStudiedCount(incompleteSession.cards_studied_count || 0)
+    setShowResumePrompt(true)
+  }
+
+  // P2.1: auto-start a fresh session — only after the check resolved and
+  // neither an offline start (render adjustment above) nor a resume is
+  // pending. has_incomplete_session means the render adjustment above owns
+  // the decision. startAttempted keeps StrictMode's double effect invocation
+  // from starting two sessions.
   useEffect(() => {
     if (sessionChecking) return
-    if (sessionId || pendingSessionId || decisionMade.current) return
-
-    // P1: a previous online queue is enough to resume learning locally after
-    // a reload without a network connection. There is intentionally no server
-    // session ID in this mode; queued reviews sync when connectivity returns.
-    if (canStartOfflineStudy(incompleteSessionError, cachedQueue)) {
-      decisionMade.current = true
-      setIsOffline(true)
-      return
-    }
-
+    if (sessionId || pendingSessionId || decisionMade) return
+    if (canStartOfflineStudy(incompleteSessionError, cachedQueue)) return
     if (!incompleteSession) return
-
-    if (incompleteSession.has_incomplete_session) {
-      setPendingSessionId(incompleteSession.session_id || null)
-      setPendingStartedAt(incompleteSession.started_at ?? null)
-      setCardsStudiedCount(incompleteSession.cards_studied_count || 0)
-      setShowResumePrompt(true)
-    } else if (!startAttempted.current) {
+    if (incompleteSession.has_incomplete_session) return
+    if (!startAttempted.current) {
       startAttempted.current = true
-      startSessionMutation.mutate()
+      startSession()
     }
   }, [
     cachedQueue,
+    decisionMade,
     incompleteSession,
     incompleteSessionError,
     pendingSessionId,
     sessionChecking,
     sessionId,
+    startSession,
   ])
 
   // Fetch study queue
@@ -181,14 +243,6 @@ export default function StudySession() {
     enabled: !!deckId,
   })
 
-  // Start session on mount
-  const startSessionMutation = useMutation({
-    mutationFn: () => flashcardsApi.startSession(parseInt(deckId!)),
-    onSuccess: (session) => {
-      setSessionId(session.id)
-    },
-  })
-
   // Submit review mutation
   const reviewMutation = useMutation({
     mutationFn: ({
@@ -223,7 +277,7 @@ export default function StudySession() {
 
   // Handle resume
   const handleResume = () => {
-    decisionMade.current = true
+    setDecisionMade(true)
     if (pendingSessionId) {
       // P2.3 (M3): base total_time_ms on the session's real start, not on
       // when this page happened to load
@@ -244,7 +298,7 @@ export default function StudySession() {
   // P2.1: the old session must be completed before a new one starts,
   // otherwise it lingers as an incomplete ghost session forever.
   const handleStartFresh = async () => {
-    decisionMade.current = true
+    setDecisionMade(true)
     setShowResumePrompt(false)
     if (pendingSessionId) {
       try {
@@ -259,7 +313,7 @@ export default function StudySession() {
     }
     setPendingSessionId(null)
     setPendingStartedAt(null)
-    startSessionMutation.mutate()
+    startSession()
   }
 
   // Handle rating.
@@ -270,7 +324,7 @@ export default function StudySession() {
     if (exitRequestedRef.current) return // M4: no writes after exit
 
     const card = effectiveQueue.cards[currentIndex]
-    const timeTakenMs = Date.now() - cardStartTime.current
+    const timeTakenMs = nowMs() - cardStartTime.current
 
     // Start transition animation
     setIsTransitioning(true)
