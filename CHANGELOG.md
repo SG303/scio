@@ -23,6 +23,10 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
   Lernwarteschlange für einen Deck-Start verfügbar ist.
 - Review-Datensätze speichern nun die zugehörige Lernsitzung, sodass
   Session-Statistiken präzise aggregiert werden können.
+- Die Anzahl-Felder der Generierungs-Requests (`num_cards`,
+  `num_questions`, `num_choices`) sind serverseitig begrenzt (1–100
+  Karten bzw. Fragen, 2–10 Antwortoptionen); ungültige Werte werden
+  mit 422 abgelehnt.
 
 ### Behoben
 
@@ -37,4 +41,24 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
   Rating-Statistiken nicht mehr.
 - Die SM-2-Ease-Factor-Strafe wird nicht mehr doppelt angewendet, und
   Lernsitzungen erhalten bei jedem Review ein korrektes Tagesdatum.
+- Die Flashcard-Generierung mit mehr als 30 Karten schlägt nicht mehr
+  mit einem Serverfehler ab, und Karten mit JSON-`null` als Front/Back
+  verwerfen nicht mehr die gesamte Charge.
+- Unbekannte `/api/`-Pfade antworten mit einem echten HTTP 404 statt
+  HTTP 200 mit „Not Found"-Rumpf.
+- Die Offline-Queue sendet Bewertungen nicht mehr doppelt, verliert
+  keine Einträge, die während eines laufenden Synchronisierungslaufs
+  hinzukommen, und verwirft Offline-Bewertungen nicht mehr still, wenn
+  ihre Lernsitzung inzwischen abgeschlossen wurde.
+- Der Offline-Sync läuft app-weit, nicht mehr nur während einer
+  offenen Lernsitzung; Deck-, Dashboard- und Streak-Anzahlen
+  aktualisieren sich nach der Synchronisierung.
+- Nach einer offline abgeschlossenen Lernsitzung erscheint die
+  Zusammenfassung statt einer Fehlerseite.
+- Fehlgeschlagene Aktionen im Frontend (Löschen, Speichern,
+  Flashcard-Erstellung, KI-Verifikation) zeigen sichtbare
+  Fehlermeldungen statt still zu scheitern; das Löschen eines
+  Dokuments verlangt eine Bestätigung.
+- Test- und Deck-Listen aktualisieren sich sofort nach einer
+  „Erstellen-und-generieren"-Generierung.
 
