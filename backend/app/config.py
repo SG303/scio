@@ -12,8 +12,10 @@ class Settings(BaseSettings):
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     # P5.3c: sent as HTTP-Referer to OpenRouter instead of a hardcoded URL
     http_referer: str = "http://localhost:8000"
-    # P5.3c: lightweight model used for question verification
-    verification_model: str = "google/gemini-2.5-flash-lite"
+    # Lightweight model used for question verification. This is only the
+    # fallback: the active model is stored in the settings table and can be
+    # changed in the app's settings UI (GET/PUT /api/settings).
+    verification_model: str = "anthropic/claude-haiku-5.5"
     
     # CORS - comma-separated list of allowed origins
     # Use "*" for allow all (development), or specific origins for production

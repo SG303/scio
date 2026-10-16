@@ -528,13 +528,14 @@ async def verify_question_integrity(
     question_text: str,
     choices: List[str],
     correct_answer_index: int,
-    explanation: str
+    explanation: str,
+    verification_model: str
 ) -> Dict[str, Any]:
-    """Verify if a question and its answer key are logically sound"""
+    """Verify if a question and its answer key are logically sound.
     
-    # P5.3c: verification model is configurable via settings (default stays
-    # a fast, cheap model)
-    VERIFICATION_MODEL = settings.verification_model
+    verification_model is resolved by the caller (settings table with
+    config fallback) so this stays free of DB access.
+    """
     
     prompt = f"""You are a quality assurance assistant for an exam system. 
 Please review this multiple-choice question to verify if the "Marked Correct Answer" is actually correct and if the question makes sense.
@@ -566,7 +567,7 @@ OUTPUT JSON ONLY:
         raise ValueError("OpenRouter API key is not configured")
 
     content = await chat_completion_json(
-        model_id=VERIFICATION_MODEL,
+        model_id=verification_model,
         system_prompt="You are a helpful assistant that outputs only valid JSON.",
         user_prompt=prompt,
         temperature=0.1,  # Low temperature for more analytical results
