@@ -76,15 +76,15 @@ function App() {
         </header>
 
         {/* Mobile Navigation */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass border-t">
-          <div className="flex items-center justify-around py-2">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass border-t overflow-x-auto">
+          <div className="flex items-center justify-around min-w-max py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    'flex flex-col items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200',
+                    'flex flex-col items-center gap-1 px-3 py-2 shrink-0 rounded-lg text-xs font-medium transition-all duration-200',
                     isActive
                       ? 'text-primary'
                       : 'text-muted-foreground'
