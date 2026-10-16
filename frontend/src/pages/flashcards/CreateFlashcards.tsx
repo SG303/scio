@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, Loader2, FileText, CheckCircle2, Coins } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
 
 export default function CreateFlashcards() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     title: '',
@@ -62,6 +63,10 @@ export default function CreateFlashcards() {
         custom_prompt: formData.custom_prompt || undefined,
         num_cards: formData.num_cards,
       })
+
+      // Refresh the deck list so it shows the new deck when the user
+      // navigates back (staleTime 5 min would otherwise serve stale data)
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
 
       // Navigate to the deck
       navigate(`/flashcards/${result.deck.id}`)
