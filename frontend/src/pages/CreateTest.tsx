@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
 import { useGenerationProgress, describeProgress } from '@/hooks/useGenerationProgress'
-import { cn, calculateEstimatedCost, formatPricePerMillion, calculateTestGenerationTokens } from '@/lib/utils'
+import { cn, calculateEstimatedCost, formatContextLength, formatPricePerMillion, calculateTestGenerationTokens } from '@/lib/utils'
 import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 
 export default function CreateTest() {
@@ -356,7 +356,7 @@ export default function CreateTest() {
                         <h4 className="font-medium">{model.name}</h4>
                         {model.context_length && (
                           <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                            {Math.round(model.context_length / 1000)}k ctx
+                            {formatContextLength(model.context_length)} ctx
                           </span>
                         )}
                       </div>
@@ -457,7 +457,7 @@ export default function CreateTest() {
                       {estimates.contextUsage.toFixed(1)}%
                     </span>
                     <span className="text-xs text-muted-foreground ml-2">
-                      ({Math.round(estimates.inputTokens / 1000)}k / {Math.round(estimates.contextLimit / 1000)}k)
+                      ({formatContextLength(estimates.inputTokens)} / {formatContextLength(estimates.contextLimit)})
                     </span>
                   </div>
                 </div>

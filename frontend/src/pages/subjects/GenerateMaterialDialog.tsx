@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
-import { cn, formatPricePerMillion } from '@/lib/utils'
+import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
 import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
@@ -365,7 +365,7 @@ export default function GenerateMaterialDialog({
                         <h4 className="font-medium">{model.name}</h4>
                         {model.context_length && (
                           <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                            {Math.round(model.context_length / 1000)}k ctx
+                            {formatContextLength(model.context_length)} ctx
                           </span>
                         )}
                       </div>

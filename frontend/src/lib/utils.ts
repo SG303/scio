@@ -125,6 +125,14 @@ export function formatPricePerMillion(pricePerToken: string | number): string {
   }
 }
 
+export function formatContextLength(contextLength: number): string {
+  // 1,000,000+ -> "1M", "1.05M", "2M"; smaller -> "500K", "524K"
+  if (contextLength >= 1_000_000) {
+    return `${parseFloat((contextLength / 1_000_000).toFixed(2))}M`
+  }
+  return `${Math.round(contextLength / 1000)}K`
+}
+
 export function calculateEstimatedCost(
   inputTokens: number,
   outputTokens: number,

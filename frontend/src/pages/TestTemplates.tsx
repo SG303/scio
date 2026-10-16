@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
-import { cn, calculateEstimatedCost, formatPricePerMillion, calculateTestGenerationTokens, formatDate, getScoreColor } from '@/lib/utils'
+import { cn, calculateEstimatedCost, formatContextLength, formatPricePerMillion, calculateTestGenerationTokens, formatDate, getScoreColor } from '@/lib/utils'
 import { TEMPLATE_QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 import { ScoreSparkline } from '@/components/ScoreSparkline'
 import { useGenerationProgress, describeProgress } from '@/hooks/useGenerationProgress'
@@ -726,7 +726,7 @@ export default function TestTemplates() {
                           <h4 className="font-medium">{model.name}</h4>
                           {model.context_length && (
                             <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                              {Math.round(model.context_length / 1000)}k ctx
+                              {formatContextLength(model.context_length)} ctx
                             </span>
                           )}
                         </div>
@@ -894,7 +894,7 @@ export default function TestTemplates() {
                       {generateEstimates.contextUsage.toFixed(1)}%
                     </span>
                     <span className="text-[10px] text-muted-foreground ml-1">
-                      ({Math.round(generateEstimates.inputTokens / 1000)}k/{Math.round(generateEstimates.contextLimit / 1000)}k)
+                      ({formatContextLength(generateEstimates.inputTokens)}/{formatContextLength(generateEstimates.contextLimit)})
                     </span>
                   </div>
                 </div>
