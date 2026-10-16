@@ -109,6 +109,9 @@ export default function DeckDetail() {
       setIsAddingCard(false)
       setNewCard({ front: '', back: '' })
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to add card')
+    },
   })
 
   // Update card mutation
@@ -118,6 +121,9 @@ export default function DeckDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(deckId) })
       setEditingCard(null)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save card')
     },
   })
 
@@ -130,6 +136,9 @@ export default function DeckDetail() {
       // P3.2: the deck list shows card counts — refresh it as well
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
       setDeletingCardId(null)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete card')
     },
   })
 
@@ -177,6 +186,9 @@ export default function DeckDetail() {
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
       setIsEditingDeck(false)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save deck settings')
     },
   })
 
