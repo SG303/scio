@@ -14,39 +14,39 @@ logger = logging.getLogger(__name__)
 
 # Default models to seed the database
 # Increment this version when you change DEFAULT_MODELS to force re-seeding
-MODELS_VERSION = 3
+MODELS_VERSION = 4
 
 # Selection criteria (Oct 2026): the app sends whole documents as context and
 # needs factually grounded questions/cards, so every default has >=1M context,
 # supports response_format, and ranks well on document reasoning and
-# hallucination benchmarks (AA GDP.pdf / AA-Omniscience). Prices are per 1M
-# input/output tokens on OpenRouter; provider pricing cliffs are noted because
-# the UI's live pricing only shows base rates.
+# hallucination benchmarks (AA GDP.pdf / AA-Omniscience). Pricing and context
+# size are shown as separate fields in the UI and therefore stay out of the
+# descriptions.
 DEFAULT_MODELS = [
     {
         "name": "GPT-6.1 Sol",
         "openrouter_id": "openai/gpt-6.1-sol",
-        "description": "OpenAI's strongest model for factual accuracy and document reasoning. 1M context, $2/$10 per M tokens (2x above 272K input)"
+        "description": "OpenAI's strongest model for factual accuracy and document reasoning"
     },
     {
         "name": "Claude Sonnet 5.5",
         "openrouter_id": "anthropic/claude-sonnet-5.5",
-        "description": "Anthropic's balanced model: excellent at grounded questions from documents, very low hallucination rate. 1M context, $2/$10 per M tokens"
+        "description": "Anthropic's balanced model: excellent at grounded questions from documents, very low hallucination rate"
     },
     {
         "name": "Gemini 3.8 Flash",
         "openrouter_id": "google/gemini-3.8-flash",
-        "description": "Google's fast all-rounder: strong document grounding at a low price. 1M context, $0.83/$4.13 per M tokens"
+        "description": "Google's fast all-rounder: strong document grounding at a low price"
     },
     {
         "name": "Claude Haiku 5.5",
         "openrouter_id": "anthropic/claude-haiku-5.5",
-        "description": "Anthropic's budget model with the same 1M context as Sonnet. $0.10/$0.50 per M tokens (5x above 100K input)"
+        "description": "Anthropic's budget model, great for high-volume generation"
     },
     {
         "name": "MiMo V2.6 Pro",
         "openrouter_id": "xiaomi/mimo-v2.6-pro",
-        "description": "Best price-performance for very long documents. 1M context, $0.43/$0.87 per M tokens"
+        "description": "Best price-performance for very long documents"
     },
 ]
 
@@ -113,13 +113,17 @@ async def seed_default_models(db: AsyncSession):
             else:
                 await db.delete(stale)
 
-        # Add or re-flag the current default models
+        # Add or re-flag the current default models; existing rows also get
+        # their name/description synced so text changes reach installations
+        # that already carry the model
         result = await db.execute(select(AIModel))
         existing_models = {m.openrouter_id: m for m in result.scalars().all()}
         for model_data in DEFAULT_MODELS:
             existing = existing_models.get(model_data["openrouter_id"])
             if existing is not None:
                 existing.is_default = True
+                existing.name = model_data["name"]
+                existing.description = model_data["description"]
             else:
                 db.add(AIModel(is_default=True, **model_data))
         
