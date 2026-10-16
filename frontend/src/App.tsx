@@ -1,7 +1,11 @@
+import { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, NavLink, Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { FileText, Settings, Home, ClipboardList, Layers, FolderOpen, Sparkles, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { flushOfflineReviews } from '@/lib/offlineQueue'
+import { queryKeys } from '@/lib/constants'
 import Dashboard from '@/pages/Dashboard'
 import Documents from '@/pages/Documents'
 import CreateTest from '@/pages/CreateTest'
@@ -31,6 +35,31 @@ const navItems = [
 ]
 
 function App() {
+  const queryClient = useQueryClient()
+
+  // P6.4 fix: replay offline-queued reviews app-wide, not only while a study
+  // session is open — otherwise ratings queued offline are never synced when
+  // connectivity returns outside a session and due counts, dashboard and
+  // streak stay stale. The singleton guard in flushOfflineReviews makes this
+  // coexist with the mount flush inside StudySession.
+  useEffect(() => {
+    const flush = async () => {
+      const synced = await flushOfflineReviews()
+      if (synced > 0) {
+        // fresh due counts everywhere they are displayed
+        queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
+        queryClient.invalidateQueries({ queryKey: queryKeys.flashcardStats })
+        queryClient.invalidateQueries({ queryKey: queryKeys.streak })
+        queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
+        // prefix-matches every queryKeys.subject(id) detail query
+        queryClient.invalidateQueries({ queryKey: ['subject'] })
+      }
+    }
+    void flush()
+    window.addEventListener('online', flush)
+    return () => window.removeEventListener('online', flush)
+  }, [queryClient])
+
   return (
     <ErrorBoundary>
       <Router>
