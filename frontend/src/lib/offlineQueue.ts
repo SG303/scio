@@ -1,4 +1,4 @@
-import { flashcardsApi } from '@/services/api'
+import { flashcardsApi, ApiError } from '@/services/api'
 import type { StudyQueueResponse } from '@/types'
 
 /**
@@ -81,6 +81,17 @@ function setReviews(reviews: OfflineReview[]): void {
   }
 }
 
+/**
+ * Remove exactly one queued entry (cardId + queuedAt identifies it uniquely).
+ * Works on the current localStorage state, so entries queued while a flush
+ * is running are never touched.
+ */
+function removeQueuedReview(cardId: number, queuedAt: number): void {
+  setReviews(
+    getReviews().filter((r) => !(r.cardId === cardId && r.queuedAt === queuedAt))
+  )
+}
+
 export function getPendingReviewCount(): number {
   return getReviews().length
 }
@@ -102,15 +113,17 @@ export function removeQueuedReviews(cardIds: number[]): void {
  * Replay queued reviews in order. Returns the number of synced reviews.
  *
  * Order matters for SM-2 (each rating builds on the previous state), so
- * replay stops at the first failure and keeps the remaining entries
- * queued for the next attempt. Cards that no longer exist (404) are
- * dropped instead of blocking the queue forever.
+ * replay stops at the first network failure and keeps the remaining entries
+ * queued for the next attempt. Cards that no longer exist (404) are dropped
+ * instead of blocking the queue forever. A 400 for a completed session is
+ * retried once without the session id — those ratings are legitimate and
+ * must not be lost. Every successful submit removes exactly its own entry,
+ * so entries queued while the flush runs survive it.
  */
-export async function flushOfflineReviews(): Promise<number> {
+async function runFlush(): Promise<number> {
   const reviews = getReviews()
   if (reviews.length === 0) return 0
 
-  const remaining: OfflineReview[] = []
   let synced = 0
 
   for (const review of reviews) {
@@ -122,16 +135,53 @@ export async function flushOfflineReviews(): Promise<number> {
         review.sessionId ?? undefined,
       )
       synced += 1
+      removeQueuedReview(review.cardId, review.queuedAt)
     } catch (err) {
-      if (err instanceof TypeError) {
-        // network unreachable again — keep this and all later entries
-        remaining.push(review)
+      if (isNetworkError(err)) {
+        // network unreachable again — stop; this and all later entries
+        // stay queued untouched for the next attempt
+        return synced
       }
-      // an HTTP error (e.g. 404 for a deleted card) is permanent:
+      if (err instanceof ApiError && err.status === 400 && review.sessionId != null) {
+        // the session was completed in the meantime — retry once without
+        // the session id so the rating is not dropped
+        try {
+          await flashcardsApi.submitReview(
+            review.cardId,
+            review.rating,
+            review.timeTakenMs,
+          )
+          synced += 1
+          removeQueuedReview(review.cardId, review.queuedAt)
+        } catch (retryErr) {
+          if (isNetworkError(retryErr)) {
+            // keep the entry queued and stop — it will be retried later
+            return synced
+          }
+          // a permanent HTTP error even without the session: drop it
+          removeQueuedReview(review.cardId, review.queuedAt)
+        }
+        continue
+      }
+      // other HTTP errors (e.g. 404 for a deleted card) are permanent:
       // drop the entry and continue with the next one
+      removeQueuedReview(review.cardId, review.queuedAt)
     }
   }
 
-  setReviews(remaining)
   return synced
+}
+
+// Only one flush may run at a time: overlapping flushes (session mount +
+// 'online' event during connection flapping) sent the same reviews twice,
+// and a full-list rewrite dropped entries queued mid-flush. While a flush
+// is running, further calls receive the same running promise.
+let flushPromise: Promise<number> | null = null
+
+export function flushOfflineReviews(): Promise<number> {
+  if (flushPromise) return flushPromise
+  flushPromise = runFlush().finally(() => {
+    flushPromise = null
+  })
+  return flushPromise
 }

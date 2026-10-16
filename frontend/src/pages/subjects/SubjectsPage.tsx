@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { toast } from '@/components/Toaster'
 import { subjectsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import type { SubjectListItem } from '@/types'
@@ -49,6 +50,9 @@ export default function SubjectsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       setDeletingSubject(null)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete subject')
     },
   })
 
