@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func, text
+from sqlalchemy import select, func, text
 from typing import List, Any, Dict
 
 from app.database import get_db
@@ -14,44 +14,40 @@ logger = logging.getLogger(__name__)
 
 # Default models to seed the database
 # Increment this version when you change DEFAULT_MODELS to force re-seeding
-MODELS_VERSION = 2
+MODELS_VERSION = 3
 
+# Selection criteria (Oct 2026): the app sends whole documents as context and
+# needs factually grounded questions/cards, so every default has >=1M context,
+# supports response_format, and ranks well on document reasoning and
+# hallucination benchmarks (AA GDP.pdf / AA-Omniscience). Prices are per 1M
+# input/output tokens on OpenRouter; provider pricing cliffs are noted because
+# the UI's live pricing only shows base rates.
 DEFAULT_MODELS = [
     {
-        "name": "Grok 4.1 Fast",
-        "openrouter_id": "x-ai/grok-4.1-fast",
-        "description": "xAI's fast model, great for quick generations"
+        "name": "GPT-6.1 Sol",
+        "openrouter_id": "openai/gpt-6.1-sol",
+        "description": "OpenAI's strongest model for factual accuracy and document reasoning. 1M context, $2/$10 per M tokens (2x above 272K input)"
     },
     {
-        "name": "Gemini 2.5 Flash",
-        "openrouter_id": "google/gemini-2.5-flash",
-        "description": "Google's fast and efficient model"
+        "name": "Claude Sonnet 5.5",
+        "openrouter_id": "anthropic/claude-sonnet-5.5",
+        "description": "Anthropic's balanced model: excellent at grounded questions from documents, very low hallucination rate. 1M context, $2/$10 per M tokens"
     },
     {
-        "name": "Claude Haiku 4.5",
-        "openrouter_id": "anthropic/claude-haiku-4.5",
-        "description": "Anthropic's fast and affordable model"
+        "name": "Gemini 3.8 Flash",
+        "openrouter_id": "google/gemini-3.8-flash",
+        "description": "Google's fast all-rounder: strong document grounding at a low price. 1M context, $0.83/$4.13 per M tokens"
     },
     {
-        "name": "Claude Sonnet 4.5",
-        "openrouter_id": "anthropic/claude-sonnet-4.5",
-        "description": "Anthropic's balanced model, excellent for analysis"
+        "name": "Claude Haiku 5.5",
+        "openrouter_id": "anthropic/claude-haiku-5.5",
+        "description": "Anthropic's budget model with the same 1M context as Sonnet. $0.10/$0.50 per M tokens (5x above 100K input)"
     },
     {
-        "name": "GPT-5.1",
-        "openrouter_id": "openai/gpt-5.1",
-        "description": "OpenAI's advanced model with strong reasoning"
+        "name": "MiMo V2.6 Pro",
+        "openrouter_id": "xiaomi/mimo-v2.6-pro",
+        "description": "Best price-performance for very long documents. 1M context, $0.43/$0.87 per M tokens"
     },
-    {
-        "name": "O4 Mini High",
-        "openrouter_id": "openai/o4-mini-high",
-        "description": "OpenAI's efficient reasoning model"
-    },
-    {
-        "name": "DeepSeek V3.2",
-        "openrouter_id": "deepseek/deepseek-v3.2",
-        "description": "Cost-effective model with strong performance"
-    }
 ]
 
 
@@ -93,12 +89,29 @@ async def seed_default_models(db: AsyncSession):
         default_ids = set(m["openrouter_id"] for m in DEFAULT_MODELS)
 
         # Delete stale defaults — only rows flagged is_default; user-added
-        # models are never matched here
-        await db.execute(
-            delete(AIModel).where(
+        # models are never matched here. P5.3e-consistent: a stale default that
+        # is still referenced (subject/test config/deck) is kept and merely
+        # un-flagged, since SQLite FKs are off and a plain delete would leave
+        # dangling ai_model_id references.
+        referenced_ids: set = set()
+        for model_cls in (TestConfig, FlashcardDeck, Subject):
+            ref_result = await db.execute(
+                select(model_cls.ai_model_id)
+                .where(model_cls.ai_model_id.is_not(None))
+                .distinct()
+            )
+            referenced_ids.update(row[0] for row in ref_result.all())
+
+        result = await db.execute(
+            select(AIModel).where(
                 AIModel.is_default.is_(True), AIModel.openrouter_id.not_in(default_ids)
             )
         )
+        for stale in result.scalars().all():
+            if stale.id in referenced_ids:
+                stale.is_default = False
+            else:
+                await db.delete(stale)
 
         # Add or re-flag the current default models
         result = await db.execute(select(AIModel))
