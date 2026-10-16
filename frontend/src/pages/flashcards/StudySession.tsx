@@ -358,19 +358,26 @@ export default function StudySession() {
       }
 
       // P4.4: navigate with the session ID so the completion screen survives
-      // a refresh (it loads its data from the backend instead of state)
-      navigate(`/flashcards/session-complete?session=${sessionId}`, {
-        state: {
-          deckId: parseInt(deckId!),
-          deckTitle: deck?.title || 'Study Session',
-          cardsReviewed: effectiveQueue.cards.length,
-          stats: {
-            ...sessionStats,
-            [ratingStatsKey(rating)]: sessionStats[ratingStatsKey(rating)] + 1,
+      // a refresh (it loads its data from the backend instead of state).
+      // Offline there is no session id — the completion screen then renders
+      // the summary from the navigation state passed below.
+      navigate(
+        sessionId != null
+          ? `/flashcards/session-complete?session=${sessionId}`
+          : '/flashcards/session-complete',
+        {
+          state: {
+            deckId: parseInt(deckId!),
+            deckTitle: deck?.title || 'Study Session',
+            cardsReviewed: effectiveQueue.cards.length,
+            stats: {
+              ...sessionStats,
+              [ratingStatsKey(rating)]: sessionStats[ratingStatsKey(rating)] + 1,
+            },
+            totalTimeMs,
           },
-          totalTimeMs,
         },
-      })
+      )
     } else {
       setCurrentIndex((prev) => prev + 1)
       cardStartTime.current = Date.now()

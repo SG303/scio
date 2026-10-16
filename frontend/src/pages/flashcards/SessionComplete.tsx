@@ -12,12 +12,18 @@ import { cn } from '@/lib/utils'
 interface LocationState {
   deckId?: number
   deckTitle?: string
+  // Full offline summary: StudySession passes these when no server session
+  // exists (offline mode), so the screen renders without a backend call
+  cardsReviewed?: number
+  stats?: { again: number; hard: number; good: number; easy: number }
+  totalTimeMs?: number
 }
 
 /**
  * P4.4: the completion screen survives a refresh — the session is loaded
- * from the backend via the `?session=<id>` search parameter, with the
- * location state only as a fallback for the deck title.
+ * from the backend via the `?session=<id>` search parameter. Without a
+ * valid session id (offline completion) the summary comes from the
+ * navigation state instead.
  */
 export default function SessionComplete() {
   const [searchParams] = useSearchParams()
@@ -26,7 +32,11 @@ export default function SessionComplete() {
   const state = location.state as LocationState | null
 
   const sessionId = searchParams.get('session')
-  const sessionIdNum = sessionId ? parseInt(sessionId) : null
+  // A missing or invalid (NaN) session param behaves like "no session":
+  // the query must not fire with NaN (it would 422), and with navigation
+  // state the offline summary can still be rendered
+  const parsedSessionId = sessionId !== null ? parseInt(sessionId, 10) : NaN
+  const sessionIdNum = Number.isFinite(parsedSessionId) ? parsedSessionId : null
 
   const {
     data: session,
@@ -58,21 +68,20 @@ export default function SessionComplete() {
     }
   }, [sessionIdNum, state, navigate])
 
-  if (sessionIdNum === null && state) {
-    // Legacy navigation without session ID — nothing to load; go back
-    return null
-  }
-
-  if (!sessionIdNum) {
-    return null
+  if (sessionIdNum === null && !state) {
+    return null // redirecting to /flashcards
   }
 
   const waitingForDeck = deckId !== null && !state?.deckTitle && deckLoading
-  if (sessionLoading || waitingForDeck) {
+  // Loading only blocks when the summary must come from the backend —
+  // with a state summary it renders immediately
+  if ((sessionLoading && !state) || waitingForDeck) {
     return <QueryState loading />
   }
 
-  if (sessionError || !session) {
+  // Error only when neither the backend data nor a state summary exists —
+  // an offline completion arrives without a session id but with state
+  if (sessionIdNum !== null && (sessionError || !session) && !state) {
     return (
       <QueryState
         error={sessionError}
@@ -82,16 +91,19 @@ export default function SessionComplete() {
   }
 
   const deckTitle = state?.deckTitle ?? deck?.title ?? 'Study Session'
-  const cardsReviewed = session.cards_reviewed
-  const stats = {
-    again: session.cards_again,
-    hard: session.cards_hard,
-    good: session.cards_good,
-    easy: session.cards_easy,
-  }
+  const cardsReviewed = session?.cards_reviewed ?? state?.cardsReviewed ?? 0
+  const stats = session
+    ? {
+        again: session.cards_again,
+        hard: session.cards_hard,
+        good: session.cards_good,
+        easy: session.cards_easy,
+      }
+    : state?.stats ?? { again: 0, hard: 0, good: 0, easy: 0 }
+  const totalTimeMs = session?.total_time_ms ?? state?.totalTimeMs ?? 0
 
   // Calculate time
-  const totalSeconds = Math.round(session.total_time_ms / 1000)
+  const totalSeconds = Math.round(totalTimeMs / 1000)
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
