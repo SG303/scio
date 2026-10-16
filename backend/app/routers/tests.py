@@ -15,6 +15,7 @@ from app.schemas.test import (
     Choice, GenerateFromTemplateRequest, CreateAndGenerateRequest
 )
 from app.services.test_generator import generate_test_questions, verify_question_integrity
+from app.routers.settings import get_verification_model
 from app.services import generation_progress
 from app.services.generation_progress import GenerationCancelled
 
@@ -667,7 +668,8 @@ async def verify_single_question(
             question_text=question.question_text,
             choices=choices_text,
             correct_answer_index=question.correct_answer,
-            explanation=question.explanation
+            explanation=question.explanation,
+            verification_model=await get_verification_model(db)
         )
         
         return verification_result

@@ -10,6 +10,7 @@ export const queryKeys = {
   documents: ['documents'] as const,
   models: ['models'] as const,
   modelsAll: ['models', true] as const,
+  settings: ['settings'] as const,
   subjects: ['subjects'] as const,
   subject: (id: QueryId) => ['subject', String(id ?? '')] as const,
   templates: ['templates'] as const,

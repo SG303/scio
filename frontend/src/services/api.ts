@@ -36,7 +36,8 @@ import type {
   CreateAndGenerateDeckRequest,
   CreateAndGenerateDeckResponse,
   ImportCardsResult,
-  FlashcardAnalytics
+  FlashcardAnalytics,
+  AppSettings
 } from '@/types'
 
 const API_BASE = '/api'
@@ -83,6 +84,16 @@ export const generationApi = {
 }
 
 // AI Models
+export const settingsApi = {
+  get: () => fetchApi<AppSettings>('/settings'),
+
+  update: (data: Partial<AppSettings>) =>
+    fetchApi<AppSettings>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+}
+
 export const modelsApi = {
   list: (enabledOnly = false) =>
     fetchApi<AIModel[]>(`/models${enabledOnly ? '?enabled_only=true' : ''}`),

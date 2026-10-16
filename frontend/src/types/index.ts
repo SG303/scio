@@ -12,6 +12,10 @@ export interface AIModel {
   context_length?: number
 }
 
+export interface AppSettings {
+  verification_model: string
+}
+
 export interface Document {
   id: number
   title: string

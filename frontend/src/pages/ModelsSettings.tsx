@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, Plus, Trash2, Loader2 } from 'lucide-react'
+import { Bot, Plus, Trash2, Loader2, ShieldCheck } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { modelsApi } from '@/services/api'
-import { cn, formatPricePerMillion } from '@/lib/utils'
+import { modelsApi, settingsApi } from '@/services/api'
+import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
+import { toast } from '@/components/Toaster'
 
 export default function ModelsSettings() {
   const queryClient = useQueryClient()
@@ -22,6 +24,11 @@ export default function ModelsSettings() {
   const { data: models = [], isLoading } = useQuery({
     queryKey: queryKeys.models,
     queryFn: () => modelsApi.list(false),
+  })
+
+  const { data: settings } = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: settingsApi.get,
   })
 
   const createMutation = useMutation({
@@ -45,6 +52,20 @@ export default function ModelsSettings() {
     mutationFn: modelsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.models })
+    },
+  })
+
+  const settingsMutation = useMutation({
+    mutationFn: (verificationModel: string) =>
+      settingsApi.update({ verification_model: verificationModel }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings })
+      toast.success('Settings saved.')
+    },
+    onError: () => {
+      // Revert the select to the last saved value
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings })
+      toast.error('Could not save the settings. Please try again.')
     },
   })
 
@@ -205,7 +226,7 @@ export default function ModelsSettings() {
                         <h4 className="font-medium">{model.name}</h4>
                         {model.context_length && (
                           <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                            {Math.round(model.context_length / 1000)}k context
+                            {formatContextLength(model.context_length)} context
                           </span>
                         )}
                       </div>
@@ -251,6 +272,52 @@ export default function ModelsSettings() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Generation Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <CardTitle>Generation Settings</CardTitle>
+          </div>
+          <CardDescription>
+            The verification model double-checks each generated question after you
+            finish a test. A cheap, fast model is usually the best choice here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-3 max-w-xl">
+            <div className="space-y-2 flex-1">
+              <Label htmlFor="verification-model">Verification model</Label>
+              <Select
+                value={settings?.verification_model ?? ''}
+                onValueChange={(value) => settingsMutation.mutate(value)}
+                disabled={settingsMutation.isPending}
+              >
+                <SelectTrigger id="verification-model">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {settings?.verification_model &&
+                    !models.some((m) => m.openrouter_id === settings.verification_model) && (
+                      <SelectItem value={settings.verification_model}>
+                        {settings.verification_model}
+                      </SelectItem>
+                    )}
+                  {models.map((model) => (
+                    <SelectItem key={model.openrouter_id} value={model.openrouter_id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {settingsMutation.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mb-2" />
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
