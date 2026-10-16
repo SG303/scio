@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FileText, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -72,7 +72,18 @@ export default function CreateSubjectDialog({
     },
   })
 
-  useEffect(() => {
+  // P2.2: form and step are adjusted during render when the dialog inputs
+  // (editingSubject / open) change (React docs: "Adjusting state when a prop
+  // changes") instead of a setState-in-effect cascade. The previous-props
+  // snapshot makes the adjustment one-shot per change and terminates before
+  // commit; behaviour is identical to the former effect, including the
+  // reset when the dialog closes or reopens.
+  const [syncedProps, setSyncedProps] = useState<{
+    editingSubject: SubjectListItem | null | undefined
+    open: boolean
+  }>({ editingSubject: undefined, open: false })
+  if (syncedProps.editingSubject !== editingSubject || syncedProps.open !== open) {
+    setSyncedProps({ editingSubject, open })
     if (editingSubject) {
       setFormData({
         title: editingSubject.title,
@@ -89,7 +100,7 @@ export default function CreateSubjectDialog({
       })
     }
     setStep(1)
-  }, [editingSubject, open])
+  }
 
   const handleClose = () => {
     setFormData({

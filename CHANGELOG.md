@@ -61,4 +61,11 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
   Dokuments verlangt eine Bestätigung.
 - Test- und Deck-Listen aktualisieren sich sofort nach einer
   „Erstellen-und-generieren"-Generierung.
+- Das Fortsetzen einer unterbrochenen Lernsitzung erzeugt keine
+  Geister- oder Doppelsitzungen mehr, und die Lernansicht friert beim
+  schnellen Bewerten oder Beenden nicht mehr ein (P2.1/P2.2).
+- Generierungen in einem Fach hinterlassen nach einem fehlgeschlagenen
+  AI-Call keine leeren Test- bzw. Karten-Objekte mehr, und während der
+  Generierung sind andere Aktionen nicht mehr durch eine
+  Datenbanksperre blockiert (bis zu 2 Minuten).
 
