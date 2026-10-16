@@ -25,13 +25,12 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      // Roadmap-known bugs, fixed in P2.1 (StudySession resume race) and
-      // P2.2 (UI freeze / effect restructure): kept visible as warnings
-      // instead of errors so lint passes until the fixes land. Flip back
-      // to 'error' once P2.1/P2.2 are merged.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/purity': 'warn',
-      'react-hooks/immutability': 'warn',
+      // P2.1 (study session resume race) and P2.2 (UI freeze / effect
+      // restructure) are merged: the nine react-hooks warnings these rules
+      // flagged are fixed, so they are enforced as errors again.
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/purity': 'error',
+      'react-hooks/immutability': 'error',
     },
   },
   {

@@ -380,21 +380,8 @@ async def generate_test_in_subject(
         )
         documents = list(result.scalars().all())
     
-    # Create test config linked to subject
-    test_config = TestConfig(
-        title=request.title,
-        num_questions=request.num_questions,
-        num_choices=request.num_choices,
-        ai_model_id=ai_model_id,
-        document_ids=document_ids or [],
-        custom_prompt=request.custom_prompt,
-        subject_id=subject_id,
-        is_template=False
-    )
-    db.add(test_config)
-    await db.flush()
-    
     # Get existing questions from this subject to avoid duplicates
+    # (read before the AI call — does not depend on the config created below)
     existing_result = await db.execute(
         select(Question)
         .join(Test, Question.test_id == Test.id)
@@ -402,8 +389,9 @@ async def generate_test_in_subject(
         .where(TestConfig.subject_id == subject_id)
     )
     existing_questions = [q.question_text for q in existing_result.scalars().all()]
-    
-    # Generate questions
+
+    # Generate questions — the AI call runs before anything is written, so a
+    # failed generation leaves no empty config behind (P5.2, Landmine 4)
     try:
         questions_data = await generate_test_questions(
             documents=documents,
@@ -420,6 +408,20 @@ async def generate_test_in_subject(
     except Exception as e:
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate test. Please try again.")
+    
+    # Create test config linked to subject
+    test_config = TestConfig(
+        title=request.title,
+        num_questions=request.num_questions,
+        num_choices=request.num_choices,
+        ai_model_id=ai_model_id,
+        document_ids=document_ids or [],
+        custom_prompt=request.custom_prompt,
+        subject_id=subject_id,
+        is_template=False
+    )
+    db.add(test_config)
+    await db.flush()
     
     # Create test
     test = Test(
@@ -497,27 +499,17 @@ async def generate_flashcards_in_subject(
         )
         documents = list(result.scalars().all())
     
-    # Create deck linked to subject
-    deck = FlashcardDeck(
-        title=request.title,
-        description=request.description,
-        ai_model_id=ai_model_id,
-        document_ids=document_ids,
-        custom_prompt=request.custom_prompt,
-        subject_id=subject_id
-    )
-    db.add(deck)
-    await db.flush()
-    
     # Get existing card fronts from this subject to avoid duplicates
+    # (read before the AI call — does not depend on the deck created below)
     existing_result = await db.execute(
         select(Flashcard.front)
         .join(FlashcardDeck, Flashcard.deck_id == FlashcardDeck.id)
         .where(FlashcardDeck.subject_id == subject_id)
     )
     existing_fronts = [row[0] for row in existing_result.fetchall()]
-    
-    # Generate flashcards
+
+    # Generate flashcards — the AI call runs before anything is written, so a
+    # failed generation leaves no empty deck behind (P5.2, Landmine 4)
     try:
         cards_data = await generate_flashcards(
             documents=documents,
@@ -533,6 +525,18 @@ async def generate_flashcards_in_subject(
     except Exception as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate flashcards. Please try again.")
+    
+    # Create deck linked to subject
+    deck = FlashcardDeck(
+        title=request.title,
+        description=request.description,
+        ai_model_id=ai_model_id,
+        document_ids=document_ids,
+        custom_prompt=request.custom_prompt,
+        subject_id=subject_id
+    )
+    db.add(deck)
+    await db.flush()
     
     # Create flashcard records
     created_cards = []
