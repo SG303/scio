@@ -148,7 +148,7 @@ curl http://localhost:8001/api/health                 # Health-Check
 
 1. SQLAlchemy `create_all` läuft beim **Startup** (`init_db`) und legt fehlende Tabellen mit dem vollständigen ORM-Schema an. Handgeschriebene Migrationen sind nur für **neue Spalten an bestehenden Tabellen** nötig.
 2. Migrationen in `app/migrations/` müssen **idempotent** sein (immer `PRAGMA table_info`-Check vor `ALTER TABLE`, immer `if table exists`-Check vor `CREATE TABLE`). Sie laufen bei jedem Startup in `main.py`-lifespan — ein Fehler blockiert den kompletten App-Start.
-3. **Bekannte Lücke:** `study_sessions` in `add_flashcard_tables.py` ist ohne die Spalten `cards_studied_json`, `new_cards_reviewed_today`, `study_date` definiert, die das ORM erwartet — Nachzug per PRAGMA-Check folgt in Package P5.3. Solange: diese Tabelle in Migrationen nie "unberührt" lassen, wenn das ORM neue Spalten bekommt.
+3. **P5.3 erledigt:** `study_sessions` hat jetzt alle ORM-Spalten (`cards_studied_json`, `new_cards_reviewed_today`, `study_date`) — per CREATE TABLE und idempotenten ALTERs mit PRAGMA-Check. Bleibende Regel: Wenn das ORM neue Spalten bekommt, die zugehörige Migration nie "unberührt" lassen.
 4. SQLite: `PRAGMA foreign_keys` ist per Default **aus** — dangling FKs passieren still. Bei Referenz-Löschungen (z. B. AI-Modelle) immer explizit referenzierende Objekte prüfen.
 5. Bestehende Nutzer-DBs sind heilig: Migrationen nie mit `DROP`/`RENAME` auf Daten-Tabellen "vereinfachen".
 
@@ -185,7 +185,7 @@ Zusätzlich gilt für jedes abgeschlossene Arbeitspaket: Der Besitzer prüft das
 ## Nicht-Ziele & Landminen
 
 - **Nicht tun:** Auth/Multi-User, neue Abhängigkeiten ohne Not, Änderungen an `components/ui/`, Umbau von SM-2-Konstanten ohne neue Tests, Aufrüstung auf anderes DB-System.
-- **Landmine 1:** `_build_interleaved_queue` existiert **doppelt** in `spaced_repetition.py` (erste Definition ist tot). Bei Arbeiten an der Study-Queue immer die zweite (aktive) Definition ändern; vollständige Entfernung ist Package P4.3.
+- **Landmine 1 (gelöst, P4.3):** Die doppelte `_build_interleaved_queue`-Definition in `spaced_repetition.py` wurde entfernt — es existiert nur noch die aktive Definition.
 - **Landmine 2 (mit P1.1 behoben):** `test_generator.py` verwirft ungültige `correct_answer`-Indizes (ausserhalb `0..len(choices)-1`, nicht konvertierbar, fehlend) mit `logger.warning`, statt sie still auf einen gültigen Index zu klemmen. **Niemals Clamping-Muster (`max(0, min(...))`) auf Antwort-Schlüssel zurückbringen oder auf neue Codepfade kopieren** — ein geklemmter Schlüssel lehrt eine falsche Antwort als richtig.
 - **Landmine 3 (mit P1.2 behoben):** Alle OpenRouter-Calls laufen über `app/services/openrouter_client.py` mit `response_format: json_object` (Automatisch-Retry ohne, falls ein Modell es nicht unterstützt). Reparatur-Regexes laufen **nur noch nach gescheitertem `json.loads`** und **nur innerhalb von `"choices": [...]`-Arrays** (`_repair_choices_arrays`). **Niemals globale Regex-Substitutionen über den AI-Response einbauen** — sie zerstören legitime Frage-/Erklärungsinhalte.
 - **Landmine 4:** Der AI-Call bei Generierung läuft aktuell innerhalb einer offenen DB-Transaktion (SQLite-Schreiblock bis zu 120 s). Keine weiteren Endpunkte nach diesem Muster bauen; Auflösung in P5.2.
