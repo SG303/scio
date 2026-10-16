@@ -86,6 +86,109 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> dict:
+    """Batched variant of get_deck_stats for list endpoints.
+
+    Computes the same per-deck statistics as get_deck_stats() with a
+    constant number of GROUP BY queries over all decks, instead of four
+    queries per deck (no N+1 — same pattern as get_global_stats).
+
+    Args:
+        db: Database session
+        decks: deck ORM objects (their new_cards_per_day is needed for the
+            daily new-card quota)
+
+    Returns:
+        Mapping deck_id -> stats dict with the same keys/values as the
+        get_deck_stats() dict (including mastered_cards).
+    """
+    if not decks:
+        return {}
+
+    now = utc_now()
+    today = now.date()
+    deck_ids = [deck.id for deck in decks]
+
+    # Card counts by deck and state — one query covers total/new/learning/review
+    result = await db.execute(
+        select(Flashcard.deck_id, Flashcard.state, func.count(Flashcard.id))
+        .where(Flashcard.deck_id.in_(deck_ids))
+        .group_by(Flashcard.deck_id, Flashcard.state)
+    )
+    counts_by_deck_state: dict = {}
+    for deck_id, state, count in result.all():
+        counts_by_deck_state.setdefault(deck_id, {})[state] = count
+
+    # Count due cards per deck
+    result = await db.execute(
+        select(Flashcard.deck_id, func.count(Flashcard.id))
+        .where(
+            and_(
+                Flashcard.deck_id.in_(deck_ids),
+                Flashcard.state != "new",
+                Flashcard.next_review_at <= now,
+            )
+        )
+        .group_by(Flashcard.deck_id)
+    )
+    due_by_deck = dict(result.all())
+
+    # Count mastered cards per deck
+    result = await db.execute(
+        select(Flashcard.deck_id, func.count(Flashcard.id))
+        .where(
+            and_(
+                Flashcard.deck_id.in_(deck_ids),
+                Flashcard.state == "review",
+                Flashcard.interval_days >= 21,  # At least 3 weeks interval
+                Flashcard.easiness_factor >= 2.0,  # Decent easiness factor
+            )
+        )
+        .group_by(Flashcard.deck_id)
+    )
+    mastered_by_deck = dict(result.all())
+
+    # P4.3: new cards already introduced today (deck-wide), all decks at once
+    result = await db.execute(
+        select(
+            StudySession.deck_id,
+            func.sum(StudySession.new_cards_reviewed_today),
+        )
+        .where(
+            and_(
+                StudySession.deck_id.in_(deck_ids),
+                StudySession.study_date == today,
+            )
+        )
+        .group_by(StudySession.deck_id)
+    )
+    new_reviewed_by_deck = {deck_id: total or 0 for deck_id, total in result.all()}
+
+    stats_map = {}
+    for deck in decks:
+        counts_by_state = counts_by_deck_state.get(deck.id, {})
+        total = sum(counts_by_state.values())
+        new_count = counts_by_state.get("new", 0)
+        learning_count = (
+            counts_by_state.get("learning", 0) + counts_by_state.get("relearning", 0)
+        )
+        review_count = counts_by_state.get("review", 0)
+        due_count = due_by_deck.get(deck.id, 0)
+        new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
+        new_today = max(0, min(new_count, deck.new_cards_per_day) - new_reviewed_today)
+        stats_map[deck.id] = {
+            "total_cards": total,
+            "new_cards": new_count,
+            "learning_cards": learning_count,
+            "review_cards": review_count,
+            "due_today": due_count + new_today,
+            "due_reviews": due_count,
+            "new_available": new_today,
+            "mastered_cards": mastered_by_deck.get(deck.id, 0),
+        }
+    return stats_map
+
+
 # ============== Deck Endpoints ==============
 
 
@@ -97,9 +200,12 @@ async def list_decks(db: AsyncSession = Depends(get_db)):
     )
     decks = result.scalars().all()
 
+    # One batched stats computation for all decks (no per-deck queries)
+    stats_map = await get_deck_stats_map(db, decks)
+
     response = []
     for deck in decks:
-        stats = await get_deck_stats(db, deck.id)
+        stats = stats_map.get(deck.id, {})
         response.append(
             FlashcardDeckWithStats(
                 id=deck.id,
@@ -577,6 +683,14 @@ async def generate_cards_for_deck(
             select(Document).where(Document.id.in_(deck.document_ids))
         )
         documents = list(result.scalars().all())
+        # Same validation as create-and-generate: a deleted document must not
+        # silently turn into generation without study material
+        found_ids = {d.id for d in documents}
+        missing_ids = set(deck.document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(
+                status_code=404, detail=f"Document(s) not found: {missing_ids}"
+            )
 
     # Get existing card fronts to avoid duplicates
     result = await db.execute(
