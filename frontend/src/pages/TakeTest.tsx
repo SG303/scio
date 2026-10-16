@@ -40,7 +40,9 @@ export default function TakeTest() {
     refetchInterval: false,
   })
 
-  const startMutation = useMutation({
+  // TanStack Query v5: mutate is referentially stable — the destructured
+  // function is what the start effect can depend on
+  const { mutate: startTest, isPending: startPending } = useMutation({
     mutationFn: () => testsApi.start(parseInt(testId!)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.test(testId) })
@@ -75,13 +77,13 @@ export default function TakeTest() {
   // Start test if it's generated - with proper guards against multiple calls
   useEffect(() => {
     if (
-      test?.status === 'generated' && 
-      !startMutation.isPending && 
+      test?.status === 'generated' &&
+      !startPending &&
       !hasAttemptedStart.current
     ) {
       hasAttemptedStart.current = true
       startAttempts.current += 1
-      startMutation.mutate(undefined, {
+      startTest(undefined, {
         onError: (error) => {
           console.error('Failed to start test:', error)
           if (startAttempts.current < 3) {
@@ -92,7 +94,20 @@ export default function TakeTest() {
         }
       })
     }
-  }, [test?.status, startMutation.isPending])
+  }, [test?.status, startPending, startTest])
+
+  // P2.2: navigate away as soon as the test reads as completed — a side
+  // effect, so it belongs in an effect, not in the render body. The ref
+  // guard keeps StrictMode's double effect invocation from pushing the
+  // same route twice.
+  const testCompleted = test?.status === 'completed'
+  const completedRedirected = useRef(false)
+  useEffect(() => {
+    if (testCompleted && !completedRedirected.current) {
+      completedRedirected.current = true
+      navigate(`/results/${testId}`)
+    }
+  }, [testCompleted, navigate, testId])
 
   // P4.1: keyboard shortcuts — 1-4 select an answer, Enter goes to the next
   // question (or opens submit on the last one). Active while the test is
@@ -141,7 +156,7 @@ export default function TakeTest() {
   }
 
   if (test.status === 'completed') {
-    navigate(`/results/${testId}`)
+    // P2.2: navigation moved into the effect above
     return null
   }
 
