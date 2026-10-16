@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 
@@ -24,8 +24,8 @@ class QuestionResponse(BaseModel):
 
 class TestConfigCreate(BaseModel):
     title: str
-    num_questions: int = 10
-    num_choices: int = 4
+    num_questions: int = Field(default=10, ge=1, le=100)
+    num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: int
     document_ids: List[int]
     is_template: bool = False
@@ -48,15 +48,15 @@ class TestConfigResponse(BaseModel):
 
 
 class GenerateFromTemplateRequest(BaseModel):
-    num_questions: Optional[int] = None  # Override the template's default
+    num_questions: Optional[int] = Field(default=None, ge=1, le=100)  # Override the template's default
 
 
 class CreateAndGenerateRequest(BaseModel):
     """P5.2: create a config and generate a test in one transaction —
     a failed generation leaves no empty config behind."""
     title: str
-    num_questions: int = 10
-    num_choices: int = 4
+    num_questions: int = Field(default=10, ge=1, le=100)
+    num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: int
     document_ids: List[int]
     is_template: bool = False
