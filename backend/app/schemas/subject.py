@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 
@@ -116,8 +116,8 @@ class SubjectDetailResponse(BaseModel):
 class GenerateTestInSubjectRequest(BaseModel):
     """Request to generate a test within a subject"""
     title: str
-    num_questions: int = 10
-    num_choices: int = 4
+    num_questions: int = Field(default=10, ge=1, le=100)
+    num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: Optional[int] = None  # Override subject default
     document_ids: Optional[List[int]] = None  # Override subject default
     custom_prompt: Optional[str] = None
@@ -127,7 +127,7 @@ class GenerateFlashcardsInSubjectRequest(BaseModel):
     """Request to generate flashcards within a subject"""
     title: str
     description: Optional[str] = None
-    num_cards: int = 20
+    num_cards: int = Field(default=20, ge=1, le=100)
     ai_model_id: Optional[int] = None  # Override subject default
     document_ids: Optional[List[int]] = None  # Override subject default
     custom_prompt: Optional[str] = None
@@ -135,14 +135,14 @@ class GenerateFlashcardsInSubjectRequest(BaseModel):
 
 class AddQuestionsRequest(BaseModel):
     """Request to add questions to an existing test config"""
-    num_questions: int = 10
+    num_questions: int = Field(default=10, ge=1, le=100)
     ai_model_id: Optional[int] = None  # Override config's model
     custom_prompt: Optional[str] = None
 
 
 class AddCardsRequest(BaseModel):
     """Request to add cards to an existing deck"""
-    num_cards: int = 10
+    num_cards: int = Field(default=10, ge=1, le=100)
     ai_model_id: Optional[int] = None  # Override deck's model
     custom_prompt: Optional[str] = None
 
