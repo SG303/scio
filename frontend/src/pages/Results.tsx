@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { toast } from '@/components/Toaster'
 import { testsApi, flashcardsApi } from '@/services/api'
 import { cn, formatScore, getScoreColor } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
@@ -66,6 +67,9 @@ export default function Results() {
       setShowFlashcardDialog(false)
       navigate(`/flashcards/${data.deck_id}`)
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to create flashcards')
+    },
   })
 
   const handleCreateFlashcards = () => {
@@ -81,7 +85,7 @@ export default function Results() {
       const result = await testsApi.verifyQuestion(parseInt(testId!), questionId)
       setVerificationResults(prev => ({ ...prev, [questionId]: result }))
     } catch (error) {
-      console.error('Verification failed', error)
+      toast.error(error instanceof Error ? error.message : 'Verification failed')
     } finally {
       setVerifying(prev => ({ ...prev, [questionId]: false }))
     }

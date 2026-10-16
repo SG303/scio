@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { toast } from '@/components/Toaster'
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
@@ -39,6 +40,9 @@ export default function FlashcardDecks() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
       setDeletingDeckId(null)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete deck')
     },
   })
 

@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { toast } from '@/components/Toaster'
 import { subjectsApi, testsApi, flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import type { TestConfigInSubject, FlashcardDeckInSubject } from '@/types'
@@ -67,6 +68,9 @@ export default function SubjectDetail() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tests })
       setDeletingTest(null)
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete test')
+    },
   })
 
   const deleteDeckMutation = useMutation({
@@ -77,6 +81,9 @@ export default function SubjectDetail() {
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
       setDeletingDeck(null)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete deck')
     },
   })
 

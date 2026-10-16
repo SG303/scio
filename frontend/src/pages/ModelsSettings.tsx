@@ -38,6 +38,9 @@ export default function ModelsSettings() {
       setIsAddOpen(false)
       setFormData({ name: '', openrouter_id: '', description: '' })
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to add model')
+    },
   })
 
   const updateMutation = useMutation({
@@ -46,12 +49,18 @@ export default function ModelsSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.models })
     },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update model')
+    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: modelsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.models })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete model')
     },
   })
 
