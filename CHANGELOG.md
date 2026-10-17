@@ -27,6 +27,12 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
   `num_questions`, `num_choices`) sind serverseitig begrenzt (1–100
   Karten bzw. Fragen, 2–10 Antwortoptionen); ungültige Werte werden
   mit 422 abgelehnt.
+- Bei der Quiz-Fragen-Generierung fragen Fallback-Strategien nur noch
+  die fehlende Anzahl nach; bereits generierte (bezahlte) Fragen werden
+  wiederverwendet statt verworfen.
+- Die Übersichtsseiten von Decks und Fächern berechnen ihre Statistiken
+  gesammelt statt pro Element — bei grösserem Datenbestand spürbar
+  schnellere Listen.
 
 ### Behoben
 
@@ -68,4 +74,12 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
   AI-Call keine leeren Test- bzw. Karten-Objekte mehr, und während der
   Generierung sind andere Aktionen nicht mehr durch eine
   Datenbanksperre blockiert (bis zu 2 Minuten).
+- Generierungen antworten mit einem klaren 404, wenn referenzierte
+  Dokumente fehlen (z. B. nach deren Löschung), statt stillschweigend
+  ohne das Studienmaterial zu generieren.
+- Löschen räumt zugehörige Daten konsistent auf: Ein gelöschter Test
+  oder eine Vorlage hinterlässt keine verwaisten Tests, Fragen oder
+  Karten-Bezüge, ein gelöschtes Deck keine Review-Zeilen, und
+  Dokument-Referenzen werden aus Test-, Deck- und Fach-Konfigurationen
+  entfernt.
 

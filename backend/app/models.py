@@ -109,7 +109,11 @@ class TestConfig(Base):
 
     # Relationships
     ai_model = relationship("AIModel", back_populates="test_configs")
-    tests = relationship("Test", back_populates="config")
+    # Referential integrity: deleting a config must delete its tests (and,
+    # via Test.questions, their questions) — SQLite has foreign_keys=OFF,
+    # so without the ORM cascade the children would linger with dangling
+    # config_id.
+    tests = relationship("Test", back_populates="config", cascade="all, delete-orphan")
     subject = relationship("Subject", back_populates="test_configs")
 
 
@@ -296,4 +300,8 @@ class StudySession(Base):
 
     # Relationships
     deck = relationship("FlashcardDeck", back_populates="study_sessions")
-    reviews = relationship("FlashcardReview", back_populates="session")
+    # Referential integrity: deleting a session must delete its reviews
+    # (foreign_keys=OFF means the rows would linger with dangling session_id).
+    reviews = relationship(
+        "FlashcardReview", back_populates="session", cascade="all, delete-orphan"
+    )
