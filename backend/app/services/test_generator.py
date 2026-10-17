@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional
 from app.config import get_settings
 from app.models import Document
 from app.services.openrouter_client import chat_completion_json
+from app.services.generation_progress import GenerationCancelled
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,10 @@ async def generate_test_questions(
             _merge(questions)
             if len(collected) >= num_questions * 0.8:  # Accept if we got at least 80%
                 return collected[:num_questions]
+        except GenerationCancelled:
+            # P6.2: a requested cancellation must leave the fallback chain —
+            # continuing here would fire further paid AI calls.
+            raise
         except Exception as e:
             # Log and continue to fallback strategy
             logger.warning("Single-call generation failed, falling back to batches: %s", e)
@@ -227,6 +232,8 @@ async def generate_test_questions(
         _merge(strategy_questions)
         if len(collected) >= num_questions * 0.8:
             return collected[:num_questions]
+    except GenerationCancelled:
+        raise
     except Exception as e:
         logger.warning("Medium batch generation failed, falling back to small batches: %s", e)
     
@@ -314,6 +321,10 @@ async def _generate_with_batch_size(
                 current_existing.append(q["question"])
             all_questions.extend(new_questions)
                 
+        except GenerationCancelled:
+            # P6.2: a cancellation must not be turned into a partial result
+            # (break) — it has to escape the whole fallback chain.
+            raise
         except Exception as e:
             if not all_questions:
                 raise e

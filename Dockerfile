@@ -9,7 +9,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 
 # Install dependencies
-RUN npm install --verbose
+RUN npm ci
 
 # Copy frontend source
 COPY frontend/ .
@@ -18,7 +18,7 @@ COPY frontend/ .
 RUN echo "Starting frontend build..." && npm run build && echo "Frontend build completed successfully!"
 
 # Stage 2: Python backend with frontend static files
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
