@@ -93,14 +93,15 @@ async def seed_default_models(db: AsyncSession):
         # is still referenced (subject/test config/deck) is kept and merely
         # un-flagged, since SQLite FKs are off and a plain delete would leave
         # dangling ai_model_id references.
-        referenced_ids: set = set()
+        reference_counts: dict = {}
         for model_cls in (TestConfig, FlashcardDeck, Subject):
             ref_result = await db.execute(
-                select(model_cls.ai_model_id)
+                select(model_cls.ai_model_id, func.count())
                 .where(model_cls.ai_model_id.is_not(None))
-                .distinct()
+                .group_by(model_cls.ai_model_id)
             )
-            referenced_ids.update(row[0] for row in ref_result.all())
+            for model_id, count in ref_result.all():
+                reference_counts[model_id] = reference_counts.get(model_id, 0) + count
 
         result = await db.execute(
             select(AIModel).where(
@@ -108,8 +109,13 @@ async def seed_default_models(db: AsyncSession):
             )
         )
         for stale in result.scalars().all():
-            if stale.id in referenced_ids:
+            if stale.id in reference_counts:
                 stale.is_default = False
+                logger.info(
+                    "Keeping stale default model %s (id=%d): still referenced by "
+                    "%d row(s). It is un-flagged so it stops appearing as a default.",
+                    stale.openrouter_id, stale.id, reference_counts[stale.id],
+                )
             else:
                 await db.delete(stale)
 
