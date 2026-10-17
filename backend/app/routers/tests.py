@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
 
 from app.database import get_db
-from app.models import Test, TestConfig, Question, Document, AIModel
+from app.models import Test, TestConfig, Question, Document, AIModel, Flashcard
 from app.schemas.test import (
     TestConfigCreate, TestConfigResponse,
     TestResponse, TestDetailResponse,
@@ -183,7 +183,13 @@ async def delete_test_template(template_id: int, db: AsyncSession = Depends(get_
     template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
+    # With the TestConfig.tests cascade (referential integrity), deleting the
+    # template also deletes its tests and questions. Clear the source links
+    # before the questions disappear, so flashcards don't keep dangling
+    # source_question_id values.
+    await _clear_flashcard_source_for_config(template.id, db)
+
     await db.delete(template)
     await db.commit()
     return {"message": "Template deleted successfully"}
@@ -349,11 +355,11 @@ async def generate_test(
     
     # Query existing questions from same template to avoid duplicates
     existing_result = await db.execute(
-        select(Question)
+        select(Question.question_text)
         .join(Test, Question.test_id == Test.id)
         .where(Test.config_id == config_id)
     )
-    existing_questions = [q.question_text for q in existing_result.scalars().all()]
+    existing_questions = [row[0] for row in existing_result.fetchall()]
     
     # Generate questions using AI
     if progress_token:
@@ -623,10 +629,43 @@ async def delete_test(test_id: int, db: AsyncSession = Depends(get_db)):
     test = result.scalar_one_or_none()
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
-    
+
+    # Referential integrity: flashcards generated from this test's questions
+    # keep a source_question_id; clear it before the questions are deleted,
+    # so they don't dangle (foreign_keys=OFF would hide this silently).
+    await _clear_flashcard_source_for_test(test_id, db)
+
     await db.delete(test)
     await db.commit()
     return {"message": "Test deleted successfully"}
+
+
+async def _clear_flashcard_source_for_test(test_id: int, db: AsyncSession):
+    """Bulk-clear Flashcard.source_question_id for one test's questions."""
+    await db.execute(
+        update(Flashcard)
+        .where(
+            Flashcard.source_question_id.in_(
+                select(Question.id).where(Question.test_id == test_id)
+            )
+        )
+        .values(source_question_id=None)
+    )
+
+
+async def _clear_flashcard_source_for_config(config_id: int, db: AsyncSession):
+    """Bulk-clear Flashcard.source_question_id for all of a config's questions."""
+    await db.execute(
+        update(Flashcard)
+        .where(
+            Flashcard.source_question_id.in_(
+                select(Question.id)
+                .join(Test, Question.test_id == Test.id)
+                .where(Test.config_id == config_id)
+            )
+        )
+        .values(source_question_id=None)
+    )
 
 
 @router.post("/{test_id}/questions/{question_id}/verify")

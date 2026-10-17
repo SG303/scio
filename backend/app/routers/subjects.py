@@ -6,7 +6,7 @@ with shared configuration and centralized management.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -27,7 +27,7 @@ from app.schemas.test import TestResponse
 from app.schemas.flashcard import FlashcardDeckResponse, GenerateFlashcardsResponse, FlashcardResponse
 from app.services.test_generator import generate_test_questions
 from app.services.flashcard_generator import generate_flashcards
-from app.services.spaced_repetition import get_deck_stats
+from app.routers.flashcards import get_deck_stats_map
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
 logger = logging.getLogger(__name__)
@@ -49,41 +49,60 @@ async def list_subjects(db: AsyncSession = Depends(get_db)):
         .order_by(Subject.created_at.desc())
     )
     subjects = result.scalars().all()
-    
+
+    # Aggregated stats for all subjects with a constant number of GROUP BY
+    # queries — no per-subject or per-deck queries (no N+1 pattern)
+    result = await db.execute(
+        select(TestConfig.subject_id, func.count(TestConfig.id))
+        .where(TestConfig.subject_id.isnot(None))
+        .group_by(TestConfig.subject_id)
+    )
+    config_count_by_subject = dict(result.all())
+
+    result = await db.execute(
+        select(TestConfig.subject_id, func.count(Test.id))
+        .join(Test, Test.config_id == TestConfig.id)
+        .where(TestConfig.subject_id.isnot(None))
+        .group_by(TestConfig.subject_id)
+    )
+    tests_taken_by_subject = dict(result.all())
+
+    result = await db.execute(
+        select(TestConfig.subject_id, func.avg(Test.score))
+        .join(Test, Test.config_id == TestConfig.id)
+        .where(
+            and_(
+                TestConfig.subject_id.isnot(None),
+                Test.status == "completed",
+                Test.score.isnot(None),
+            )
+        )
+        .group_by(TestConfig.subject_id)
+    )
+    avg_score_by_subject = dict(result.all())
+
+    result = await db.execute(
+        select(FlashcardDeck).where(FlashcardDeck.subject_id.isnot(None))
+    )
+    decks_by_subject: dict = {}
+    for deck in result.scalars().all():
+        decks_by_subject.setdefault(deck.subject_id, []).append(deck)
+
+    stats_map = await get_deck_stats_map(
+        db,
+        [deck for decks in decks_by_subject.values() for deck in decks],
+    )
+
     response = []
     for subject in subjects:
-        # Get test configs for this subject
-        test_result = await db.execute(
-            select(TestConfig)
-            .options(selectinload(TestConfig.tests))
-            .where(TestConfig.subject_id == subject.id)
-        )
-        test_configs = test_result.scalars().all()
-        
-        # Get flashcard decks for this subject
-        deck_result = await db.execute(
-            select(FlashcardDeck)
-            .where(FlashcardDeck.subject_id == subject.id)
-        )
-        decks = deck_result.scalars().all()
-        
-        # Calculate aggregated stats
-        total_tests_taken = sum(len(tc.tests) for tc in test_configs)
-        completed_tests = [t for tc in test_configs for t in tc.tests if t.status == "completed"]
-        average_score = None
-        if completed_tests:
-            scores = [t.score for t in completed_tests if t.score is not None]
-            if scores:
-                average_score = sum(scores) / len(scores)
-        
-        # Get flashcard stats
+        decks = decks_by_subject.get(subject.id, [])
         total_cards = 0
         mastered_cards = 0
         for deck in decks:
-            stats = await get_deck_stats(db, deck.id)
+            stats = stats_map.get(deck.id, {})
             total_cards += stats.get('total_cards', 0)
             mastered_cards += stats.get('mastered_cards', 0)
-        
+
         response.append(SubjectListResponse(
             id=subject.id,
             title=subject.title,
@@ -92,10 +111,10 @@ async def list_subjects(db: AsyncSession = Depends(get_db)):
             ai_model_name=subject.ai_model.name if subject.ai_model else None,
             document_ids=subject.document_ids,
             document_count=len(subject.document_ids) if subject.document_ids else 0,
-            test_count=len(test_configs),
+            test_count=config_count_by_subject.get(subject.id, 0),
             deck_count=len(decks),
-            total_tests_taken=total_tests_taken,
-            average_score=average_score,
+            total_tests_taken=tests_taken_by_subject.get(subject.id, 0),
+            average_score=avg_score_by_subject.get(subject.id),
             total_cards=total_cards,
             mastered_cards=mastered_cards,
             created_at=subject.created_at,
@@ -203,12 +222,15 @@ async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
         ))
     
     # Build flashcard deck responses with stats
+    # One batched stats computation for all decks (no per-deck queries)
+    stats_map = await get_deck_stats_map(db, decks)
+
     deck_responses = []
     total_cards = 0
     mastered_cards = 0
     
     for deck in decks:
-        stats = await get_deck_stats(db, deck.id)
+        stats = stats_map.get(deck.id, {})
         total_cards += stats.get('total_cards', 0)
         mastered_cards += stats.get('mastered_cards', 0)
         
@@ -379,16 +401,22 @@ async def generate_test_in_subject(
             select(Document).where(Document.id.in_(document_ids))
         )
         documents = list(result.scalars().all())
+        # Same validation as create-and-generate: a deleted document must not
+        # silently turn into generation without study material
+        found_ids = {d.id for d in documents}
+        missing_ids = set(document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
     
     # Get existing questions from this subject to avoid duplicates
     # (read before the AI call — does not depend on the config created below)
     existing_result = await db.execute(
-        select(Question)
+        select(Question.question_text)
         .join(Test, Question.test_id == Test.id)
         .join(TestConfig, Test.config_id == TestConfig.id)
         .where(TestConfig.subject_id == subject_id)
     )
-    existing_questions = [q.question_text for q in existing_result.scalars().all()]
+    existing_questions = [row[0] for row in existing_result.fetchall()]
 
     # Generate questions — the AI call runs before anything is written, so a
     # failed generation leaves no empty config behind (P5.2, Landmine 4)
@@ -498,6 +526,12 @@ async def generate_flashcards_in_subject(
             select(Document).where(Document.id.in_(document_ids))
         )
         documents = list(result.scalars().all())
+        # Same validation as create-and-generate: a deleted document must not
+        # silently turn into generation without study material
+        found_ids = {d.id for d in documents}
+        missing_ids = set(document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
     
     # Get existing card fronts from this subject to avoid duplicates
     # (read before the AI call — does not depend on the deck created below)
@@ -606,14 +640,20 @@ async def add_questions_to_test_config(
             select(Document).where(Document.id.in_(test_config.document_ids))
         )
         documents = list(result.scalars().all())
+        # Same validation as create-and-generate: a deleted document must not
+        # silently turn into generation without study material
+        found_ids = {d.id for d in documents}
+        missing_ids = set(test_config.document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
     
     # Get ALL existing questions from this config to avoid duplicates
     existing_result = await db.execute(
-        select(Question)
+        select(Question.question_text)
         .join(Test, Question.test_id == Test.id)
         .where(Test.config_id == config_id)
     )
-    existing_questions = [q.question_text for q in existing_result.scalars().all()]
+    existing_questions = [row[0] for row in existing_result.fetchall()]
     
     # Generate new questions
     try:
@@ -713,6 +753,12 @@ async def add_cards_to_deck(
             select(Document).where(Document.id.in_(deck.document_ids))
         )
         documents = list(result.scalars().all())
+        # Same validation as create-and-generate: a deleted document must not
+        # silently turn into generation without study material
+        found_ids = {d.id for d in documents}
+        missing_ids = set(deck.document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
     
     # Get existing card fronts to avoid duplicates
     existing_result = await db.execute(
