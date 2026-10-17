@@ -33,6 +33,11 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 - Die Übersichtsseiten von Decks und Fächern berechnen ihre Statistiken
   gesammelt statt pro Element — bei grösserem Datenbestand spürbar
   schnellere Listen.
+- Die Datenbank läuft im WAL-Modus mit 5 Sekunden Sperr-Wartezeit:
+  Lesezugriffe (z. B. während einer langen KI-Generierung) blockieren
+  Schreibvorgänge anderer Aktionen nicht mehr.
+- FastAPI-Validierungsfehler zeigen im Frontend eine lesbare Meldung
+  (Feld + Ursache) statt „[object Object]".
 
 ### Behoben
 
@@ -82,4 +87,7 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
   Karten-Bezüge, ein gelöschtes Deck keine Review-Zeilen, und
   Dokument-Referenzen werden aus Test-, Deck- und Fach-Konfigurationen
   entfernt.
+- Ein angeforderter Abbruch der Quiz-Fragen-Generierung stoppt die
+  Generierung vollständig; es werden keine weiteren KI-Anfragen mehr
+  im Hintergrund gefeuert.
 
