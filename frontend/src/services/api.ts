@@ -55,6 +55,32 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Build a readable error message from a FastAPI `detail` payload, which can be
+ * a string or — for request-validation errors (422) — an array of
+ * `{loc, msg, type}` objects. The first `loc` element is always "body" (or
+ * "path"/"query") and is dropped so the message names the offending field.
+ */
+export function formatErrorDetail(detail: unknown): string {
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (item && typeof item === 'object') {
+          const loc = Array.isArray(item.loc) ? item.loc.slice(1) : []
+          const field = loc.length > 0 ? `${loc.join('.')}: ` : ''
+          const msg = typeof item.msg === 'string' ? item.msg : JSON.stringify(item)
+          return `${field}${msg}`
+        }
+        return String(item)
+      })
+      .join('; ')
+  }
+  if (detail && typeof detail === 'object') {
+    return JSON.stringify(detail)
+  }
+  return typeof detail === 'string' ? detail : ''
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
@@ -69,7 +95,7 @@ async function fetchApi<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'An error occurred' }))
-    throw new ApiError(error.detail || 'Request failed', response.status)
+    throw new ApiError(formatErrorDetail(error.detail) || 'Request failed', response.status)
   }
 
   return response.json()

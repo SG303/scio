@@ -171,15 +171,51 @@ scio/
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
-| `/api/documents` | GET, POST | List/create documents |
-| `/api/documents/upload` | POST | Upload document file |
-| `/api/models` | GET, POST | List/create AI models |
-| `/api/tests/configs` | GET, POST | List/create test configs |
-| `/api/tests/generate/{id}` | POST | Generate test from config |
-| `/api/tests/{id}` | GET | Get test details |
+| `/api/documents` | GET, POST | List / create documents |
+| `/api/documents/{id}` | GET, PUT, DELETE | Get / update / delete a document |
+| `/api/documents/upload` | POST | Upload a document file (PDF, DOCX, TXT, MD) |
+| `/api/models` | GET, POST | List / create AI models (`?enabled_only=true`) |
+| `/api/models/{id}` | GET, PUT, DELETE | Get / update / delete an AI model |
+| `/api/settings` | GET, PUT | Get / update app settings |
+| `/api/tests/configs` | GET, POST | List / create test configs |
+| `/api/tests/configs/{id}/scores` | GET | Score history for a config |
+| `/api/tests/templates` | GET | List test templates |
+| `/api/tests/templates/{id}` | GET, PUT, DELETE | Get / update / delete a template |
+| `/api/tests/create-and-generate` | POST | Create a config and generate the test in one call |
+| `/api/tests/generate/{config_id}` | POST | Generate a test from a config |
+| `/api/tests` | GET | List tests |
+| `/api/tests/{id}` | GET, DELETE | Get test details / delete a test |
 | `/api/tests/{id}/start` | POST | Start a test |
 | `/api/tests/{id}/answer` | POST | Submit an answer |
-| `/api/tests/{id}/submit` | POST | Submit test for grading |
+| `/api/tests/{id}/submit` | POST | Submit a test for grading |
+| `/api/tests/{id}/questions/{question_id}/verify` | POST | AI-based verification of a question |
+| `/api/flashcards/decks` | GET, POST | List / create flashcard decks |
+| `/api/flashcards/decks/{id}` | GET, PUT, DELETE | Get / update / delete a deck |
+| `/api/flashcards/decks/{id}/cards` | GET, POST | List / create cards |
+| `/api/flashcards/decks/{id}/generate` | POST | Generate cards for a deck |
+| `/api/flashcards/decks/{id}/study` | GET | Get the SM-2 study queue |
+| `/api/flashcards/decks/{id}/stats` | GET | Per-deck statistics |
+| `/api/flashcards/decks/{id}/incomplete-session` | GET | Check for a resumable study session |
+| `/api/flashcards/decks/{id}/export` | POST | Export a deck as Anki `.apkg` or CSV |
+| `/api/flashcards/decks/{id}/import` | POST | Import cards from CSV |
+| `/api/flashcards/create-and-generate` | POST | Create a deck and generate cards in one call |
+| `/api/flashcards/cards/{id}` | PUT, DELETE | Update / delete a card |
+| `/api/flashcards/cards/{id}/review` | POST | Submit an SM-2 review rating |
+| `/api/flashcards/sessions` | POST | Start a study session |
+| `/api/flashcards/sessions/{id}` | GET | Get a study session |
+| `/api/flashcards/sessions/{id}/complete` | POST | Complete a study session |
+| `/api/flashcards/stats` | GET | Global flashcard statistics |
+| `/api/flashcards/analytics` | GET | Aggregated learning analytics |
+| `/api/flashcards/streak` | GET | Study streak and daily goal |
+| `/api/flashcards/from-test/{test_id}` | POST | Create a flashcard deck from a test |
+| `/api/subjects` | GET, POST | List / create subjects |
+| `/api/subjects/{id}` | GET, PUT, DELETE | Get / update / delete a subject (`?cascade=true`) |
+| `/api/subjects/{id}/generate-test` | POST | Generate a test for a subject |
+| `/api/subjects/{id}/generate-flashcards` | POST | Generate flashcards for a subject |
+| `/api/subjects/{id}/test-configs/{config_id}/add-questions` | POST | Add AI questions to an existing test |
+| `/api/subjects/{id}/decks/{deck_id}/add-cards` | POST | Add AI cards to an existing deck |
+| `/api/generation/progress/{token}` | GET | Poll AI generation progress |
+| `/api/generation/progress/{token}/cancel` | POST | Request generation cancellation |
 
 ## Tech Stack
 
