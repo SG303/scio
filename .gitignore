@@ -8,6 +8,7 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 data/*.backup-*
+data/backups/
 backend/data/*.db
 backend/data/*.db-journal
 backend/data/*.db-wal
