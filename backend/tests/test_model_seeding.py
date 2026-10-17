@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
+from app import models
 from app.models import Base, AIModel, Setting
 from app.routers.ai_models import DEFAULT_MODELS, MODELS_VERSION, seed_default_models
 
@@ -80,3 +81,81 @@ async def test_reseed_leaves_user_models_alone(session):
     ).scalar_one()
     assert row.description == "mine"
     assert row.is_default is False
+
+
+async def test_reseed_deletes_unreferenced_stale_default(session):
+    """A stale default no longer referenced by any subject/config/deck is
+    removed on re-seed — nobody can lose a usable reference."""
+    await seed_default_models(session)
+    stale = AIModel(
+        name="Old Default",
+        openrouter_id="old/stale-model",
+        description="previous generation default",
+        is_default=True,
+    )
+    session.add(stale)
+    await session.commit()
+    stale_id = stale.id
+    await _set_version(session, MODELS_VERSION - 1)
+
+    await seed_default_models(session)
+
+    row = (
+        await session.execute(select(AIModel).where(AIModel.id == stale_id))
+    ).scalar_one_or_none()
+    assert row is None
+
+
+async def test_reseed_keeps_referenced_stale_default(session):
+    """A stale default still referenced by a test config or subject is kept
+    (SQLite FKs are off — deleting it would leave dangling ai_model_id rows
+    that break later generations) and merely un-flagged. Neutral references
+    to still-current defaults are untouched."""
+    await seed_default_models(session)
+    sonnet = (
+        await session.execute(
+            select(AIModel).where(AIModel.openrouter_id == SONNET_ID)
+        )
+    ).scalar_one()
+    stale = AIModel(
+        name="Old Default",
+        openrouter_id="old/stale-model",
+        description="previous generation default",
+        is_default=True,
+    )
+    session.add(stale)
+    await session.flush()
+    config = models.TestConfig(
+        title="Config",
+        num_questions=1,
+        num_choices=4,
+        ai_model_id=stale.id,
+        document_ids=[],
+    )
+    subject = models.Subject(title="Subject", ai_model_id=stale.id)
+    session.add_all([config, subject])
+    await session.commit()
+    stale_id = stale.id
+    sonnet_id = sonnet.id
+    await _set_version(session, MODELS_VERSION - 1)
+
+    await seed_default_models(session)
+
+    row = (
+        await session.execute(select(AIModel).where(AIModel.id == stale_id))
+    ).scalar_one()
+    assert row.is_default is False
+    # References stayed intact (no dangling ids) …
+    config_after = (
+        await session.execute(select(models.TestConfig).order_by(models.TestConfig.id))
+    ).scalars().first()
+    assert config_after.ai_model_id == stale_id
+    subject_after = (
+        await session.execute(select(models.Subject).order_by(models.Subject.id))
+    ).scalars().first()
+    assert subject_after.ai_model_id == stale_id
+    # … and the still-current default is untouched
+    sonnet_after = (
+        await session.execute(select(AIModel).where(AIModel.id == sonnet_id))
+    ).scalar_one()
+    assert sonnet_after.is_default is True
