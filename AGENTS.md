@@ -185,6 +185,7 @@ Zusätzlich gilt für jedes abgeschlossene Arbeitspaket: Der Besitzer prüft das
 ## Nicht-Ziele & Landminen
 
 - **Nicht tun:** Auth/Multi-User, neue Abhängigkeiten ohne Not, Änderungen an `components/ui/`, Umbau von SM-2-Konstanten ohne neue Tests, Aufrüstung auf anderes DB-System.
+- **Kein Dark Mode / Theme-Toggle:** Der Besitzer plant die UI-Überarbeitung zu einem späteren Zeitpunkt; das Thema ist bewusst zurückgestellt und gehört in einen eigenen UI-Refactor, nicht in Feature-Runden.
 - **Landmine 1 (gelöst, P4.3):** Die doppelte `_build_interleaved_queue`-Definition in `spaced_repetition.py` wurde entfernt — es existiert nur noch die aktive Definition.
 - **Landmine 2 (mit P1.1 behoben):** `test_generator.py` verwirft ungültige `correct_answer`-Indizes (ausserhalb `0..len(choices)-1`, nicht konvertierbar, fehlend) mit `logger.warning`, statt sie still auf einen gültigen Index zu klemmen. **Niemals Clamping-Muster (`max(0, min(...))`) auf Antwort-Schlüssel zurückbringen oder auf neue Codepfade kopieren** — ein geklemmter Schlüssel lehrt eine falsche Antwort als richtig.
 - **Landmine 3 (mit P1.2 behoben):** Alle OpenRouter-Calls laufen über `app/services/openrouter_client.py` mit `response_format: json_object` (Automatisch-Retry ohne, falls ein Modell es nicht unterstützt). Reparatur-Regexes laufen **nur noch nach gescheitertem `json.loads`** und **nur innerhalb von `"choices": [...]`-Arrays** (`_repair_choices_arrays`). **Niemals globale Regex-Substitutionen über den AI-Response einbauen** — sie zerstören legitime Frage-/Erklärungsinhalte.
