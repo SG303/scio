@@ -8,6 +8,10 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- Automatische Datenbank-Backups: kurz nach dem Start und dann täglich
+  landet eine konsistente Kopie der Datenbank in `data/backups/` (die
+  14 neuesten bleiben erhalten). Ein Sofort-Backup ist über den neuen
+  API-Endpunkt möglich (UI-Karte folgt mit der geplanten Überarbeitung).
 - Regressionstests für die Zuordnung von Flashcard-Reviews zu parallelen
   Lernsitzungen.
 - Frontend-Unit-Tests für den Einstieg in das Offline-Lernen.
