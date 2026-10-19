@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 
@@ -21,11 +22,21 @@ from app.routers import documents, ai_models, tests, flashcards, subjects, gener
 from app.routers.settings import router as settings_router
 from app.routers.ai_models import seed_default_models
 from app.config import get_settings
+from app.services import db_backup
 from app.migrations.add_template_fields import migrate as migrate_template_fields
 from app.migrations.add_flashcard_tables import migrate as migrate_flashcard_tables
 from app.migrations.add_subjects_table import migrate as migrate_subjects_table
 
 settings = get_settings()
+
+
+async def _backup_loop():
+    """Run one backup ~60s after startup, then every 24h. Each cycle
+    logs its result; a failed cycle never stops the loop."""
+    await asyncio.sleep(db_backup.FIRST_BACKUP_DELAY_SECONDS)
+    while True:
+        await db_backup.run_backup_cycle(settings.database_path)
+        await asyncio.sleep(db_backup.BACKUP_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
@@ -42,8 +53,16 @@ async def lifespan(app: FastAPI):
     async with async_session() as db:
         await seed_default_models(db)
     
-    yield
-    # Shutdown (nothing to clean up)
+    backup_task = asyncio.create_task(_backup_loop())
+    try:
+        yield
+    finally:
+        # Shutdown: stop the backup scheduler cleanly
+        backup_task.cancel()
+        try:
+            await backup_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
