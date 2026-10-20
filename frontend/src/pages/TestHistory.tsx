@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/Toaster'
-import { GraduationCap, Trash2, Clock, CheckCircle2, ClipboardList, Sparkles } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Trash2, ClipboardList, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { QueryState } from '@/components/QueryState'
-import { ScoreSparkline } from '@/components/ScoreSparkline'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { List, RowActions } from '@/components/List'
+import { TestRow } from '@/components/TestRow'
 import {
   Dialog,
   DialogContent,
@@ -16,9 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { testsApi } from '@/services/api'
-import { formatDate, getScoreColor } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
-import type { Test } from '@/types'
 
 /**
  * P5.1: test management — all tests in one place.
@@ -26,7 +27,6 @@ import type { Test } from '@/types'
  * built from the completed tests of the same config.
  */
 export default function TestHistory() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [deletingTestId, setDeletingTestId] = useState<number | null>(null)
 
@@ -78,116 +78,60 @@ export default function TestHistory() {
     }
   }
 
-  const openTest = (test: Test) => {
-    if (test.status === 'completed') {
-      navigate(`/results/${test.id}`)
-    } else {
-      navigate(`/test/${test.id}`)
-    }
-  }
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Tests</h1>
-        <p className="text-muted-foreground">
-          All your practice tests — continue, review or clean up.
-        </p>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-8">
+      <PageHeader
+        title="Tests"
+        description="All your practice tests — continue, review or clean up."
+        actions={
+          <Button asChild>
+            <Link to="/create">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Generate New
+            </Link>
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Test History</CardTitle>
-              <CardDescription>
-                {tests.length} test{tests.length !== 1 ? 's' : ''} total
-              </CardDescription>
-            </div>
-            <Button variant="outline" size="sm" asChild>
+      {tests.length === 0 ? (
+        <EmptyState
+          icon={ClipboardList}
+          title="No tests yet"
+          description="Generate your first practice test to see it here."
+          action={
+            <Button asChild>
               <Link to="/create">
                 <Sparkles className="h-4 w-4 mr-2" />
-                Generate New
+                Generate Test
               </Link>
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {tests.length === 0 ? (
-            <div className="text-center py-12">
-              <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No tests yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Generate your first practice test to see it here.
-              </p>
-              <Button asChild>
-                <Link to="/create">
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate Test
-                </Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {tests.map((test) => {
-                const scores = scoresByConfig.get(test.config_id) ?? []
-                return (
-                  <div
-                    key={test.id}
-                    className="flex items-center gap-4 py-3 first:pt-0 last:pb-0"
-                  >
-                    <button
-                      className="flex flex-1 items-center gap-3 text-left min-w-0"
-                      onClick={() => openTest(test)}
-                    >
-                      {test.status === 'completed' ? (
-                        <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
-                      ) : test.status === 'in_progress' ? (
-                        <Clock className="h-5 w-5 text-primary shrink-0" />
-                      ) : (
-                        <GraduationCap className="h-5 w-5 text-muted-foreground shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        <h4 className="font-medium truncate">
-                          {test.config_title || `Test #${test.id}`}
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          {test.total_questions} questions • {formatDate(test.created_at)}
-                        </p>
-                      </div>
-                    </button>
-                    {scores.length >= 2 && (
-                      <div className="hidden sm:block text-primary shrink-0" title="Recent scores for this template">
-                        <ScoreSparkline scores={scores} />
-                      </div>
-                    )}
-                    <div className="w-14 text-right shrink-0">
-                      {test.status === 'completed' && test.score !== null ? (
-                        <span className={`text-lg font-bold ${getScoreColor(test.score)}`}>
-                          {test.score}%
-                        </span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground capitalize">
-                          {test.status === 'in_progress' ? 'Continue' : 'Start'}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+          }
+        />
+      ) : (
+        <section className="space-y-3">
+          <SectionHeader title="Test history" meta={tests.length} />
+          <List>
+            {tests.map((test) => (
+              <TestRow
+                key={test.id}
+                test={test}
+                scores={scoresByConfig.get(test.config_id)}
+                actions={
+                  <RowActions label={`Actions for ${test.config_title || `Test #${test.id}`}`}>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
                       onClick={() => setDeletingTestId(test.id)}
-                      aria-label={`Delete ${test.config_title || `Test #${test.id}`}`}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </RowActions>
+                }
+              />
+            ))}
+          </List>
+        </section>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deletingTestId !== null} onOpenChange={() => setDeletingTestId(null)}>
