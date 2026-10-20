@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { ratingStyles } from '@/lib/studyColors'
 import type { FlashcardStudy as FlashcardStudyType } from '@/types'
 
 interface FlashcardStudyProps {
@@ -71,7 +72,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
         tabIndex={0}
         aria-pressed={isFlipped}
         aria-label={isFlipped ? 'Hide answer' : 'Show answer'}
-        className="w-full max-w-2xl aspect-[4/3] sm:aspect-[3/2] perspective-1000 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-2xl"
+        className="w-full max-w-2xl aspect-[4/3] sm:aspect-[3/2] perspective-1000 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onClick={handleFlip}
         onKeyDown={handleKeyDown}
       >
@@ -84,39 +85,46 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
           {/* Front Face */}
           <div
             className={cn(
-              'absolute inset-0 backface-hidden rounded-2xl',
-              'bg-card border shadow-xl',
-              'flex flex-col items-center justify-center p-6 sm:p-10 text-center'
+              'absolute inset-0 backface-hidden rounded-xl',
+              'bg-card border shadow-md',
+              'flex flex-col p-5 sm:p-8'
             )}
           >
-            <p className="text-xl sm:text-2xl font-medium text-card-foreground leading-relaxed">
-              {card.front}
+            <p className="text-xs font-medium text-muted-foreground">Question</p>
+            <div className="flex flex-1 items-center justify-center overflow-auto py-4 text-center">
+              <p className="text-xl sm:text-2xl font-medium tracking-tight text-card-foreground leading-relaxed">
+                {card.front}
+              </p>
+            </div>
+            <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="sm:hidden">Tap to reveal the answer</span>
+              <span className="hidden sm:inline">
+                Click or press <kbd className="rounded border bg-muted px-1 font-mono text-[11px]">Space</kbd> to reveal the answer
+              </span>
             </p>
-            <p className="absolute bottom-6 text-sm text-muted-foreground">Tap or press Space to reveal answer</p>
           </div>
 
           {/* Back Face */}
           <div
             className={cn(
-              'absolute inset-0 backface-hidden rounded-2xl rotate-y-180',
-              'bg-muted border shadow-xl',
-              'flex flex-col items-center justify-center p-6 sm:p-10 text-center overflow-auto'
+              'absolute inset-0 backface-hidden rounded-xl rotate-y-180',
+              'bg-card border shadow-md',
+              'flex flex-col p-5 sm:p-8'
             )}
           >
-            <p className="text-lg sm:text-xl text-foreground leading-relaxed whitespace-pre-wrap">
-              {card.back}
+            <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+              Answer
             </p>
+            <div className="flex flex-1 items-center justify-center overflow-auto py-4 text-center">
+              <p className="text-lg sm:text-xl text-card-foreground leading-relaxed whitespace-pre-wrap">
+                {card.back}
+              </p>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Flip hint when not flipped */}
-      {!isFlipped && (
-        <div className="mt-6 flex items-center gap-2 text-muted-foreground animate-pulse">
-          <RotateCcw className="h-4 w-4" />
-          <span className="text-sm">Tap card to flip</span>
-        </div>
-      )}
 
       {/* Rating Buttons - Only show when flipped */}
       <div
@@ -130,42 +138,18 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
         </p>
         {/* P6.4: two columns on phones — larger touch targets; 4 across from sm up */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          <Button
-            variant="outline"
-            className="flex flex-col h-auto py-3 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
-            onClick={() => handleRate(1)}
-            disabled={isSubmitting}
-          >
-            <span className="font-semibold text-red-400">Again</span>
-            <span className="text-xs text-muted-foreground">{intervalHints[1]}</span>
-          </Button>
-          <Button
-            variant="outline"
-            className="flex flex-col h-auto py-3 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
-            onClick={() => handleRate(2)}
-            disabled={isSubmitting}
-          >
-            <span className="font-semibold text-orange-400">Hard</span>
-            <span className="text-xs text-muted-foreground">{intervalHints[2]}</span>
-          </Button>
-          <Button
-            variant="outline"
-            className="flex flex-col h-auto py-3 border-blue-500/30 hover:bg-blue-500/10 hover:border-blue-500"
-            onClick={() => handleRate(3)}
-            disabled={isSubmitting}
-          >
-            <span className="font-semibold text-blue-400">Good</span>
-            <span className="text-xs text-muted-foreground">{intervalHints[3]}</span>
-          </Button>
-          <Button
-            variant="outline"
-            className="flex flex-col h-auto py-3 border-emerald-500/30 hover:bg-emerald-500/10 hover:border-emerald-500"
-            onClick={() => handleRate(4)}
-            disabled={isSubmitting}
-          >
-            <span className="font-semibold text-emerald-400">Easy</span>
-            <span className="text-xs text-muted-foreground">{intervalHints[4]}</span>
-          </Button>
+          {ratingStyles.map((style) => (
+            <Button
+              key={style.rating}
+              variant="outline"
+              className={cn('flex flex-col gap-0.5 h-auto py-3', style.button)}
+              onClick={() => handleRate(style.rating)}
+              disabled={isSubmitting}
+            >
+              <span className={cn('font-semibold', style.text)}>{style.label}</span>
+              <span className="text-xs font-normal text-muted-foreground">{intervalHints[style.rating]}</span>
+            </Button>
+          ))}
         </div>
       </div>
     </div>

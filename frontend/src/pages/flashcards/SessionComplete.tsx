@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, ArrowRight, Home, RotateCcw } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { CheckCircle2, ArrowRight, Home, RotateCcw, SearchX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
-import { flashcardsApi } from '@/services/api'
+import { EmptyState } from '@/components/EmptyState'
+import { flashcardsApi, ApiError } from '@/services/api'
 import { queryKeys } from '@/lib/constants'
-import { cn } from '@/lib/utils'
+import { cn, getScoreColor } from '@/lib/utils'
+import { ratingStyles } from '@/lib/studyColors'
 
 interface LocationState {
   deckId?: number
@@ -82,6 +83,24 @@ export default function SessionComplete() {
   // Error only when neither the backend data nor a state summary exists —
   // an offline completion arrives without a session id but with state
   if (sessionIdNum !== null && (sessionError || !session) && !state) {
+    // A session that no longer exists is a not-found state, not a
+    // connection problem
+    if (sessionError instanceof ApiError && sessionError.status === 404) {
+      return (
+        <div className="mx-auto max-w-3xl">
+          <EmptyState
+            icon={SearchX}
+            title="Session not found"
+            description="This study session no longer exists."
+            action={
+              <Button variant="outline" asChild>
+                <Link to="/flashcards">All Decks</Link>
+              </Button>
+            }
+          />
+        </div>
+      )
+    }
     return (
       <QueryState
         error={sessionError}
@@ -116,83 +135,84 @@ export default function SessionComplete() {
     ? Math.round(((stats.good + stats.easy) / cardsReviewed) * 100)
     : 0
 
+  const ratingTotal = stats.again + stats.hard + stats.good + stats.easy
+
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8 text-center">
-        {/* Success Icon */}
-        <div className="flex justify-center">
-          <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <CheckCircle2 className="h-10 w-10 text-emerald-500" />
-          </div>
-        </div>
-
+    <div className="flex min-h-[70vh] flex-col items-center justify-center">
+      <div className="w-full max-w-md space-y-6">
         {/* Title */}
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Session Complete!</h1>
-          <p className="text-muted-foreground">{deckTitle}</p>
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg border bg-card">
+            <CheckCircle2 className="h-5 w-5 text-success" />
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Session complete</h1>
+          <p className="mt-1 truncate text-sm text-muted-foreground">{deckTitle}</p>
         </div>
 
-        {/* Main Stat */}
-        <Card className="border-emerald-500/20 bg-emerald-500/5">
-          <CardContent className="pt-6">
-            <div className="text-5xl font-bold text-emerald-500 mb-2">{cardsReviewed}</div>
-            <div className="text-muted-foreground">cards reviewed</div>
-          </CardContent>
-        </Card>
+        {/* Summary: cards reviewed and rating breakdown */}
+        <div className="rounded-xl border bg-card p-5 sm:p-6">
+          <div className="flex items-baseline gap-2">
+            <span className="text-5xl font-semibold tabular-nums tracking-tight">{cardsReviewed}</span>
+            <span className="text-sm text-muted-foreground">
+              card{cardsReviewed !== 1 ? 's' : ''} reviewed
+            </span>
+          </div>
 
-        {/* Rating Breakdown */}
-        <div className="grid grid-cols-4 gap-3">
-          <div className="text-center p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-            <div className={cn("text-2xl font-bold", stats.again > 0 ? "text-red-400" : "text-muted-foreground")}>
-              {stats.again}
-            </div>
-            <div className="text-xs text-muted-foreground">Again</div>
+          <div
+            className="mt-5 flex h-1.5 overflow-hidden rounded-full bg-secondary"
+            role="img"
+            aria-label={`Again ${stats.again}, Hard ${stats.hard}, Good ${stats.good}, Easy ${stats.easy}`}
+          >
+            {ratingTotal > 0 &&
+              ratingStyles.map((style) => (
+                <div
+                  key={style.key}
+                  className={style.fill}
+                  style={{ width: `${(stats[style.key] / ratingTotal) * 100}%` }}
+                />
+              ))}
           </div>
-          <div className="text-center p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
-            <div className={cn("text-2xl font-bold", stats.hard > 0 ? "text-orange-400" : "text-muted-foreground")}>
-              {stats.hard}
-            </div>
-            <div className="text-xs text-muted-foreground">Hard</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <div className={cn("text-2xl font-bold", stats.good > 0 ? "text-blue-400" : "text-muted-foreground")}>
-              {stats.good}
-            </div>
-            <div className="text-xs text-muted-foreground">Good</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-            <div className={cn("text-2xl font-bold", stats.easy > 0 ? "text-emerald-400" : "text-muted-foreground")}>
-              {stats.easy}
-            </div>
-            <div className="text-xs text-muted-foreground">Easy</div>
-          </div>
+
+          <dl className="mt-4 grid grid-cols-4 gap-2">
+            {ratingStyles.map((style) => (
+              <div key={style.key}>
+                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className={cn('h-1.5 w-1.5 rounded-full', style.fill)} aria-hidden />
+                  {style.label}
+                </dt>
+                <dd
+                  className={cn(
+                    'mt-0.5 text-lg font-semibold tabular-nums',
+                    stats[style.key] > 0 ? style.text : 'text-muted-foreground'
+                  )}
+                >
+                  {stats[style.key]}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
         {/* Additional Stats */}
-        <div className="flex justify-center gap-8 text-sm">
-          <div>
-            <div className="text-muted-foreground">Time spent</div>
-            <div className="font-semibold">{timeString}</div>
+        <dl className="grid grid-cols-3 divide-x rounded-xl border bg-card text-center">
+          <div className="px-3 py-4">
+            <dt className="text-xs text-muted-foreground">Time spent</dt>
+            <dd className="mt-0.5 font-semibold tabular-nums">{timeString}</dd>
           </div>
-          <div>
-            <div className="text-muted-foreground">Cards/min</div>
-            <div className="font-semibold">{cardsPerMinute}</div>
+          <div className="px-3 py-4">
+            <dt className="text-xs text-muted-foreground">Cards/min</dt>
+            <dd className="mt-0.5 font-semibold tabular-nums">{cardsPerMinute}</dd>
           </div>
-          <div>
-            <div className="text-muted-foreground">Success rate</div>
-            <div className={cn(
-              "font-semibold",
-              successRate >= 80 ? "text-emerald-400" :
-              successRate >= 60 ? "text-blue-400" :
-              successRate >= 40 ? "text-orange-400" : "text-red-400"
-            )}>
+          <div className="px-3 py-4">
+            <dt className="text-xs text-muted-foreground">Success rate</dt>
+            <dd className={cn('mt-0.5 font-semibold tabular-nums', getScoreColor(successRate))}>
               {successRate}%
-            </div>
+            </dd>
           </div>
-        </div>
+        </dl>
 
         {/* Actions */}
-        <div className="flex flex-col gap-3 pt-4">
+        <div className="flex flex-col gap-3 pt-2">
           {deckId !== null && (
             <Button asChild size="lg">
               <Link to={`/flashcards/${deckId}/study`}>

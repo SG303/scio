@@ -74,15 +74,6 @@ export default {
         xl: "var(--shadow-xl)",
         "2xl": "var(--shadow-2xl)",
       },
-      keyframes: {
-        "fade-in": {
-          from: { opacity: "0", transform: "translateY(6px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
-        },
-      },
-      animation: {
-        "fade-in": "fade-in 0.3s ease-out forwards",
-      },
       fontFamily: {
         sans: ['Geist', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         mono: ['Geist Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],

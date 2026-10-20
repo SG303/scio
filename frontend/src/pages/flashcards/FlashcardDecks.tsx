@@ -1,17 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Plus, Layers, Trash2, BookOpen, Sparkles, MoreVertical } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Plus, Layers, Trash2, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { List, ListRow, ListIcon, RowActions, rowLinkClass } from '@/components/List'
 import { deckIsStudiable, deckStudyCount } from '@/lib/decks'
-import { Progress } from '@/components/ui/progress'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { cardStates } from '@/lib/studyColors'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -62,142 +59,126 @@ export default function FlashcardDecks() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Flashcard Decks</h1>
-          <p className="text-muted-foreground">
-            Create and study flashcard decks with spaced repetition
-          </p>
-        </div>
-        <Button asChild>
-          <Link to="/flashcards/create">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Deck
-          </Link>
-        </Button>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-8">
+      <PageHeader
+        title="Flashcard Decks"
+        description="Create and study flashcard decks with spaced repetition."
+        actions={
+          <Button asChild>
+            <Link to="/flashcards/create">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Deck
+            </Link>
+          </Button>
+        }
+      />
 
-      {/* Decks Grid */}
       {decks.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Layers className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No flashcard decks yet</h3>
-            <p className="text-muted-foreground text-center mb-6 max-w-md">
-              Create your first flashcard deck to start learning with AI-powered spaced repetition.
-            </p>
+        <EmptyState
+          icon={Layers}
+          title="No flashcard decks yet"
+          description="Create your first flashcard deck to start learning with AI-powered spaced repetition."
+          action={
             <Button asChild>
               <Link to="/flashcards/create">
-                <Sparkles className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4 mr-2" />
                 Create Your First Deck
               </Link>
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {decks.map((deck, index) => {
-            const masteryPercent = deck.total_cards > 0
-              ? Math.round(((deck.total_cards - deck.new_cards) / deck.total_cards) * 100)
-              : 0
+        <section className="space-y-3">
+          <SectionHeader title="Decks" meta={decks.length} />
+          <List>
+            {decks.map((deck) => {
+              const masteryPercent = deck.total_cards > 0
+                ? Math.round(((deck.total_cards - deck.new_cards) / deck.total_cards) * 100)
+                : 0
+              const studiable = deckIsStudiable(deck)
+              const stateCounts = {
+                new: deck.new_cards,
+                learning: deck.learning_cards,
+                review: deck.review_cards,
+              }
 
-            return (
-              <Card
-                key={deck.id}
-                className={cn(
-                  "opacity-0 animate-fade-in relative group",
-                  `stagger-${Math.min(index + 1, 5)}`
-                )}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="truncate">{deck.title}</CardTitle>
-                      {deck.description && (
-                        <CardDescription className="line-clamp-2 mt-1">
-                          {deck.description}
-                        </CardDescription>
-                      )}
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link to={`/flashcards/${deck.id}`}>
-                            <BookOpen className="h-4 w-4 mr-2" />
-                            Browse Cards
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setDeletingDeckId(deck.id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Stats */}
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                      <span className="text-muted-foreground">{deck.new_cards} new</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                      <span className="text-muted-foreground">{deck.learning_cards} learning</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                      <span className="text-muted-foreground">{deck.review_cards} review</span>
-                    </div>
-                  </div>
-
-                  {/* Progress */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{deck.total_cards} cards</span>
-                      <span className="text-muted-foreground">{masteryPercent}% studied</span>
-                    </div>
-                    <Progress value={masteryPercent} className="h-1.5" />
-                  </div>
-
-                  {/* Due Badge & Study Button */}
-                  <div className="flex items-center justify-between pt-2">
-                    {/* P4.3: honest count — what a fresh queue would deliver now */}
-                    {deckIsStudiable(deck) ? (
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                          {deckStudyCount(deck)} due
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">All caught up!</span>
-                    )}
-                    <Button
-                      size="sm"
-                      disabled={!deckIsStudiable(deck)}
-                      asChild
+              return (
+                <ListRow key={deck.id} interactive>
+                  <ListIcon>
+                    <Layers />
+                  </ListIcon>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={`/flashcards/${deck.id}`}
+                      className={cn('block truncate text-sm font-medium', rowLinkClass)}
                     >
-                      <Link to={`/flashcards/${deck.id}/study`}>
-                        Study Now
-                      </Link>
-                    </Button>
+                      {deck.title}
+                    </Link>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {/* P4.3: honest count — what a fresh queue would deliver now */}
+                      {studiable && (
+                        <span className="font-medium text-primary sm:hidden">
+                          {deckStudyCount(deck)} due ·{' '}
+                        </span>
+                      )}
+                      {deck.total_cards} card{deck.total_cards !== 1 ? 's' : ''} · {masteryPercent}% studied
+                      {deck.description && <> · {deck.description}</>}
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+
+                  {/* Card states in the shared Stats palette */}
+                  <div className="hidden shrink-0 items-center gap-3 text-xs text-muted-foreground md:flex">
+                    {cardStates.map((state) => (
+                      <span key={state.key} className="flex items-center gap-1.5">
+                        <span className={cn('h-2 w-2 rounded-full', state.className)} aria-hidden />
+                        <span className="tabular-nums text-foreground">{stateCounts[state.key]}</span>
+                        {state.label.toLowerCase()}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="hidden w-24 shrink-0 justify-end sm:flex">
+                    {studiable ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium tabular-nums text-primary">
+                        {deckStudyCount(deck)} due
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">All caught up</span>
+                    )}
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant={studiable ? 'default' : 'outline'}
+                    className="relative z-10 shrink-0"
+                    disabled={!studiable}
+                    asChild
+                  >
+                    <Link to={`/flashcards/${deck.id}/study`}>
+                      Study
+                    </Link>
+                  </Button>
+                  <RowActions label={`Actions for ${deck.title}`}>
+                    <DropdownMenuItem asChild>
+                      <Link to={`/flashcards/${deck.id}`}>
+                        <BookOpen className="h-4 w-4 mr-2" />
+                        Browse Cards
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setDeletingDeckId(deck.id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </RowActions>
+                </ListRow>
+              )
+            })}
+          </List>
+        </section>
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -227,4 +208,3 @@ export default function FlashcardDecks() {
     </div>
   )
 }
-
