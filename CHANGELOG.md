@@ -8,6 +8,19 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- Umfassende UI-Überarbeitung (PRs #22–#24): neues minimalistisches
+  Design-System mit vollständigen shadcn-Tokens für Light- und
+  Dark-Theme (`frontend/src/index.css`, neutrale Grautöne, Indigo als
+  einziger Akzent). Das Theme folgt standardmässig der
+  Systemeinstellung; über Sun/Moon im Header umschaltbar, die Wahl wird
+  in localStorage unter `scio-theme` gespeichert (ohne Flackern beim
+  Start dank Inline-Skript).
+- Gemeinsame UI-Komponenten (`PageHeader`, `SectionHeader`,
+  `List`/`ListRow`/`ListIcon`/`RowActions`, `TestRow`, `EmptyState`,
+  `StepIndicator`, `CostEstimate`, `GenerationStatus`, `OptionCard`)
+  vereinheitlichen Listen- und Seitenaufbau über alle Kernseiten;
+  Header und Navigation sind in `components/layout/AppLayout.tsx`
+  zusammengefasst.
 - Automatische Datenbank-Backups: kurz nach dem Start und dann täglich
   landet eine konsistente Kopie der Datenbank in `data/backups/` (die
   14 neuesten bleiben erhalten). Ein Sofort-Backup ist über den neuen
@@ -21,6 +34,18 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Geändert
 
+- Neuer Schrift-Stack Geist/Geist Mono (zuvor Outfit/JetBrains Mono),
+  Eckradius 0.5rem; dekorative Gradients, Glassmorphism- und
+  Glow-Effekte sowie die `.stagger-*`-Utilitys und Fade-in-Animationen
+  sind entfernt.
+- Die Studienkarte rendert auf Basis der Theme-Tokens („Question"/
+  „Answer"-Labels, Bewertungen auf destructive/warning/primary/
+  success gemappt); Karten-Status- und Bewertungsfarben sind zentral in
+  `lib/studyColors.ts` gebündelt, Score-Farb-Helfer
+  (`getScoreColor`/`getScoreBgColor`) liegen in `lib/utils.ts`.
+- Fächer- und Flashcard-Seiten nutzen die gemeinsame Seitenanatomie;
+  alle neun Kernseiten passen auf 390 px Breite, Fach-Score-
+  Schwellen sind vereinheitlicht auf 80/60 (zuvor 70/50).
 - Die Statusanzeige von Test- und Vorlagengenerierungen reagiert unmittelbar
   auf einen angeforderten Abbruch.
 - Die Offline-Queue stellt explizit fest, ob eine lokal gespeicherte
@@ -45,6 +70,13 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Behoben
 
+- Die Review-Balken der Stats-Seite hatten zuvor eine Höhe von null.
+- Die Score-Sparkline einer Vorlage lädt jetzt tatsächlich
+  Verlaufsdaten (placeholderData statt initialData).
+- Die Flashcard-Kostenschätzung rechnet mit Token-Preisen
+  (pro Million Tokens), statt den Preis doppelt durch 1.000.000 zu
+  teilen.
+- Die Deck-Detail-Seite überläuft bei 390 px Breite nicht mehr.
 - Offline-Lernen kann nach einem Reload oder einem frischen Start ohne
   Netzwerk mit einer bereits gespeicherten Warteschlange beginnen.
 - Der Abbruch einer abgeschlossenen oder fehlgeschlagenen Testgenerierung
