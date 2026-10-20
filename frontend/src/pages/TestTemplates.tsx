@@ -110,7 +110,7 @@ export default function TestTemplates() {
         })
       ),
     enabled: templates.length > 0,
-    initialData: templates.map((tpl) => ({ templateId: tpl.id, scores: [] as number[] })),
+    placeholderData: templates.map((tpl) => ({ templateId: tpl.id, scores: [] as number[] })),
   })
   const scoresByTemplate = new Map(templatesWithTests.map((t) => [t.templateId, t.scores]))
   
