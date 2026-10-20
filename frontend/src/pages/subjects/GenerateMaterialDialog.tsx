@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, Layers, Sparkles, Loader2, CheckCircle2, FileText } from 'lucide-react'
+import { ClipboardList, Layers, Sparkles, Loader2, FileText, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +16,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
-import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
+import {
+  calculateEstimatedCost,
+  calculateFlashcardGenerationTokens,
+  calculateTestGenerationTokens,
+  cn,
+} from '@/lib/utils'
+import { ListIcon } from '@/components/List'
+import { StepIndicator } from '@/components/StepIndicator'
+import { CostEstimate } from '@/components/CostEstimate'
+import { GenerationStatus } from '@/components/GenerationStatus'
+import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
 import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
@@ -179,6 +189,28 @@ export default function GenerateMaterialDialog({
   const currentForm = materialType === 'test' ? testForm : flashcardForm
   const canGenerate = currentForm.title.trim() !== '' && currentForm.ai_model_id !== null
 
+  // Cost estimate with the same token helpers as the standalone wizards
+  const estimates = (() => {
+    const selectedModel = models.find((m) => m.id === currentForm.ai_model_id)
+    if (!materialType || !selectedModel) return null
+
+    const documentContents = currentForm.document_ids.map(
+      (id) => documents.find((d) => d.id === id)?.content || ''
+    )
+    const { inputTokens, outputTokens, numBatches } =
+      materialType === 'test'
+        ? calculateTestGenerationTokens(documentContents, testForm.num_questions, !!testForm.custom_prompt)
+        : calculateFlashcardGenerationTokens(documentContents, flashcardForm.num_cards)
+
+    // Context usage is per batch (each call must fit in the window)
+    const contextLimit = selectedModel.context_length || 128000
+    const contextUsage = ((inputTokens + outputTokens) / numBatches / contextLimit) * 100
+    const hasPricing = selectedModel.pricing?.prompt && selectedModel.pricing?.completion
+    const { estimatedCost } = calculateEstimatedCost(inputTokens, outputTokens, selectedModel)
+
+    return { inputTokens, outputTokens, estimatedCost, contextUsage, contextLimit, hasPricing, numBatches }
+  })()
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -199,43 +231,50 @@ export default function GenerateMaterialDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <StepIndicator
+          steps={['Choose Type', 'Configure']}
+          current={step === 'choose' ? 1 : 2}
+          className="py-2"
+        />
+
         {/* Step 1: Choose Material Type */}
         {step === 'choose' && (
-          <div className="grid gap-4 py-4 md:grid-cols-2">
-            <button
-              onClick={() => handleChooseMaterial('test')}
-              className="flex flex-col items-center gap-4 p-6 rounded-lg border-2 border-dashed hover:border-primary hover:bg-primary/5 transition-all text-center"
-            >
-              <div className="p-4 rounded-full bg-blue-500/10">
-                <ClipboardList className="h-8 w-8 text-blue-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">Practice Test</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Multiple choice questions to test your knowledge
-                </p>
-              </div>
-            </button>
-            <button
-              onClick={() => handleChooseMaterial('flashcards')}
-              className="flex flex-col items-center gap-4 p-6 rounded-lg border-2 border-dashed hover:border-primary hover:bg-primary/5 transition-all text-center"
-            >
-              <div className="p-4 rounded-full bg-purple-500/10">
-                <Layers className="h-8 w-8 text-purple-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">Flashcards</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Question & answer cards for spaced repetition
-                </p>
-              </div>
-            </button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([
+              {
+                type: 'test',
+                icon: ClipboardList,
+                title: 'Practice Test',
+                description: 'Multiple choice questions to test your knowledge',
+              },
+              {
+                type: 'flashcards',
+                icon: Layers,
+                title: 'Flashcards',
+                description: 'Question & answer cards for spaced repetition',
+              },
+            ] as const).map(({ type, icon: Icon, title, description }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => handleChooseMaterial(type)}
+                className="flex items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ListIcon>
+                  <Icon />
+                </ListIcon>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium">{title}</h3>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+                </div>
+              </button>
+            ))}
           </div>
         )}
 
         {/* Step 2: Configure */}
         {step === 'configure' && (
-          <div className="space-y-6 py-4">
+          <div className="space-y-6">
             {/* Title */}
             <div className="space-y-2">
               <Label htmlFor="title">
@@ -331,93 +370,48 @@ export default function GenerateMaterialDialog({
             {/* AI Model */}
             <div className="space-y-2">
               <Label>AI Model</Label>
-              <div className="grid gap-2 max-h-40 overflow-y-auto">
+              <div className="grid max-h-56 gap-2 overflow-y-auto p-0.5" role="radiogroup" aria-label="AI Model">
                 {models.map((model) => (
-                  <button
+                  <OptionCard
                     key={model.id}
-                    type="button"
+                    indicator="radio"
+                    selected={currentForm.ai_model_id === model.id}
                     onClick={() =>
                       materialType === 'test'
                         ? setTestForm({ ...testForm, ai_model_id: model.id })
                         : setFlashcardForm({ ...flashcardForm, ai_model_id: model.id })
                     }
-                    className={cn(
-                      'flex items-start gap-3 p-3 rounded-lg border text-left transition-all text-sm',
-                      currentForm.ai_model_id === model.id
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                        : 'hover:bg-muted/50'
-                    )}
                   >
-                    <div
-                      className={cn(
-                        'w-4 h-4 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors',
-                        currentForm.ai_model_id === model.id
-                          ? 'border-primary bg-primary'
-                          : 'border-muted-foreground/30'
-                      )}
-                    >
-                      {currentForm.ai_model_id === model.id && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <h4 className="font-medium">{model.name}</h4>
-                        {model.context_length && (
-                          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                            {formatContextLength(model.context_length)} ctx
-                          </span>
-                        )}
-                      </div>
-                      {model.pricing && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          {formatPricePerMillion(model.pricing.prompt)} /{' '}
-                          {formatPricePerMillion(model.pricing.completion)} per 1M tokens
-                        </p>
-                      )}
-                    </div>
-                  </button>
+                    <ModelOptionLabel model={model} />
+                  </OptionCard>
                 ))}
               </div>
             </div>
 
             {/* Documents (collapsible) */}
-            <details className="group">
-              <summary className="cursor-pointer flex items-center gap-2 text-sm font-medium">
-                <FileText className="h-4 w-4" />
-                Documents ({currentForm.document_ids.length} selected)
+            <details className="group rounded-lg border">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Documents
+                <span className="font-normal tabular-nums text-muted-foreground">
+                  {currentForm.document_ids.length} selected
+                </span>
+                <ChevronDown className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
               </summary>
-              <div className="mt-3 space-y-2">
+              <div className="border-t p-3">
                 {documents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No documents available</p>
                 ) : (
-                  <div className="grid gap-2 max-h-40 overflow-y-auto">
+                  <div className="grid max-h-48 gap-2 overflow-y-auto p-0.5">
                     {documents.map((doc) => (
-                      <button
+                      <OptionCard
                         key={doc.id}
-                        type="button"
+                        indicator="checkbox"
+                        selected={currentForm.document_ids.includes(doc.id)}
                         onClick={() => handleDocumentToggle(doc.id)}
-                        className={cn(
-                          'flex items-center gap-3 p-2 rounded-lg border text-left transition-all text-sm',
-                          currentForm.document_ids.includes(doc.id)
-                            ? 'border-primary bg-primary/5'
-                            : 'hover:bg-muted/50'
-                        )}
                       >
-                        <div
-                          className={cn(
-                            'w-4 h-4 rounded border flex items-center justify-center transition-colors',
-                            currentForm.document_ids.includes(doc.id)
-                              ? 'border-primary bg-primary'
-                              : 'border-muted-foreground/30'
-                          )}
-                        >
-                          {currentForm.document_ids.includes(doc.id) && (
-                            <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                          )}
-                        </div>
-                        <span className="truncate">{doc.title}</span>
-                      </button>
+                        <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
+                      </OptionCard>
                     ))}
                   </div>
                 )}
@@ -442,11 +436,21 @@ export default function GenerateMaterialDialog({
               />
             </div>
 
+            {estimates && (
+              <CostEstimate
+                estimates={estimates}
+                overLimitMessage="Warning: Context limit exceeded. Generation may fail."
+              />
+            )}
+
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
                 {error}
               </div>
             )}
+
+            {/* Subject generation reports no batch progress — static waiting panel */}
+            {isGenerating && <GenerationStatus progress={null} />}
           </div>
         )}
 
@@ -480,4 +484,3 @@ export default function GenerateMaterialDialog({
     </Dialog>
   )
 }
-

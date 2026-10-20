@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Sparkles, Loader2, FileText, CheckCircle2, Coins } from 'lucide-react'
+import { Sparkles, Loader2, FileText } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, flashcardsApi } from '@/services/api'
-import { calculateEstimatedCost, cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
+import { calculateEstimatedCost, calculateFlashcardGenerationTokens } from '@/lib/utils'
+import { PageHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { StepIndicator } from '@/components/StepIndicator'
+import { CostEstimate } from '@/components/CostEstimate'
+import { GenerationStatus } from '@/components/GenerationStatus'
+import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
 import { queryKeys } from '@/lib/constants'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
@@ -85,14 +91,17 @@ export default function CreateFlashcards() {
     const selectedModel = models.find(m => m.id === formData.ai_model_id)
     if (!selectedModel) return null
 
-    // Rough estimation: ~500 tokens per document + ~100 output tokens per card
-    const documentTokens = formData.document_ids.reduce((acc, id) => {
-      const doc = documents.find(d => d.id === id)
-      return acc + (doc?.content?.length || 0) / 4 // ~4 chars per token
-    }, 0)
+    const documentContents = formData.document_ids.map(
+      (id) => documents.find((d) => d.id === id)?.content || ''
+    )
+    const { inputTokens, outputTokens, numBatches } = calculateFlashcardGenerationTokens(
+      documentContents,
+      formData.num_cards
+    )
 
-    const inputTokens = Math.max(500, documentTokens + 500) // minimum 500 for prompt
-    const outputTokens = formData.num_cards * 100 // ~100 tokens per card
+    // Context usage is per batch (each call must fit in the window)
+    const contextLimit = selectedModel.context_length || 128000
+    const contextUsage = ((inputTokens + outputTokens) / numBatches / contextLimit) * 100
 
     const hasPricing = selectedModel.pricing?.prompt && selectedModel.pricing?.completion
     // OpenRouter prices are per token — same calculation as CreateTest
@@ -102,114 +111,70 @@ export default function CreateFlashcards() {
       inputTokens,
       outputTokens,
       estimatedCost,
+      contextUsage,
+      contextLimit,
       hasPricing,
+      numBatches,
     }
   }, [formData.document_ids, formData.ai_model_id, formData.num_cards, documents, models])
 
-  return (
-    <div className="max-w-3xl mx-auto space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Create Flashcard Deck</h1>
-        <p className="text-muted-foreground">
-          Generate AI-powered flashcards from your study materials
-        </p>
-      </div>
+  const selectedModelName = models.find((m) => m.id === formData.ai_model_id)?.name
 
-      {/* Progress Steps */}
-      <div className="flex items-center gap-4">
-        {[1, 2, 3].map((s) => (
-          <div key={s} className="flex items-center gap-2">
-            <div
-              className={cn(
-                'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
-                step >= s
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground'
-              )}
-            >
-              {step > s ? <CheckCircle2 className="h-4 w-4" /> : s}
-            </div>
-            <span
-              className={cn(
-                'text-sm font-medium',
-                step >= s ? 'text-foreground' : 'text-muted-foreground'
-              )}
-            >
-              {s === 1 ? 'Select Documents' : s === 2 ? 'Configure' : 'Generate'}
-            </span>
-            {s < 3 && <div className="w-12 h-px bg-muted ml-2" />}
-          </div>
-        ))}
-      </div>
+  return (
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        title="Create Flashcard Deck"
+        description="Generate AI-powered flashcards from your study materials."
+      />
+
+      <StepIndicator steps={['Select Documents', 'Configure', 'Generate']} current={step} />
 
       {/* Step 1: Select Documents */}
       {step === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>Select Study Materials (Optional)</CardTitle>
+            <CardTitle className="text-base">Select Study Materials (Optional)</CardTitle>
             <CardDescription>
               Choose documents to generate flashcards from, or skip to create cards on a topic
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {documents.length === 0 ? (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground mb-4">
-                  No documents available. You can still create flashcards by specifying a topic.
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <Button variant="outline" onClick={() => navigate('/documents')}>
-                    Add Documents
-                  </Button>
-                  <Button onClick={() => setStep(2)}>
-                    Continue Without Documents
-                  </Button>
-                </div>
-              </div>
+              <EmptyState
+                icon={FileText}
+                title="No documents available"
+                description="You can still create flashcards by specifying a topic."
+                action={
+                  <>
+                    <Button variant="outline" onClick={() => navigate('/documents')}>
+                      Add Documents
+                    </Button>
+                    <Button onClick={() => setStep(2)}>
+                      Continue Without Documents
+                    </Button>
+                  </>
+                }
+              />
             ) : (
               <>
                 {formData.document_ids.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-4 text-center text-sm text-muted-foreground">
+                  <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
                     No documents selected. The AI will generate flashcards based on your deck title/topic.
-                  </div>
+                  </p>
                 )}
-                <div className="grid gap-3">
+                <div className="grid gap-2">
                   {documents.map((doc) => (
-                    <button
+                    <OptionCard
                       key={doc.id}
-                      type="button"
+                      indicator="checkbox"
+                      selected={formData.document_ids.includes(doc.id)}
                       onClick={() => handleDocumentToggle(doc.id)}
-                      className={cn(
-                        'flex items-center gap-4 p-4 rounded-lg border text-left transition-all',
-                        formData.document_ids.includes(doc.id)
-                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                          : 'hover:bg-muted/50'
-                      )}
                     >
-                      <div
-                        className={cn(
-                          'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors',
-                          formData.document_ids.includes(doc.id)
-                            ? 'border-primary bg-primary'
-                            : 'border-muted-foreground/30'
-                        )}
-                      >
-                        {formData.document_ids.includes(doc.id) && (
-                          <CheckCircle2 className="h-4 w-4 text-primary-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium">{doc.title}</h4>
-                        <p className="text-sm text-muted-foreground capitalize">
-                          {doc.doc_type.replace('_', ' ')}
-                        </p>
-                      </div>
-                    </button>
+                      <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
+                    </OptionCard>
                   ))}
                 </div>
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-end border-t pt-4">
                   <Button onClick={() => setStep(2)}>Continue</Button>
                 </div>
               </>
@@ -222,9 +187,9 @@ export default function CreateFlashcards() {
       {step === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle>Configure Deck</CardTitle>
+            <CardTitle className="text-base">Configure Deck</CardTitle>
             <CardDescription>
-              Set up your flashcard deck parameters
+              Set up your flashcard deck parameters and choose an AI model
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -264,7 +229,7 @@ export default function CreateFlashcards() {
                 value={String(formData.num_cards)}
                 onValueChange={(v) => setFormData({ ...formData, num_cards: parseInt(v) })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="num_cards">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -279,50 +244,16 @@ export default function CreateFlashcards() {
 
             <div className="space-y-2">
               <Label>AI Model</Label>
-              <div className="grid gap-3">
+              <div className="grid gap-2" role="radiogroup" aria-label="AI Model">
                 {models.map((model) => (
-                  <button
+                  <OptionCard
                     key={model.id}
-                    type="button"
+                    indicator="radio"
+                    selected={formData.ai_model_id === model.id}
                     onClick={() => setFormData({ ...formData, ai_model_id: model.id })}
-                    className={cn(
-                      'flex items-start gap-4 p-4 rounded-lg border text-left transition-all',
-                      formData.ai_model_id === model.id
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                        : 'hover:bg-muted/50'
-                    )}
                   >
-                    <div
-                      className={cn(
-                        'w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors',
-                        formData.ai_model_id === model.id
-                          ? 'border-primary bg-primary'
-                          : 'border-muted-foreground/30'
-                      )}
-                    >
-                      {formData.ai_model_id === model.id && (
-                        <div className="w-2 h-2 rounded-full bg-primary-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <h4 className="font-medium">{model.name}</h4>
-                        {model.context_length && (
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                            {formatContextLength(model.context_length)} ctx
-                          </span>
-                        )}
-                      </div>
-                      {model.description && (
-                        <p className="text-sm text-muted-foreground">{model.description}</p>
-                      )}
-                      {model.pricing && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatPricePerMillion(model.pricing.prompt)} / {formatPricePerMillion(model.pricing.completion)} per 1M tokens
-                        </p>
-                      )}
-                    </div>
-                  </button>
+                    <ModelOptionLabel model={model} />
+                  </OptionCard>
                 ))}
               </div>
             </div>
@@ -338,7 +269,7 @@ export default function CreateFlashcards() {
               />
             </div>
 
-            <div className="flex justify-between pt-4">
+            <div className="flex justify-between border-t pt-4">
               <Button variant="outline" onClick={() => setStep(1)}>
                 Back
               </Button>
@@ -354,76 +285,47 @@ export default function CreateFlashcards() {
       {step === 3 && (
         <Card>
           <CardHeader>
-            <CardTitle>Ready to Generate</CardTitle>
+            <CardTitle className="text-base">Ready to Generate</CardTitle>
             <CardDescription>Review your settings and generate flashcards</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Summary */}
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Title</span>
-                <span className="font-medium">{formData.title}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Documents</span>
-                <span className="font-medium">
-                  {formData.document_ids.length > 0
-                    ? `${formData.document_ids.length} selected`
-                    : 'None (topic-based)'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Flashcards</span>
-                <span className="font-medium">{formData.num_cards}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">AI Model</span>
-                <span className="font-medium">
-                  {models.find((m) => m.id === formData.ai_model_id)?.name}
-                </span>
-              </div>
-            </div>
+            <dl className="divide-y rounded-lg border text-sm">
+              {([
+                ['Title', formData.title],
+                ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : 'None (topic-based)'],
+                ['Flashcards', formData.num_cards],
+                ['AI model', selectedModelName],
+              ] as const).map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-4 px-4 py-2.5">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="truncate text-right font-medium">{value}</dd>
+                </div>
+              ))}
+            </dl>
 
             {/* Cost Estimation */}
             {estimates && (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Coins className="h-4 w-4 text-primary" />
-                  <h4 className="font-medium text-sm">Estimated Cost</h4>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground block mb-1">Estimated Cost</span>
-                    {estimates.hasPricing ? (
-                      <span className="font-semibold text-lg">
-                        ${estimates.estimatedCost.toFixed(4)}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground italic">Pricing unavailable</span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-1">Est. Tokens</span>
-                    <span className="font-medium">
-                      ~{Math.round(estimates.inputTokens / 1000)}k in / ~{Math.round(estimates.outputTokens / 1000)}k out
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <CostEstimate
+                estimates={estimates}
+                overLimitMessage="Warning: Your documents exceed this model's context window. The generation will likely fail. Please select fewer documents or a model with a larger context window."
+              />
             )}
 
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+              <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
                 {error}
               </div>
             )}
 
-            <div className="flex justify-between pt-4">
+            {/* Flashcard generation reports no batch progress — static waiting panel */}
+            {isGenerating && <GenerationStatus progress={null} />}
+
+            <div className="flex justify-between border-t pt-4">
               <Button variant="outline" onClick={() => setStep(2)} disabled={isGenerating}>
                 Back
               </Button>
-              <Button onClick={handleGenerate} disabled={isGenerating} size="lg">
+              <Button onClick={handleGenerate} disabled={isGenerating}>
                 {isGenerating ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -437,16 +339,9 @@ export default function CreateFlashcards() {
                 )}
               </Button>
             </div>
-
-            {isGenerating && (
-              <div className="text-center text-sm text-muted-foreground">
-                <p>This may take a minute depending on the AI model...</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
     </div>
   )
 }
-

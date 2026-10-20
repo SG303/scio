@@ -127,6 +127,28 @@ export function calculateTestGenerationTokens(
 }
 
 /**
+ * Token estimate for a flashcard generation, mirroring the backend
+ * (flashcard_generator.py): up to 30 cards in one call, larger requests in
+ * batches of 25 that each resend the prompt and documents. ~500 prompt
+ * tokens per call, ~100 output tokens per card.
+ */
+export function calculateFlashcardGenerationTokens(
+  documentContents: string[],
+  numCards: number
+): { inputTokens: number; outputTokens: number; numBatches: number } {
+  const numBatches = numCards <= 30 ? 1 : Math.ceil(numCards / 25)
+  const documentTokens = documentContents.reduce(
+    (acc, content) => acc + (content ? estimateTokens(content) : 0),
+    0
+  )
+  return {
+    inputTokens: (documentTokens + 500) * numBatches,
+    outputTokens: numCards * 100,
+    numBatches,
+  }
+}
+
+/**
  * Format price per token to price per 1M tokens for display
  * OpenRouter returns pricing per token (e.g., "0.000005")
  * This converts to a human-readable per-million format
