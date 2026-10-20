@@ -10,11 +10,13 @@ Your AI Learning Hub. Upload study materials, generate practice tests, create fl
 ## Features
 
 - 📚 **Document Management** - Upload PDFs, DOCX, TXT, or paste text directly
-- 🤖 **Multiple AI Models** - Choose from GPT-4, Claude, Llama, and more via OpenRouter
+- 🤖 **Multiple AI Models** - Choose from GPT-6.1, Claude, Gemini and more via OpenRouter
 - 📝 **Practice Tests** - Generate customizable tests with AI-powered questions
 - 🎴 **Flashcards** - Create and study flashcards with spaced repetition
 - 📁 **Subject Organization** - Organize your learning materials by subject
 - 📊 **Progress Tracking** - Track your learning progress and performance
+- 🌗 **Light/Dark Theme** - Follows your system setting by default, with a Sun/Moon toggle
+- 💾 **Automatic Backups** - Daily snapshot backups of the database, keep 14
 - 🐳 **Single Container** - Easy deployment with Docker
 
 ## Quick Start
@@ -69,21 +71,22 @@ Supported formats: PDF, DOCX, TXT, Markdown
 ### 2. Configure AI Models
 
 Go to **AI Models** to enable/disable models or add new ones. Default models include:
-- GPT-4o / GPT-4o Mini
-- Claude 3.5 Sonnet / Claude 3 Haiku
-- Llama 3.1 (70B / 8B)
-- Gemini Pro 1.5
-- Mistral Large
-- DeepSeek V3
+- GPT-6.1 Sol
+- Claude Sonnet 5.5
+- Gemini 3.8 Flash
+- Claude Haiku 5.5
+- MiMo V2.6 Pro
 
 ### 3. Create a Test
 
 Click **Create Test** and:
 1. Select which documents to use as context
 2. Choose the AI model
-3. Set number of questions (5-30)
-4. Set number of choices (3-6)
+3. Set number of questions (1-100, default 10)
+4. Set number of choices (2-10, default 4)
 5. Generate!
+
+You'll see live progress while the AI generates; you can cancel long-running generations.
 
 ### 4. Take the Test
 
@@ -104,18 +107,26 @@ After submission, see:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OPENROUTER_API_KEY` | Your OpenRouter API key | Yes |
+| `OPENROUTER_API_KEY` | Your OpenRouter API key (only needed for AI generation) | Yes |
 | `DEBUG` | Enable debug mode (default: false) | No |
+| `APP_NAME` | App display name (default: "Scio") | No |
 
 ### Data Persistence
 
 The app stores data in two directories (mounted as Docker volumes):
-- `./data/` - SQLite database
+- `./data/` - SQLite database + automatic backups
 - `./uploads/` - Uploaded document files
 
-### Backup
+### Backups
 
-To backup your data:
+The app creates automatic daily backups of the database (about a minute after
+startup, then every 24 hours) into `data/backups/`. Each backup is a consistent
+snapshot named `scio-backup-YYYYMMDD-HHMMSS.db`, verified with an integrity
+check, and the 14 most recent backups are kept. You can also trigger a backup
+any time via the Settings page or `POST /api/settings/backups`
+(`GET /api/settings/backups` lists them).
+
+To backup your data manually:
 ```bash
 # Stop the container
 docker compose down
@@ -130,17 +141,22 @@ cp -r uploads/ backup/uploads/
 ### Local Development Setup
 
 ```bash
-# Backend
+# Backend (dependencies installed directly into your environment)
 cd backend
-python -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
+
+# Backend tests (extra dev dependencies)
+pip install -r requirements-dev.txt
+pytest
 
 # Frontend (in another terminal)
 cd frontend
 npm install
-npm run dev
+npm run dev        # Vite dev server on port 5173, API proxied to port 8000
+npm test           # Vitest unit tests
+npm run typecheck
+npm run lint
 ```
 
 ### Project Structure
@@ -175,8 +191,9 @@ scio/
 | `/api/documents/{id}` | GET, PUT, DELETE | Get / update / delete a document |
 | `/api/documents/upload` | POST | Upload a document file (PDF, DOCX, TXT, MD) |
 | `/api/models` | GET, POST | List / create AI models (`?enabled_only=true`) |
-| `/api/models/{id}` | GET, PUT, DELETE | Get / update / delete an AI model |
+| `/api/models/{id}` | GET, PUT, DELETE | Get / update / delete an AI model (delete refused with 409 while still referenced by a config, deck or subject) |
 | `/api/settings` | GET, PUT | Get / update app settings |
+| `/api/settings/backups` | GET, POST | List database backups / create a backup now |
 | `/api/tests/configs` | GET, POST | List / create test configs |
 | `/api/tests/configs/{id}/scores` | GET | Score history for a config |
 | `/api/tests/templates` | GET | List test templates |
@@ -209,7 +226,7 @@ scio/
 | `/api/flashcards/streak` | GET | Study streak and daily goal |
 | `/api/flashcards/from-test/{test_id}` | POST | Create a flashcard deck from a test |
 | `/api/subjects` | GET, POST | List / create subjects |
-| `/api/subjects/{id}` | GET, PUT, DELETE | Get / update / delete a subject (`?cascade=true`) |
+| `/api/subjects/{id}` | GET, PUT, DELETE | Get / update / delete a subject; by default its test configs and decks are only unlinked, with `?cascade=true` they are deleted with it |
 | `/api/subjects/{id}/generate-test` | POST | Generate a test for a subject |
 | `/api/subjects/{id}/generate-flashcards` | POST | Generate flashcards for a subject |
 | `/api/subjects/{id}/test-configs/{config_id}/add-questions` | POST | Add AI questions to an existing test |
@@ -222,6 +239,7 @@ scio/
 - **Backend**: FastAPI, SQLAlchemy, SQLite, aiosqlite
 - **Frontend**: React 18, TypeScript, Tailwind CSS, TanStack Query
 - **AI**: OpenRouter API (access to multiple LLM providers)
+- **Theming**: Light/dark via semantic CSS variables — follows the system setting by default, with a Sun/Moon toggle persisting the choice in localStorage (`scio-theme`)
 - **Container**: Docker with multi-stage build
 
 ## Troubleshooting
