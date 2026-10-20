@@ -3,11 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Your AI Learning Hub - Generate practice tests, create flashcards, and organize your learning journey" />
+    <meta name="theme-color" content="#fcfcfd" />
+    <!-- Apply the theme before first paint (no flash of the wrong theme).
+         Keep in sync with src/lib/theme.tsx (storage key + colors). -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('scio-theme');
+          var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#101011' : '#fcfcfd');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
     <title>Scio - AI Learning Hub</title>
   </head>
   <body>
@@ -15,4 +28,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
