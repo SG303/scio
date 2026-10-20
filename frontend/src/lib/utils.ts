@@ -25,11 +25,11 @@ export function formatScore(score: number): string {
 }
 
 export function getScoreColor(score: number): string {
-  if (score >= 90) return 'text-green-400'
-  if (score >= 80) return 'text-emerald-400'
-  if (score >= 70) return 'text-yellow-400'
-  if (score >= 60) return 'text-orange-400'
-  return 'text-red-400'
+  if (score >= 90) return 'text-green-600 dark:text-green-400'
+  if (score >= 80) return 'text-emerald-600 dark:text-emerald-400'
+  if (score >= 70) return 'text-yellow-600 dark:text-yellow-400'
+  if (score >= 60) return 'text-orange-600 dark:text-orange-400'
+  return 'text-red-600 dark:text-red-400'
 }
 
 export function estimateTokens(text: string): number {

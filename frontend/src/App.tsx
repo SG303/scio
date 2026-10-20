@@ -1,9 +1,8 @@
 import { useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, NavLink, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { FileText, Settings, Home, ClipboardList, Layers, FolderOpen, Sparkles, BarChart3 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { AppLayout } from '@/components/layout/AppLayout'
 import { flushOfflineReviews } from '@/lib/offlineQueue'
 import { queryKeys } from '@/lib/constants'
 import Dashboard from '@/pages/Dashboard'
@@ -22,17 +21,6 @@ import StudySession from '@/pages/flashcards/StudySession'
 import SessionComplete from '@/pages/flashcards/SessionComplete'
 import SubjectsPage from '@/pages/subjects/SubjectsPage'
 import SubjectDetail from '@/pages/subjects/SubjectDetail'
-
-const navItems = [
-  { to: '/', icon: Home, label: 'Dashboard' },
-  { to: '/subjects', icon: FolderOpen, label: 'Subjects' },
-  { to: '/documents', icon: FileText, label: 'Documents' },
-  { to: '/tests', icon: ClipboardList, label: 'Tests' },
-  { to: '/templates', icon: Sparkles, label: 'Templates' },
-  { to: '/stats', icon: BarChart3, label: 'Stats' },
-  { to: '/flashcards', icon: Layers, label: 'Flashcards' },
-  { to: '/settings', icon: Settings, label: 'AI Models' },
-]
 
 function App() {
   const queryClient = useQueryClient()
@@ -63,72 +51,7 @@ function App() {
   return (
     <ErrorBoundary>
       <Router>
-        <div className="min-h-screen gradient-bg">
-        {/* Header */}
-        <header className="sticky top-0 z-40 glass border-b">
-          <div className="container mx-auto px-4">
-            <div className="flex h-16 items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img 
-                  src="/scio_logo.png" 
-                  alt="Scio Logo" 
-                  className="h-16 w-16 object-contain"
-                />
-                <div>
-                  <h1 className="text-lg font-bold tracking-tight">Scio</h1>
-                  <p className="text-xs text-muted-foreground">Learn • Practice • Master</p>
-                </div>
-              </div>
-              
-              {/* Navigation */}
-              <nav className="hidden md:flex items-center gap-1">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                      )
-                    }
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </NavLink>
-                ))}
-              </nav>
-            </div>
-          </div>
-        </header>
-
-        {/* Mobile Navigation */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass border-t overflow-x-auto">
-          <div className="flex items-center justify-around min-w-max py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex flex-col items-center gap-1 px-3 py-2 shrink-0 rounded-lg text-xs font-medium transition-all duration-200',
-                    isActive
-                      ? 'text-primary'
-                      : 'text-muted-foreground'
-                  )
-                }
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </NavLink>
-            ))}
-          </div>
-        </nav>
-
-        {/* Main Content */}
-        <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
+        <AppLayout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/documents" element={<Documents />} />
@@ -162,8 +85,7 @@ function App() {
               }
             />
           </Routes>
-        </main>
-        </div>
+        </AppLayout>
       </Router>
     </ErrorBoundary>
   )

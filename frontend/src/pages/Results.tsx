@@ -123,8 +123,8 @@ export default function Results() {
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Score Card */}
       <Card className="overflow-hidden">
-        <div className="bg-gradient-to-br from-primary/20 via-accent/10 to-background p-8 text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-background/80 backdrop-blur mb-4">
+        <div className="p-8 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-4">
             <Trophy className={cn('h-10 w-10', getScoreColor(score))} />
           </div>
           <h1 className="text-3xl font-bold mb-2">{test.config_title || 'Practice Test'}</h1>

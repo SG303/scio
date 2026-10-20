@@ -79,9 +79,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-accent/10 to-background border p-8">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="relative">
+      <div className="rounded-xl border bg-card p-8">
+        <div>
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium text-primary">AI-Powered Learning</span>
@@ -178,7 +177,7 @@ export default function Dashboard() {
 
       {/* P4.2: Streak & Daily Goal Widget */}
       {streak && (
-        <Card className="opacity-0 animate-fade-in stagger-5 border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-transparent">
+        <Card className="opacity-0 animate-fade-in stagger-5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
@@ -214,7 +213,7 @@ export default function Dashboard() {
 
       {/* Flashcards Due Today Widget */}
       {flashcardStats && flashcardStats.total_cards > 0 && (
-        <Card className="opacity-0 animate-fade-in stagger-5 border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent">
+        <Card className="opacity-0 animate-fade-in stagger-5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">

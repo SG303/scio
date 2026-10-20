@@ -15,8 +15,8 @@ export default defineConfig({
         short_name: 'Scio',
         description:
           'Your AI Learning Hub - Generate practice tests, create flashcards, and organize your learning journey',
-        theme_color: '#080c16',
-        background_color: '#080c16',
+        theme_color: '#101011',
+        background_color: '#101011',
         display: 'standalone',
         start_url: '/',
         icons: [
