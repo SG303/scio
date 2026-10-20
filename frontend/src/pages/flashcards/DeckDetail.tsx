@@ -8,15 +8,19 @@ import {
   Edit2,
   Sparkles,
   BookOpen,
-  MoreVertical,
+  MoreHorizontal,
   Download,
   Upload,
+  SearchX,
 } from 'lucide-react'
 import { toast } from '@/components/Toaster'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { List, ListRow, RowActions } from '@/components/List'
 import { deckIsStudiable, deckStudyCount } from '@/lib/decks'
+import { cardStates, cardStateClass } from '@/lib/studyColors'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -32,6 +36,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { flashcardsApi } from '@/services/api'
@@ -164,20 +169,6 @@ export default function DeckDetail() {
     }
   }
 
-  const getStateColor = (state: string) => {
-    switch (state) {
-      case 'new':
-        return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-      case 'learning':
-      case 'relearning':
-        return 'bg-orange-500/10 text-orange-500 border-orange-500/20'
-      case 'review':
-        return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-      default:
-        return 'bg-muted text-muted-foreground'
-    }
-  }
-
   // P4.3: save deck settings — invalidates the deck and the deck list
   const updateDeckMutation = useMutation({
     mutationFn: (data: { title: string; description: string; new_cards_per_day: number }) =>
@@ -220,164 +211,163 @@ export default function DeckDetail() {
 
   if (!deck) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold mb-2">Deck not found</h2>
-        <Button onClick={() => navigate('/flashcards')}>Go to Flashcards</Button>
+      <div className="mx-auto max-w-5xl">
+        <EmptyState
+          icon={SearchX}
+          title="Deck not found"
+          description="This deck may have been deleted."
+          action={
+            <Button variant="outline" onClick={() => navigate('/flashcards')}>
+              Go to Flashcards
+            </Button>
+          }
+        />
       </div>
     )
   }
 
+  const stateCounts = {
+    new: deck.new_cards,
+    learning: deck.learning_cards,
+    review: deck.review_cards,
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/flashcards')}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-2xl font-bold">{deck.title}</h1>
-          </div>
-          {deck.description && (
-            <p className="text-muted-foreground ml-12">{deck.description}</p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsAddingCard(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Card
-          </Button>
-          {/* P6.1: export as Anki or CSV */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={exportMutation.isPending}>
-                <Download className="h-4 w-4 mr-2" />
-                Export
+    <div className="mx-auto max-w-5xl space-y-8">
+      <div className="space-y-3">
+        <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground" asChild>
+          <Link to="/flashcards">
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
+            Flashcard Decks
+          </Link>
+        </Button>
+        <PageHeader
+          title={<span className="break-words">{deck.title}</span>}
+          description={deck.description || undefined}
+          actions={
+            <>
+              {/* P6.1 export/import and P4.3 deck settings live in one menu so
+                  the header fits on phones */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" aria-label="More deck actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[12rem]">
+                  <DropdownMenuItem onClick={handleOpenEditDeck}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit Deck
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowImportDialog(true)}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={exportMutation.isPending}
+                    onClick={() => exportMutation.mutate({ format: 'apkg' })}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Anki deck (.apkg)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={exportMutation.isPending}
+                    onClick={() => exportMutation.mutate({ format: 'csv' })}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV (.csv)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" onClick={() => setIsAddingCard(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Card
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => exportMutation.mutate({ format: 'apkg' })}>
-                Anki deck (.apkg)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportMutation.mutate({ format: 'csv' })}>
-                CSV (.csv)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {/* P6.1: CSV import */}
-          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import
-          </Button>
-          {/* P4.3: deck settings incl. daily new-card limit */}
-          <Button variant="outline" onClick={handleOpenEditDeck}>
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit Deck
-          </Button>
-          {/* P4.3: honest count — remaining new cards respect today's deck-wide quota */}
-          <Button asChild disabled={!deckIsStudiable(deck)}>
-            <Link to={`/flashcards/${deckId}/study`}>
-              <BookOpen className="h-4 w-4 mr-2" />
-              Study ({deckStudyCount(deck)})
-            </Link>
-          </Button>
-        </div>
+              {/* P4.3: honest count — remaining new cards respect today's deck-wide quota */}
+              <Button asChild disabled={!deckIsStudiable(deck)}>
+                <Link to={`/flashcards/${deckId}/study`}>
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Study ({deckStudyCount(deck)})
+                </Link>
+              </Button>
+            </>
+          }
+        />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold">{deck.total_cards}</div>
-            <div className="text-sm text-muted-foreground">Total Cards</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold text-blue-400">{deck.new_cards}</div>
-            <div className="text-sm text-muted-foreground">New</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold text-orange-400">{deck.learning_cards}</div>
-            <div className="text-sm text-muted-foreground">Learning</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold text-emerald-400">{deck.review_cards}</div>
-            <div className="text-sm text-muted-foreground">Review</div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Stats in the shared card-state palette */}
+      <dl className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card md:grid-cols-4">
+        <div className="p-5">
+          <dt className="text-sm text-muted-foreground">Total cards</dt>
+          <dd className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{deck.total_cards}</dd>
+        </div>
+        {cardStates.map((state, i) => (
+          <div
+            key={state.key}
+            className={cn(
+              'border-l p-5',
+              i === 1 && 'border-l-0 border-t md:border-l md:border-t-0',
+              i === 2 && 'border-t md:border-t-0'
+            )}
+          >
+            <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className={cn('h-2 w-2 rounded-full', state.className)} aria-hidden />
+              {state.label}
+            </dt>
+            <dd className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
+              {stateCounts[state.key]}
+            </dd>
+          </div>
+        ))}
+      </dl>
 
       {/* Cards List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Cards ({cards.length})</CardTitle>
-          <CardDescription>All flashcards in this deck</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {cards.length === 0 ? (
-            <div className="text-center py-8">
-              <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No cards yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Add cards manually or generate them with AI
-              </p>
+      <section className="space-y-3">
+        <SectionHeader title="Cards" meta={cards.length} />
+        {cards.length === 0 ? (
+          <EmptyState
+            icon={Sparkles}
+            title="No cards yet"
+            description="Add cards manually or generate them with AI."
+            action={
               <Button onClick={() => setIsAddingCard(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Your First Card
               </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {cards.map((card) => (
-                <div
-                  key={card.id}
-                  className="flex items-start gap-4 p-4 rounded-lg border bg-card/50 hover:bg-card transition-colors"
-                >
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium">{card.front}</p>
-                      <span
-                        className={cn(
-                          'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border shrink-0',
-                          getStateColor(card.state)
-                        )}
-                      >
-                        {card.state}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">{card.back}</p>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setEditingCard(card)}>
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => setDeletingCardId(card.id)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            }
+          />
+        ) : (
+          <List>
+            {cards.map((card) => (
+              <ListRow key={card.id} className="items-start">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-sm font-medium break-words">{card.front}</p>
+                  <p className="line-clamp-2 text-sm text-muted-foreground break-words">{card.back}</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <span className="mt-0.5 flex shrink-0 items-center gap-1.5 text-xs capitalize text-muted-foreground">
+                  <span className={cn('h-2 w-2 rounded-full', cardStateClass(card.state))} aria-hidden />
+                  {card.state}
+                </span>
+                <RowActions label="Card actions">
+                  <DropdownMenuItem onClick={() => setEditingCard(card)}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeletingCardId(card.id)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </RowActions>
+              </ListRow>
+            ))}
+          </List>
+        )}
+      </section>
 
       {/* Add Card Dialog */}
       <Dialog open={isAddingCard} onOpenChange={setIsAddingCard}>
