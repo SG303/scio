@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Loader2, CloudOff, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/EmptyState'
 
 type QueryStateProps = {
   loading?: boolean
@@ -28,27 +29,25 @@ export function QueryState({
 }: QueryStateProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-label="Loading">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 space-y-4">
-        <div className="rounded-full bg-red-500/10 p-4">
-          <CloudOff className="h-8 w-8 text-red-500" />
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10">
+          <CloudOff className="h-5 w-5 text-destructive" />
         </div>
-        <div className="text-center space-y-1">
-          <h2 className="text-xl font-semibold">Could not load data</h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            The server could not be reached. Make sure Scio is running, then try again.
-          </p>
-        </div>
+        <h2 className="text-base font-semibold">Could not load data</h2>
+        <p className="mt-1 max-w-md text-sm text-muted-foreground">
+          The server could not be reached. Make sure Scio is running, then try again.
+        </p>
         {onRetry && (
-          <Button variant="outline" onClick={onRetry}>
-            <RotateCcw className="h-4 w-4 mr-2" />
+          <Button variant="outline" size="sm" className="mt-5" onClick={onRetry}>
+            <RotateCcw className="mr-2 h-4 w-4" />
             Try Again
           </Button>
         )}
@@ -57,14 +56,7 @@ export function QueryState({
   }
 
   if (empty) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 space-y-2 text-center">
-        <h2 className="text-xl font-semibold">Nothing here yet</h2>
-        {emptyMessage && (
-          <p className="text-sm text-muted-foreground max-w-md">{emptyMessage}</p>
-        )}
-      </div>
-    )
+    return <EmptyState title="Nothing here yet" description={emptyMessage} />
   }
 
   return <>{children ?? null}</>
