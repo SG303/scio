@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, flashcardsApi } from '@/services/api'
-import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
+import { calculateEstimatedCost, cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
@@ -95,13 +95,8 @@ export default function CreateFlashcards() {
     const outputTokens = formData.num_cards * 100 // ~100 tokens per card
 
     const hasPricing = selectedModel.pricing?.prompt && selectedModel.pricing?.completion
-    let estimatedCost = 0
-
-    if (hasPricing) {
-      const promptPrice = parseFloat(selectedModel.pricing!.prompt)
-      const completionPrice = parseFloat(selectedModel.pricing!.completion)
-      estimatedCost = (inputTokens * promptPrice + outputTokens * completionPrice) / 1_000_000
-    }
+    // OpenRouter prices are per token — same calculation as CreateTest
+    const { estimatedCost } = calculateEstimatedCost(inputTokens, outputTokens, selectedModel)
 
     return {
       inputTokens,
