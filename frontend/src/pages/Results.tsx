@@ -1,10 +1,8 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trophy, CheckCircle2, XCircle, ArrowLeft, RotateCcw, Home, Loader2, Search, AlertTriangle, Check, Layers } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CheckCircle2, XCircle, ArrowLeft, RotateCcw, Loader2, Search, AlertTriangle, Check, Layers, SearchX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -23,8 +21,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from '@/components/Toaster'
+import { QueryState } from '@/components/QueryState'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
 import { testsApi, flashcardsApi } from '@/services/api'
-import { cn, formatScore, getScoreColor } from '@/lib/utils'
+import { cn, formatDate, formatScore, getScoreColor } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 
 interface VerificationResult {
@@ -99,18 +100,17 @@ export default function Results() {
   })
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-pulse text-muted-foreground">Loading results...</div>
-      </div>
-    )
+    return <QueryState loading />
   }
 
   if (!test || test.status !== 'completed') {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold mb-2">Results not available</h2>
-        <Button onClick={() => navigate('/')}>Go Home</Button>
+      <div className="mx-auto max-w-3xl">
+        <EmptyState
+          icon={SearchX}
+          title="Results not available"
+          action={<Button onClick={() => navigate('/')}>Go Home</Button>}
+        />
       </div>
     )
   }
@@ -119,218 +119,217 @@ export default function Results() {
   const correctCount = test.correct_answers || 0
   const totalQuestions = test.total_questions
 
+  const incorrectCount = totalQuestions - correctCount
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* Score Card */}
-      <Card className="overflow-hidden">
-        <div className="p-8 text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-4">
-            <Trophy className={cn('h-10 w-10', getScoreColor(score))} />
-          </div>
-          <h1 className="text-3xl font-bold mb-2">{test.config_title || 'Practice Test'}</h1>
-          <p className="text-muted-foreground mb-6">Test Completed!</p>
-          
-          <div className={cn('text-6xl font-bold mb-2', getScoreColor(score))}>
-            {score}%
-          </div>
-          <p className="text-lg text-muted-foreground mb-4">{formatScore(score)}</p>
-          
-          <div className="flex items-center justify-center gap-8 text-sm">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-success" />
-              <span>{correctCount} correct</span>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        title={test.config_title || 'Practice Test'}
+        description={
+          test.completed_at ? `Completed ${formatDate(test.completed_at)}` : 'Test completed'
+        }
+        actions={
+          <>
+            {incorrectCount > 0 && (
+              <Button variant="outline" onClick={() => setShowFlashcardDialog(true)}>
+                <Layers className="h-4 w-4 mr-2" />
+                Create Flashcards from Mistakes
+              </Button>
+            )}
+            <Button asChild>
+              <Link to="/create">
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Create New Test
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      {/* Score summary */}
+      <div className="rounded-xl border bg-card p-5 sm:p-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-8">
+          <div>
+            <div className={cn('text-5xl font-semibold tabular-nums tracking-tight', getScoreColor(score))}>
+              {score}%
             </div>
-            <div className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-destructive" />
-              <span>{totalQuestions - correctCount} incorrect</span>
+            <p className="mt-1 text-sm text-muted-foreground">{formatScore(score)}</p>
+          </div>
+          <div className="flex-1 space-y-3">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <span className="tabular-nums font-medium">{correctCount}</span>
+                <span className="text-muted-foreground">correct</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-destructive" />
+                <span className="tabular-nums font-medium">{incorrectCount}</span>
+                <span className="text-muted-foreground">incorrect</span>
+              </span>
+              <span className="text-muted-foreground">
+                <span className="tabular-nums">{totalQuestions}</span> questions
+              </span>
+            </div>
+            <div
+              className="flex h-1.5 overflow-hidden rounded-full bg-secondary"
+              role="img"
+              aria-label={`${correctCount} of ${totalQuestions} correct`}
+            >
+              <div className="bg-success" style={{ width: `${totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0}%` }} />
+              <div className="bg-destructive/70" style={{ width: `${totalQuestions > 0 ? (incorrectCount / totalQuestions) * 100 : 0}%` }} />
             </div>
           </div>
         </div>
-        
-        <CardContent className="p-6">
-          <Progress value={score} className="h-3" />
-          <div className="flex justify-between mt-2 text-sm text-muted-foreground">
-            <span>0%</span>
-            <span>100%</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-4 justify-center">
-        <Button variant="outline" asChild>
-          <Link to="/">
-            <Home className="h-4 w-4 mr-2" />
-            Dashboard
-          </Link>
-        </Button>
-        {totalQuestions - correctCount > 0 && (
-          <Button variant="outline" onClick={() => setShowFlashcardDialog(true)}>
-            <Layers className="h-4 w-4 mr-2" />
-            Create Flashcards from Mistakes
-          </Button>
-        )}
-        <Button asChild>
-          <Link to="/create">
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Create New Test
-          </Link>
-        </Button>
       </div>
 
       {/* Questions Review */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Question Review</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {test.questions.map((question, index) => (
-            <div
-              key={question.id}
-              className={cn(
-                'p-6 rounded-lg border',
-                question.is_correct ? 'border-success/30 bg-success/5' : 'border-destructive/30 bg-destructive/5'
-              )}
-            >
-              <div className="flex items-start gap-4 mb-4">
-                <div
-                  className={cn(
-                    'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
-                    question.is_correct ? 'bg-success/20' : 'bg-destructive/20'
-                  )}
-                >
+      <section className="space-y-3">
+        <SectionHeader title="Question review" meta={`${correctCount}/${totalQuestions}`} />
+        <div className="space-y-4">
+          {test.questions.map((question, index) => {
+            const verification = verificationResults[question.id]
+            return (
+              <article key={question.id} className="rounded-xl border bg-card p-5 sm:p-6">
+                <div className="flex items-start gap-3">
                   {question.is_correct ? (
-                    <CheckCircle2 className="h-5 w-5 text-success" />
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-label="Correct" />
                   ) : (
-                    <XCircle className="h-5 w-5 text-destructive" />
+                    <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-label="Incorrect" />
                   )}
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Question {index + 1} ·{' '}
+                      <span className={question.is_correct ? 'text-success' : 'text-destructive'}>
+                        {question.is_correct ? 'Correct' : 'Incorrect'}
+                      </span>
+                    </p>
+                    <p className="font-medium leading-relaxed">{question.question_text}</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-medium mb-1">Question {index + 1}</h4>
-                  <p className="text-muted-foreground">{question.question_text}</p>
-                </div>
-              </div>
 
-              <div className="space-y-2 ml-12">
-                {question.choices.map((choice) => {
-                  const isCorrect = choice.index === question.correct_answer
-                  const isUserAnswer = choice.index === question.user_answer
-                  
-                  return (
-                    <div
-                      key={choice.index}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg text-sm',
-                        isCorrect && 'bg-success/10 border border-success/30',
-                        isUserAnswer && !isCorrect && 'bg-destructive/10 border border-destructive/30',
-                        !isCorrect && !isUserAnswer && 'bg-muted/30'
-                      )}
-                    >
-                      <span
+                <div className="mt-4 space-y-2 sm:ml-8">
+                  {question.choices.map((choice) => {
+                    const isCorrect = choice.index === question.correct_answer
+                    const isUserAnswer = choice.index === question.user_answer
+
+                    return (
+                      <div
+                        key={choice.index}
                         className={cn(
-                          'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                          isCorrect ? 'bg-success text-success-foreground' :
-                          isUserAnswer ? 'bg-destructive text-destructive-foreground' :
-                          'bg-muted-foreground/20'
+                          'flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm',
+                          isCorrect && 'border-success/40 bg-success/5',
+                          isUserAnswer && !isCorrect && 'border-destructive/40 bg-destructive/5',
+                          !isCorrect && !isUserAnswer && 'border-transparent text-muted-foreground'
                         )}
                       >
-                        {String.fromCharCode(65 + choice.index)}
-                      </span>
-                      <span className="flex-1">{choice.text}</span>
-                      {isCorrect && (
-                        <span className="text-xs text-success font-medium">✓ Correct answer</span>
-                      )}
-                      {isUserAnswer && !isCorrect && (
-                        <span className="text-xs text-destructive font-medium">✗ Your answer</span>
-                      )}
-                      {isUserAnswer && isCorrect && (
-                        <span className="text-xs text-success font-medium">✓ Your answer</span>
-                      )}
-                    </div>
-                  )
-                })}
-                {question.user_answer === null && (
-                  <div className="text-sm text-muted-foreground italic mt-2">
-                    You did not answer this question
-                  </div>
-                )}
-              </div>
-
-              {question.explanation ? (
-                <div className="mt-4 ml-12 p-4 rounded-lg bg-primary/5 border border-primary/20">
-                  <h5 className="text-sm font-medium mb-1 text-primary">💡 Explanation</h5>
-                  <p className="text-sm text-muted-foreground">{question.explanation}</p>
+                        <span
+                          className={cn(
+                            'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
+                            isCorrect ? 'bg-success text-success-foreground' :
+                            isUserAnswer ? 'bg-destructive text-destructive-foreground' :
+                            'border bg-background'
+                          )}
+                        >
+                          {String.fromCharCode(65 + choice.index)}
+                        </span>
+                        <span className="flex-1">{choice.text}</span>
+                        {(isCorrect || isUserAnswer) && (
+                          <span
+                            className={cn(
+                              'shrink-0 text-xs font-medium',
+                              isCorrect ? 'text-success' : 'text-destructive'
+                            )}
+                          >
+                            {isUserAnswer && isCorrect
+                              ? 'Your answer'
+                              : isCorrect
+                              ? 'Correct answer'
+                              : 'Your answer'}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {question.user_answer === null && (
+                    <p className="text-sm italic text-muted-foreground">
+                      You did not answer this question
+                    </p>
+                  )}
                 </div>
-              ) : (
-                <div className="mt-4 ml-12 p-4 rounded-lg bg-muted/30 border">
-                  <h5 className="text-sm font-medium mb-1">💡 Explanation</h5>
-                  <p className="text-sm text-muted-foreground">
-                    The correct answer is <strong>{String.fromCharCode(65 + (question.correct_answer || 0))}</strong>: {question.choices.find(c => c.index === question.correct_answer)?.text}
-                  </p>
-                </div>
-              )}
 
-              {/* AI Verification */}
-              <div className="mt-4 ml-12">
-                {!verificationResults[question.id] ? (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleVerify(question.id)}
-                    disabled={verifying[question.id]}
-                  >
-                    {verifying[question.id] ? (
-                      <>
-                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                        Verifying...
-                      </>
+                <div className="mt-4 space-y-3 sm:ml-8">
+                  <div className="rounded-lg bg-muted/60 p-3 text-sm">
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">Explanation</p>
+                    {question.explanation ? (
+                      <p className="leading-relaxed">{question.explanation}</p>
                     ) : (
-                      <>
-                        <Search className="h-3 w-3 mr-2" />
-                        Verify with AI
-                      </>
+                      <p className="leading-relaxed">
+                        The correct answer is <strong>{String.fromCharCode(65 + (question.correct_answer || 0))}</strong>: {question.choices.find(c => c.index === question.correct_answer)?.text}
+                      </p>
                     )}
-                  </Button>
-                ) : (
-                  <div className={cn(
-                    "p-4 rounded-lg border text-sm",
-                    verificationResults[question.id].status === 'likely_ok' 
-                      ? "bg-success/10 border-success/30" 
-                      : "bg-amber-500/10 border-amber-500/30"
-                  )}>
-                    <div className="flex items-start gap-2">
-                      {verificationResults[question.id].status === 'likely_ok' ? (
-                        <Check className="h-4 w-4 text-success mt-0.5" />
+                  </div>
+
+                  {/* AI Verification */}
+                  {!verification ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => handleVerify(question.id)}
+                      disabled={verifying[question.id]}
+                    >
+                      {verifying[question.id] ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                          Verifying...
+                        </>
                       ) : (
-                        <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                        <>
+                          <Search className="h-3.5 w-3.5 mr-2" />
+                          Verify with AI
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <div
+                      className={cn(
+                        'flex items-start gap-2 rounded-lg border p-3 text-sm',
+                        verification.status === 'likely_ok'
+                          ? 'border-success/30 bg-success/5'
+                          : 'border-warning/30 bg-warning/5'
+                      )}
+                    >
+                      {verification.status === 'likely_ok' ? (
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                      ) : (
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                       )}
                       <div>
-                        <span className={cn(
-                          "font-medium",
-                          verificationResults[question.id].status === 'likely_ok' 
-                            ? "text-success" 
-                            : "text-amber-500"
-                        )}>
-                          {verificationResults[question.id].status === 'likely_ok' 
-                            ? "AI Verification: Likely OK" 
-                            : "AI Verification: Potential Issue"}
+                        <span
+                          className={cn(
+                            'font-medium',
+                            verification.status === 'likely_ok' ? 'text-success' : 'text-warning'
+                          )}
+                        >
+                          {verification.status === 'likely_ok'
+                            ? 'AI Verification: Likely OK'
+                            : 'AI Verification: Potential Issue'}
                         </span>
-                        <p className="mt-1 text-muted-foreground">
-                          {verificationResults[question.id].analysis}
-                        </p>
+                        <p className="mt-1 text-muted-foreground">{verification.analysis}</p>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+                  )}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      </section>
 
       {/* Bottom Navigation */}
-      <div className="flex justify-center pb-8">
-        <Button variant="outline" onClick={() => navigate('/')}>
+      <div className="flex justify-center pb-4">
+        <Button variant="ghost" onClick={() => navigate('/')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Dashboard
         </Button>

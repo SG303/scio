@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Flag, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ChevronLeft, ChevronRight, Flag, Loader2, Check, AlertTriangle, SearchX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -15,6 +14,8 @@ import {
 } from '@/components/ui/dialog'
 import { testsApi } from '@/services/api'
 import { toast } from '@/components/Toaster'
+import { QueryState } from '@/components/QueryState'
+import { EmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 
@@ -139,18 +140,17 @@ export default function TakeTest() {
   })
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <QueryState loading />
   }
 
   if (error || !test) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold mb-2">Test not found</h2>
-        <Button onClick={() => navigate('/')}>Go Home</Button>
+      <div className="mx-auto max-w-3xl">
+        <EmptyState
+          icon={SearchX}
+          title="Test not found"
+          action={<Button onClick={() => navigate('/')}>Go Home</Button>}
+        />
       </div>
     )
   }
@@ -197,124 +197,145 @@ export default function TakeTest() {
     submitMutation.mutate()
   }
 
+  const isLastQuestion = currentQuestion === questions.length - 1
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">{test.config_title || `Test #${test.id}`}</h1>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            {test.config_title || `Test #${test.id}`}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Question {currentQuestion + 1} of {questions.length}
-            <span className="hidden sm:inline"> · Tip: press 1–4 to answer, Enter for next</span>
+            <span className="tabular-nums">{answeredCount} of {questions.length}</span> answered
           </p>
         </div>
         <Button
-          variant="destructive"
+          variant="outline"
+          className="shrink-0"
           onClick={handleSubmitClick}
           disabled={submitMutation.isPending}
+          aria-label="Submit Test"
         >
           {submitMutation.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
           ) : (
-            <Flag className="h-4 w-4 mr-2" />
+            <Flag className="h-4 w-4 sm:mr-2" />
           )}
-          Submit Test
+          <span className="hidden sm:inline">Submit Test</span>
         </Button>
       </div>
 
-      {/* Progress */}
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Progress</span>
-          <span className="font-medium">{answeredCount} / {questions.length} answered</span>
-        </div>
-        <Progress value={progress} className="h-2" />
+      {/* Progress + question navigation */}
+      <div className="space-y-4">
+        <Progress value={progress} className="h-1.5" aria-label="Answered questions" />
+        <nav aria-label="Questions" className="flex flex-wrap gap-1.5">
+          {questions.map((q, i) => {
+            const answered = localAnswers[q.id] !== undefined || q.user_answer !== null
+            return (
+              <button
+                key={q.id}
+                onClick={() => setCurrentQuestion(i)}
+                aria-current={i === currentQuestion ? 'step' : undefined}
+                aria-label={`Question ${i + 1}${answered ? ', answered' : ''}`}
+                className={cn(
+                  'h-9 w-9 rounded-md border text-sm font-medium tabular-nums transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  i === currentQuestion
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : answered
+                    ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/15'
+                    : 'bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
+              >
+                {i + 1}
+              </button>
+            )
+          })}
+        </nav>
       </div>
 
-      {/* Question Navigation */}
-      <div className="flex flex-wrap gap-2">
-        {questions.map((q, i) => (
-          <button
-            key={q.id}
-            onClick={() => setCurrentQuestion(i)}
-            className={cn(
-              'w-10 h-10 rounded-lg text-sm font-medium transition-all',
-              i === currentQuestion
-                ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
-                : localAnswers[q.id] !== undefined || q.user_answer !== null
-                ? 'bg-success/20 text-success border border-success/30'
-                : 'bg-muted hover:bg-muted/80'
-            )}
-          >
-            {i + 1}
-          </button>
-        ))}
-      </div>
-
-      {/* Question Card */}
+      {/* Question */}
       {question && (
-        <Card className="overflow-hidden">
-          <CardHeader className="bg-muted/30">
-            <CardTitle className="text-lg">
-              Question {question.question_number}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-6">
-            <p className="text-lg leading-relaxed">{question.question_text}</p>
-
-            <div className="space-y-3">
-              {question.choices.map((choice) => (
-                <button
-                  key={choice.index}
-                  onClick={() => handleAnswer(choice.index)}
-                  disabled={answerMutation.isPending}
-                  className={cn(
-                    'w-full flex items-center gap-4 p-4 rounded-lg border text-left transition-all',
-                    currentAnswer === choice.index
-                      ? 'border-primary bg-primary/10 ring-1 ring-primary'
-                      : 'hover:bg-muted/50 hover:border-muted-foreground/30'
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-medium transition-colors',
-                      currentAnswer === choice.index
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-muted-foreground/30'
-                    )}
-                  >
-                    {String.fromCharCode(65 + choice.index)}
-                  </div>
-                  <span className="flex-1">{choice.text}</span>
-                  {question.user_answer === choice.index && (
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
-                  )}
-                </button>
-              ))}
+        <div className="rounded-xl border bg-card">
+          <div className="space-y-5 p-5 sm:p-6">
+            <div className="space-y-2">
+              <p className="text-xs font-medium tabular-nums text-muted-foreground">
+                Question {currentQuestion + 1} of {questions.length}
+              </p>
+              <p className="text-lg font-medium leading-relaxed">{question.question_text}</p>
             </div>
 
-            {/* Navigation */}
-            <div className="flex justify-between pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentQuestion((prev) => Math.max(0, prev - 1))}
-                disabled={currentQuestion === 0}
-              >
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Previous
+            <div className="space-y-2" role="radiogroup" aria-label="Answer choices">
+              {question.choices.map((choice) => {
+                const selected = currentAnswer === choice.index
+                return (
+                  <button
+                    key={choice.index}
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => handleAnswer(choice.index)}
+                    disabled={answerMutation.isPending}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors sm:p-4',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      selected
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'hover:bg-accent/60'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs font-semibold transition-colors',
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'bg-background text-muted-foreground'
+                      )}
+                    >
+                      {String.fromCharCode(65 + choice.index)}
+                    </span>
+                    <span className="flex-1 text-sm sm:text-base">{choice.text}</span>
+                    {question.user_answer === choice.index && (
+                      <Check className="h-4 w-4 shrink-0 text-primary" aria-label="Saved" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center justify-between gap-3 border-t px-5 py-4 sm:px-6">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentQuestion((prev) => Math.max(0, prev - 1))}
+              disabled={currentQuestion === 0}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <p className="hidden text-xs text-muted-foreground md:block">
+              Press <kbd className="rounded border bg-muted px-1 font-mono text-[11px]">1</kbd>–<kbd className="rounded border bg-muted px-1 font-mono text-[11px]">4</kbd> to answer,{' '}
+              <kbd className="rounded border bg-muted px-1 font-mono text-[11px]">Enter</kbd> for next
+            </p>
+            {isLastQuestion ? (
+              <Button onClick={handleSubmitClick} disabled={submitMutation.isPending}>
+                <Flag className="h-4 w-4 mr-2" />
+                Submit Test
               </Button>
+            ) : (
               <Button
                 onClick={() =>
                   setCurrentQuestion((prev) => Math.min(questions.length - 1, prev + 1))
                 }
-                disabled={currentQuestion === questions.length - 1}
               >
                 Next
-                <ChevronRight className="h-4 w-4 ml-2" />
+                <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Submit Confirmation Dialog */}
@@ -322,13 +343,13 @@ export default function TakeTest() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
               Submit Test?
             </DialogTitle>
             <DialogDescription>
               Are you sure you want to submit your test? You have answered {answeredCount} of {questions.length} questions.
               {answeredCount < questions.length && (
-                <span className="block mt-2 text-destructive font-medium">
+                <span className="block mt-2 text-warning font-medium">
                   Warning: You have {questions.length - answeredCount} unanswered question{questions.length - answeredCount > 1 ? 's' : ''}.
                 </span>
               )}
@@ -341,7 +362,7 @@ export default function TakeTest() {
             <Button variant="outline" onClick={() => setShowSubmitDialog(false)}>
               Continue Test
             </Button>
-            <Button variant="destructive" onClick={handleConfirmSubmit}>
+            <Button onClick={handleConfirmSubmit}>
               Submit Test
             </Button>
           </DialogFooter>
