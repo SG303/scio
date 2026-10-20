@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { FileText, CheckCircle2, Loader2 } from 'lucide-react'
+import { FileText, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +15,9 @@ import {
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
 import { toast } from '@/components/Toaster'
-import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
+import { EmptyState } from '@/components/EmptyState'
+import { StepIndicator } from '@/components/StepIndicator'
+import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
 import type { SubjectListItem } from '@/types'
 import { queryKeys } from '@/lib/constants'
 
@@ -154,32 +156,7 @@ export default function CreateSubjectDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Progress Steps */}
-        <div className="flex items-center gap-4 py-4">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center gap-2">
-              <div
-                className={cn(
-                  'w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors',
-                  step >= s
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {step > s ? <CheckCircle2 className="h-3 w-3" /> : s}
-              </div>
-              <span
-                className={cn(
-                  'text-xs font-medium',
-                  step >= s ? 'text-foreground' : 'text-muted-foreground'
-                )}
-              >
-                {s === 1 ? 'Details' : s === 2 ? 'Documents' : 'AI Model'}
-              </span>
-              {s < 3 && <div className="w-8 h-px bg-muted ml-2" />}
-            </div>
-          ))}
-        </div>
+        <StepIndicator steps={['Details', 'Documents', 'AI Model']} current={step} className="py-2" />
 
         {/* Step 1: Details */}
         {step === 1 && (
@@ -213,51 +190,29 @@ export default function CreateSubjectDialog({
               Select documents to use as context for all materials in this subject (optional).
             </p>
             {documents.length === 0 ? (
-              <div className="text-center py-6">
-                <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  No documents available. You can add documents later or generate topic-based content.
-                </p>
-              </div>
+              <EmptyState
+                icon={FileText}
+                title="No documents available"
+                description="You can add documents later or generate topic-based content."
+                className="py-8"
+              />
             ) : (
               <>
                 {formData.document_ids.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-3 text-center text-sm text-muted-foreground">
+                  <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
                     No documents selected. Materials will be generated based on titles/topics.
-                  </div>
+                  </p>
                 )}
-                <div className="grid gap-2 max-h-60 overflow-y-auto">
+                <div className="grid max-h-60 gap-2 overflow-y-auto p-0.5">
                   {documents.map((doc) => (
-                    <button
+                    <OptionCard
                       key={doc.id}
-                      type="button"
+                      indicator="checkbox"
+                      selected={formData.document_ids.includes(doc.id)}
                       onClick={() => handleDocumentToggle(doc.id)}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border text-left transition-all text-sm',
-                        formData.document_ids.includes(doc.id)
-                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                          : 'hover:bg-muted/50'
-                      )}
                     >
-                      <div
-                        className={cn(
-                          'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
-                          formData.document_ids.includes(doc.id)
-                            ? 'border-primary bg-primary'
-                            : 'border-muted-foreground/30'
-                        )}
-                      >
-                        {formData.document_ids.includes(doc.id) && (
-                          <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium">{doc.title}</h4>
-                        <p className="text-xs text-muted-foreground capitalize">
-                          {doc.doc_type.replace('_', ' ')}
-                        </p>
-                      </div>
-                    </button>
+                      <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
+                    </OptionCard>
                   ))}
                 </div>
               </>
@@ -272,88 +227,45 @@ export default function CreateSubjectDialog({
               Select a default AI model for generating content in this subject (can be overridden per generation).
             </p>
             {formData.ai_model_id === null && (
-              <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-3 text-center text-sm text-muted-foreground">
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
                 No default model selected. You'll need to select a model when generating content.
-              </div>
+              </p>
             )}
-            <div className="grid gap-2 max-h-60 overflow-y-auto">
+            <div className="grid max-h-60 gap-2 overflow-y-auto p-0.5" role="radiogroup" aria-label="Default AI Model">
               {models.map((model) => (
-                <button
+                <OptionCard
                   key={model.id}
-                  type="button"
+                  indicator="radio"
+                  selected={formData.ai_model_id === model.id}
                   onClick={() =>
                     setFormData({
                       ...formData,
                       ai_model_id: formData.ai_model_id === model.id ? null : model.id,
                     })
                   }
-                  className={cn(
-                    'flex items-start gap-3 p-3 rounded-lg border text-left transition-all text-sm',
-                    formData.ai_model_id === model.id
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
-                  )}
                 >
-                  <div
-                    className={cn(
-                      'w-4 h-4 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors',
-                      formData.ai_model_id === model.id
-                        ? 'border-primary bg-primary'
-                        : 'border-muted-foreground/30'
-                    )}
-                  >
-                    {formData.ai_model_id === model.id && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <h4 className="font-medium">{model.name}</h4>
-                      {model.context_length && (
-                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {formatContextLength(model.context_length)} ctx
-                        </span>
-                      )}
-                    </div>
-                    {model.description && (
-                      <p className="text-xs text-muted-foreground">{model.description}</p>
-                    )}
-                    {model.pricing && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {formatPricePerMillion(model.pricing.prompt)} /{' '}
-                        {formatPricePerMillion(model.pricing.completion)} per 1M tokens
-                      </p>
-                    )}
-                  </div>
-                </button>
+                  <ModelOptionLabel model={model} />
+                </OptionCard>
               ))}
             </div>
 
             {/* Summary */}
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-2 mt-4">
-              <h4 className="font-medium text-sm">Summary</h4>
-              <div className="grid gap-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Name</span>
-                  <span>{formData.title}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Documents</span>
-                  <span>
-                    {formData.document_ids.length > 0
-                      ? `${formData.document_ids.length} selected`
-                      : 'None'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Default Model</span>
-                  <span>
-                    {formData.ai_model_id
-                      ? models.find((m) => m.id === formData.ai_model_id)?.name
-                      : 'None'}
-                  </span>
-                </div>
-              </div>
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Summary</h4>
+              <dl className="divide-y rounded-lg border text-sm">
+                {([
+                  ['Name', formData.title],
+                  ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : 'None'],
+                  ['Default model', formData.ai_model_id
+                    ? models.find((m) => m.id === formData.ai_model_id)?.name
+                    : 'None'],
+                ] as const).map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-4 px-3 py-2">
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="truncate text-right font-medium">{value}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           </div>
         )}

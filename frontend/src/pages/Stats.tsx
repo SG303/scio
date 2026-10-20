@@ -5,18 +5,13 @@ import { PageHeader } from '@/components/PageHeader'
 import { flashcardsApi } from '@/services/api'
 import { cn, getScoreBgColor, getScoreColor } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
+// One series palette for every chart: the accent for activity, the
+// semantic tokens for card states (shared with the deck pages).
+import { cardStates } from '@/lib/studyColors'
 import type { SubjectScoreSeries } from '@/types'
 
 const formatDay = (date: string, options: Intl.DateTimeFormatOptions) =>
   new Date(date + 'T00:00:00').toLocaleDateString(undefined, options)
-
-// One series palette for every chart: the accent for activity, the
-// semantic tokens for card states. Phase 3 deck pages should reuse it.
-const cardStates = [
-  { key: 'new', label: 'New', className: 'bg-primary/40' },
-  { key: 'learning', label: 'Learning', className: 'bg-warning' },
-  { key: 'review', label: 'Review', className: 'bg-success' },
-] as const
 
 function ChartCard({
   title,

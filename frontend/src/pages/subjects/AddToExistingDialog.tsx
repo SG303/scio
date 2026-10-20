@@ -15,7 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { modelsApi, subjectsApi } from '@/services/api'
-import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
+import { GenerationStatus } from '@/components/GenerationStatus'
+import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
 import { QUESTION_COUNT_OPTIONS, queryKeys } from '@/lib/constants'
 import type { TestConfigInSubject, FlashcardDeckInSubject } from '@/types'
 
@@ -147,48 +148,16 @@ export default function AddToExistingDialog({
           {/* AI Model */}
           <div className="space-y-2">
             <Label>AI Model</Label>
-            <div className="grid gap-2 max-h-40 overflow-y-auto">
+            <div className="grid max-h-56 gap-2 overflow-y-auto p-0.5" role="radiogroup" aria-label="AI Model">
               {models.map((model) => (
-                <button
+                <OptionCard
                   key={model.id}
-                  type="button"
+                  indicator="radio"
+                  selected={aiModelId === model.id}
                   onClick={() => setAiModelId(model.id)}
-                  className={cn(
-                    'flex items-start gap-3 p-3 rounded-lg border text-left transition-all text-sm',
-                    aiModelId === model.id
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
-                  )}
                 >
-                  <div
-                    className={cn(
-                      'w-4 h-4 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors',
-                      aiModelId === model.id
-                        ? 'border-primary bg-primary'
-                        : 'border-muted-foreground/30'
-                    )}
-                  >
-                    {aiModelId === model.id && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <h4 className="font-medium">{model.name}</h4>
-                      {model.context_length && (
-                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {formatContextLength(model.context_length)} ctx
-                        </span>
-                      )}
-                    </div>
-                    {model.pricing && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {formatPricePerMillion(model.pricing.prompt)} /{' '}
-                        {formatPricePerMillion(model.pricing.completion)} per 1M tokens
-                      </p>
-                    )}
-                  </div>
-                </button>
+                  <ModelOptionLabel model={model} />
+                </OptionCard>
               ))}
             </div>
           </div>
@@ -210,16 +179,18 @@ export default function AddToExistingDialog({
           </div>
 
           {/* Info about duplicate prevention */}
-          <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+          <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
             The AI will be informed about existing {type === 'test' ? 'questions' : 'cards'} to
             avoid generating duplicates.
-          </div>
+          </p>
 
           {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
               {error}
             </div>
           )}
+
+          {isGenerating && <GenerationStatus progress={null} />}
         </div>
 
         <DialogFooter>

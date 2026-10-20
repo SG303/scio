@@ -7,22 +7,18 @@ import {
   Sparkles,
   ClipboardList,
   Layers,
-  MoreVertical,
   Trash2,
   BookOpen,
-  TrendingUp,
   FileText,
+  SearchX,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { List, ListRow, ListIcon, RowActions, rowLinkClass } from '@/components/List'
 import { deckIsStudiable } from '@/lib/decks'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -33,7 +29,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from '@/components/Toaster'
 import { subjectsApi, testsApi, flashcardsApi } from '@/services/api'
-import { cn } from '@/lib/utils'
+import { cn, getScoreColor } from '@/lib/utils'
 import type { TestConfigInSubject, FlashcardDeckInSubject } from '@/types'
 import GenerateMaterialDialog from './GenerateMaterialDialog'
 import AddToExistingDialog from './AddToExistingDialog'
@@ -98,303 +94,225 @@ export default function SubjectDetail() {
 
   if (!subject) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold mb-2">Subject not found</h2>
-        <Button onClick={() => navigate('/subjects')}>Go to Subjects</Button>
+      <div className="mx-auto max-w-5xl">
+        <EmptyState
+          icon={SearchX}
+          title="Subject not found"
+          description="This subject may have been deleted."
+          action={
+            <Button variant="outline" onClick={() => navigate('/subjects')}>
+              Go to Subjects
+            </Button>
+          }
+        />
       </div>
     )
   }
 
+  const kpis = [
+    { label: 'Tests', value: subject.test_configs.length, className: undefined },
+    { label: 'Decks', value: subject.flashcard_decks.length, className: undefined },
+    {
+      label: 'Avg. score',
+      value: subject.average_score !== null ? `${Math.round(subject.average_score)}%` : '—',
+      className: subject.average_score !== null ? getScoreColor(subject.average_score) : undefined,
+    },
+    {
+      label: 'Cards mastered',
+      value: subject.total_cards > 0
+        ? `${Math.round((subject.mastered_cards / subject.total_cards) * 100)}%`
+        : '—',
+      className: undefined,
+    },
+  ]
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/subjects')}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold">{subject.title}</h1>
-              {subject.description && (
-                <p className="text-muted-foreground">{subject.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
-        <Button onClick={() => setShowGenerateDialog(true)}>
-          <Sparkles className="h-4 w-4 mr-2" />
-          Create Learning Material
+    <div className="mx-auto max-w-5xl space-y-8">
+      <div className="space-y-3">
+        <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground" asChild>
+          <Link to="/subjects">
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
+            Subjects
+          </Link>
         </Button>
+        <PageHeader
+          title={<span className="break-words">{subject.title}</span>}
+          description={subject.description || undefined}
+          actions={
+            <Button onClick={() => setShowGenerateDialog(true)}>
+              <Sparkles className="h-4 w-4 mr-2" />
+              Create Learning Material
+            </Button>
+          }
+        />
+        {/* Subject defaults */}
+        {(subject.ai_model_name || subject.document_count > 0) && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            {subject.ai_model_name && (
+              <span className="inline-flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                {subject.ai_model_name}
+              </span>
+            )}
+            {subject.document_count > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                {subject.document_count} document{subject.document_count !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <ClipboardList className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold">{subject.test_configs.length}</div>
-                <div className="text-sm text-muted-foreground">Tests</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <Layers className="h-5 w-5 text-purple-500" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold">{subject.flashcard_decks.length}</div>
-                <div className="text-sm text-muted-foreground">Decks</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <TrendingUp className="h-5 w-5 text-emerald-500" />
-              </div>
-              <div>
-                <div
-                  className={cn(
-                    'text-2xl font-bold',
-                    subject.average_score !== null
-                      ? subject.average_score >= 70
-                        ? 'text-emerald-500'
-                        : subject.average_score >= 50
-                        ? 'text-amber-500'
-                        : 'text-red-500'
-                      : ''
-                  )}
-                >
-                  {subject.average_score !== null ? `${Math.round(subject.average_score)}%` : '—'}
-                </div>
-                <div className="text-sm text-muted-foreground">Avg. Score</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/10">
-                <BookOpen className="h-5 w-5 text-amber-500" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold">
-                  {subject.total_cards > 0
-                    ? `${Math.round((subject.mastered_cards / subject.total_cards) * 100)}%`
-                    : '—'}
-                </div>
-                <div className="text-sm text-muted-foreground">Cards Mastered</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Subject Info */}
-      {(subject.ai_model_name || subject.document_count > 0) && (
-        <div className="flex flex-wrap gap-3">
-          {subject.ai_model_name && (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
-              <span>{subject.ai_model_name}</span>
-            </div>
-          )}
-          {subject.document_count > 0 && (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted text-sm">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <span>
-                {subject.document_count} document{subject.document_count !== 1 ? 's' : ''}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      <dl className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card md:grid-cols-4">
+        {kpis.map((kpi, i) => (
+          <div
+            key={kpi.label}
+            className={cn(
+              'p-5',
+              i % 2 === 1 && 'border-l',
+              i >= 2 && 'border-t md:border-t-0',
+              i === 2 && 'md:border-l'
+            )}
+          >
+            <dt className="text-sm text-muted-foreground">{kpi.label}</dt>
+            <dd className={cn('mt-1 text-2xl font-semibold tabular-nums tracking-tight', kpi.className)}>
+              {kpi.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Tests Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5" />
-                  Practice Tests
-                </CardTitle>
-                <CardDescription>Tests created in this subject</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {subject.test_configs.length === 0 ? (
-              <div className="text-center py-8">
-                <ClipboardList className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">No tests yet</p>
+        <section className="min-w-0 space-y-3">
+          <SectionHeader title="Practice tests" meta={subject.test_configs.length} />
+          {subject.test_configs.length === 0 ? (
+            <EmptyState
+              icon={ClipboardList}
+              title="No tests yet"
+              action={
                 <Button variant="outline" onClick={() => setShowGenerateDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Create Test
                 </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {subject.test_configs.map((config) => (
-                  <div
-                    key={config.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card/50 hover:bg-card transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium truncate">{config.title}</h4>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                        <span>{config.num_questions} questions</span>
-                        {config.tests_taken > 0 && (
-                          <>
-                            <span>•</span>
-                            <span>{config.tests_taken} taken</span>
-                          </>
-                        )}
-                        {config.best_score !== null && (
-                          <>
-                            <span>•</span>
-                            <span
-                              className={cn(
-                                'font-medium',
-                                config.best_score >= 70
-                                  ? 'text-emerald-500'
-                                  : config.best_score >= 50
-                                  ? 'text-amber-500'
-                                  : 'text-red-500'
-                              )}
-                            >
-                              Best: {config.best_score}%
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => setAddToExisting({ type: 'test', item: config })}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Questions
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setDeletingTest(config)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+              }
+            />
+          ) : (
+            <List>
+              {subject.test_configs.map((config) => (
+                <ListRow key={config.id}>
+                  <ListIcon>
+                    <ClipboardList />
+                  </ListIcon>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-medium">{config.title}</h3>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {config.num_questions} questions
+                      {config.tests_taken > 0 && <> · {config.tests_taken} taken</>}
+                      {config.best_score !== null && (
+                        <>
+                          {' · '}
+                          <span className={cn('font-medium', getScoreColor(config.best_score))}>
+                            Best {config.best_score}%
+                          </span>
+                        </>
+                      )}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <RowActions label={`Actions for ${config.title}`}>
+                    <DropdownMenuItem
+                      onClick={() => setAddToExisting({ type: 'test', item: config })}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Questions
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setDeletingTest(config)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </RowActions>
+                </ListRow>
+              ))}
+            </List>
+          )}
+        </section>
 
         {/* Flashcard Decks Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Layers className="h-5 w-5" />
-                  Flashcard Decks
-                </CardTitle>
-                <CardDescription>Flashcard decks in this subject</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {subject.flashcard_decks.length === 0 ? (
-              <div className="text-center py-8">
-                <Layers className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">No decks yet</p>
+        <section className="min-w-0 space-y-3">
+          <SectionHeader title="Flashcard decks" meta={subject.flashcard_decks.length} />
+          {subject.flashcard_decks.length === 0 ? (
+            <EmptyState
+              icon={Layers}
+              title="No decks yet"
+              action={
                 <Button variant="outline" onClick={() => setShowGenerateDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Create Deck
                 </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {subject.flashcard_decks.map((deck) => (
-                  <div
-                    key={deck.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card/50 hover:bg-card transition-colors"
-                  >
-                    <Link to={`/flashcards/${deck.id}`} className="flex-1 min-w-0">
-                      <h4 className="font-medium truncate">{deck.title}</h4>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                        <span>{deck.total_cards} cards</span>
-                        {deck.due_cards > 0 && (
-                          <>
-                            <span>•</span>
-                            <span className="text-amber-500">{deck.due_cards} due</span>
-                          </>
-                        )}
-                        {deck.new_cards > 0 && (
-                          <>
-                            <span>•</span>
-                            <span className="text-blue-500">{deck.new_cards} new</span>
-                          </>
-                        )}
-                      </div>
+              }
+            />
+          ) : (
+            <List>
+              {subject.flashcard_decks.map((deck) => (
+                <ListRow key={deck.id} interactive>
+                  <ListIcon>
+                    <Layers />
+                  </ListIcon>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={`/flashcards/${deck.id}`}
+                      className={cn('block truncate text-sm font-medium', rowLinkClass)}
+                    >
+                      {deck.title}
                     </Link>
-                    <div className="flex items-center gap-2">
-                      {/* P4.3: disabled when today's quota is actually empty */}
-                      <Button variant="outline" size="sm" asChild disabled={!deckIsStudiable(deck)}>
-                        <Link to={`/flashcards/${deck.id}/study`}>
-                          <BookOpen className="h-4 w-4 mr-1" />
-                          Study
-                        </Link>
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => setAddToExisting({ type: 'deck', item: deck })}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Cards
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => setDeletingDeck(deck)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {deck.total_cards} cards
+                      {deck.due_cards > 0 && (
+                        <> · <span className="font-medium text-primary">{deck.due_cards} due</span></>
+                      )}
+                      {deck.new_cards > 0 && <> · {deck.new_cards} new</>}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  {/* P4.3: disabled when today's quota is actually empty */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="relative z-10 shrink-0"
+                    asChild
+                    disabled={!deckIsStudiable(deck)}
+                  >
+                    <Link to={`/flashcards/${deck.id}/study`}>
+                      <BookOpen className="h-4 w-4 sm:mr-1.5" />
+                      <span className="sr-only sm:not-sr-only">Study</span>
+                    </Link>
+                  </Button>
+                  <RowActions label={`Actions for ${deck.title}`}>
+                    <DropdownMenuItem
+                      onClick={() => setAddToExisting({ type: 'deck', item: deck })}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Cards
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setDeletingDeck(deck)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </RowActions>
+                </ListRow>
+              ))}
+            </List>
+          )}
+        </section>
       </div>
 
       {/* Generate Material Dialog */}
