@@ -9,18 +9,14 @@ import {
   Sparkles,
   Loader2,
   Copy,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Pencil,
-  Coins,
-  Clock,
-  GraduationCap,
   ArrowRight,
-  TrendingUp,
+  ClipboardList,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -34,10 +30,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
-import { cn, calculateEstimatedCost, formatContextLength, formatPricePerMillion, calculateTestGenerationTokens, formatDate, getScoreColor } from '@/lib/utils'
+import { cn, calculateEstimatedCost, calculateTestGenerationTokens, getScoreColor } from '@/lib/utils'
 import { TEMPLATE_QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 import { ScoreSparkline } from '@/components/ScoreSparkline'
-import { useGenerationProgress, describeProgress } from '@/hooks/useGenerationProgress'
+import { QueryState } from '@/components/QueryState'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { List, ListIcon, ListRow, RowActions } from '@/components/List'
+import { TestRow } from '@/components/TestRow'
+import { StepIndicator } from '@/components/StepIndicator'
+import { CostEstimate } from '@/components/CostEstimate'
+import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
+import { useGenerationProgress } from '@/hooks/useGenerationProgress'
+import { GenerationStatus } from '@/components/GenerationStatus'
 import type { TestConfig } from '@/types'
 
 export default function TestTemplates() {
@@ -73,7 +78,7 @@ export default function TestTemplates() {
   const [deletingTemplateId, setDeletingTemplateId] = useState<number | null>(null)
   
   // Queries
-  const { data: templates = [], isLoading } = useQuery({
+  const { data: templates = [], isLoading, error: templatesError, refetch: refetchTemplates } = useQuery({
     queryKey: queryKeys.templates,
     queryFn: testsApi.listTemplates,
   })
@@ -334,148 +339,137 @@ export default function TestTemplates() {
   const canProceedStep2 = formData.ai_model_id > 0 && formData.title.trim() !== ''
   const recentTests = tests.slice(0, 5)
   
+  // P3.3 pattern: a failed query is an error, not an empty template list
+  if (isLoading || templatesError) {
+    return <QueryState loading={isLoading} error={templatesError} onRetry={refetchTemplates} />
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Test Templates</h1>
-          <p className="text-muted-foreground">
-            Create reusable templates for daily practice tests
-          </p>
-        </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Template
-        </Button>
-      </div>
-      
-      {/* Templates List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : templates.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Copy className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No templates yet</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Create a template to quickly generate practice tests for daily learning.
-            </p>
+    <div className="mx-auto max-w-5xl space-y-8">
+      <PageHeader
+        title="Test Templates"
+        description="Create reusable templates for daily practice tests."
+        actions={
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Template
+          </Button>
+        }
+      />
+
+      {templates.length === 0 ? (
+        <EmptyState
+          icon={Copy}
+          title="No templates yet"
+          description="Create a template to quickly generate practice tests for daily learning."
+          action={
             <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create Your First Template
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       ) : (
-        <div className="grid gap-4">
-          {templates.map((template) => (
-            <Card key={template.id}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-lg">{template.title}</h3>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                      <span>{template.num_questions} questions</span>
-                      <span>{template.num_choices} choices</span>
-                      <span>{getModelName(template.ai_model_id)}</span>
-                      <span>
+        <section className="space-y-3">
+          <SectionHeader title="Templates" meta={templates.length} />
+          <List>
+            {templates.map((template) => {
+              // P5.1: score trend from completed tests of this template
+              const scores = scoresByTemplate.get(template.id) ?? []
+              const isExpanded = expandedTemplates.has(template.id)
+              return (
+                <div key={template.id}>
+                  <ListRow>
+                    <ListIcon>
+                      <Copy />
+                    </ListIcon>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-medium">{template.title}</h3>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {template.num_questions} questions · {template.num_choices} choices ·{' '}
+                        {getModelName(template.ai_model_id)} ·{' '}
                         {template.document_ids.length > 0
                           ? `${template.document_ids.length} document${template.document_ids.length > 1 ? 's' : ''}`
                           : 'Topic-based'}
-                      </span>
+                      </p>
                     </div>
-                    
-                    {(() => {
-                      // P5.1: score trend from completed tests of this template
-                      const scores = scoresByTemplate.get(template.id) ?? []
-                      return scores.length >= 2 ? (
-                        <div
-                          className="mt-3 flex items-center gap-2 text-primary"
-                          title="Score trend (recent tests)"
-                        >
-                          <TrendingUp className="h-4 w-4" />
-                          <ScoreSparkline scores={scores} />
-                          <span className="text-xs text-muted-foreground">
-                            {scores[scores.length - 1]}% last
-                          </span>
-                        </div>
-                      ) : null
-                    })()}
-                    
-                    {template.custom_prompt && (
-                      <div className="mt-3">
-                        <button
-                          onClick={() => toggleExpanded(template.id)}
-                          className="flex items-center gap-1 text-sm text-primary hover:underline"
-                        >
-                          {expandedTemplates.has(template.id) ? (
-                            <>
-                              <ChevronUp className="h-4 w-4" />
-                              Hide custom prompt
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown className="h-4 w-4" />
-                              Show custom prompt
-                            </>
-                          )}
-                        </button>
-                        {expandedTemplates.has(template.id) && (
-                          <div className="mt-2 p-3 rounded-lg bg-muted/50 text-sm whitespace-pre-wrap">
-                            {template.custom_prompt}
-                          </div>
-                        )}
+                    {scores.length >= 2 && (
+                      <div
+                        className="hidden shrink-0 items-center gap-3 text-muted-foreground md:flex"
+                        title="Score trend (recent tests)"
+                      >
+                        <ScoreSparkline scores={scores} />
+                        <span className="w-24 text-xs">
+                          <span className={cn('font-semibold tabular-nums', getScoreColor(scores[scores.length - 1]))}>
+                            {scores[scores.length - 1]}%
+                          </span>{' '}
+                          last
+                        </span>
                       </div>
                     )}
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleOpenEditDialog(template)}
+                      className="shrink-0"
+                      onClick={() => handleOpenGenerateDialog(template)}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Sparkles className="h-4 w-4 sm:mr-2" />
+                      <span className="sr-only sm:not-sr-only">Generate Test</span>
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setDeletingTemplateId(template.id)
-                        deleteMutation.mutate(template.id)
-                      }}
-                      disabled={deletingTemplateId === template.id}
-                    >
-                      {deletingTemplateId === template.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button onClick={() => handleOpenGenerateDialog(template)}>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate Test
-                    </Button>
-                  </div>
+                    {deletingTemplateId === template.id ? (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <RowActions label={`Actions for ${template.title}`}>
+                        <DropdownMenuItem onClick={() => handleOpenEditDialog(template)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        {template.custom_prompt && (
+                          <DropdownMenuItem onClick={() => toggleExpanded(template.id)}>
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 mr-2" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 mr-2" />
+                            )}
+                            {isExpanded ? 'Hide custom prompt' : 'Show custom prompt'}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => {
+                            setDeletingTemplateId(template.id)
+                            deleteMutation.mutate(template.id)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </RowActions>
+                    )}
+                  </ListRow>
+                  {template.custom_prompt && isExpanded && (
+                    <div className="px-4 pb-4 sm:pl-16">
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Custom prompt</p>
+                      <div className="whitespace-pre-wrap rounded-lg bg-muted/60 p-3 text-sm">
+                        {template.custom_prompt}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              )
+            })}
+          </List>
+        </section>
       )}
-      
-      {/* Recent Tests */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Recent Tests</CardTitle>
-              <CardDescription>Your latest generated tests</CardDescription>
-            </div>
-            {tests.length > 5 && (
+
+      <section className="space-y-3">
+        <SectionHeader
+          title="Recent tests"
+          action={
+            tests.length > 5 && (
               <Button variant="ghost" size="sm" asChild>
                 {/* P5.1: points to the real test history instead of the dashboard */}
                 <Link to="/tests">
@@ -483,66 +477,24 @@ export default function TestTemplates() {
                   <ArrowRight className="h-4 w-4 ml-1" />
                 </Link>
               </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {recentTests.length === 0 ? (
-            <div className="text-center py-12">
-              <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No tests yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Generate a test from your templates to get started
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentTests.map((test) => (
-                <Link
-                  key={test.id}
-                  to={test.status === 'completed' ? `/results/${test.id}` : `/test/${test.id}`}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card/50 hover:bg-card transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                      test.status === 'completed' ? 'bg-success/10' : 
-                      test.status === 'in_progress' ? 'bg-primary/10' : 'bg-muted'
-                    }`}>
-                      {test.status === 'completed' ? (
-                        <CheckCircle2 className="h-5 w-5 text-success" />
-                      ) : test.status === 'in_progress' ? (
-                        <Clock className="h-5 w-5 text-primary" />
-                      ) : (
-                        <GraduationCap className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-medium">{test.config_title || `Test #${test.id}`}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {test.total_questions} questions • {formatDate(test.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    {test.status === 'completed' && test.score !== null && (
-                      <span className={`text-lg font-bold ${getScoreColor(test.score)}`}>
-                        {test.score}%
-                      </span>
-                    )}
-                    {test.status === 'in_progress' && (
-                      <span className="text-sm text-primary">Continue →</span>
-                    )}
-                    {test.status === 'generated' && (
-                      <span className="text-sm text-muted-foreground">Start →</span>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      
+            )
+          }
+        />
+        {recentTests.length === 0 ? (
+          <EmptyState
+            icon={ClipboardList}
+            title="No tests yet"
+            description="Generate a test from your templates to get started."
+          />
+        ) : (
+          <List>
+            {recentTests.map((test) => (
+              <TestRow key={test.id} test={test} />
+            ))}
+          </List>
+        )}
+      </section>
+
       {/* Create Template Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={(open) => {
         setShowCreateDialog(open)
@@ -558,82 +510,39 @@ export default function TestTemplates() {
             </DialogDescription>
           </DialogHeader>
           
-          {/* Progress Steps */}
-          <div className="flex items-center gap-4 py-4">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors',
-                    createStep >= s
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
-                  )}
-                >
-                  {createStep > s ? <CheckCircle2 className="h-3 w-3" /> : s}
-                </div>
-                <span
-                  className={cn(
-                    'text-xs font-medium',
-                    createStep >= s ? 'text-foreground' : 'text-muted-foreground'
-                  )}
-                >
-                  {s === 1 ? 'Documents' : s === 2 ? 'Configure' : 'Custom Prompt'}
-                </span>
-                {s < 3 && <div className="w-8 h-px bg-muted ml-2" />}
-              </div>
-            ))}
-          </div>
+          <StepIndicator
+            steps={['Documents', 'Configure', 'Custom Prompt']}
+            current={createStep}
+            className="py-2"
+          />
           
           {/* Step 1: Select Documents */}
           {createStep === 1 && (
             <div className="space-y-4">
               {documents.length === 0 ? (
-                <div className="text-center py-6">
-                  <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-4">
-                    No documents available. Template will be topic-based.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={FileText}
+                  title="No documents available"
+                  description="The template will be topic-based."
+                  className="py-8"
+                />
               ) : (
                 <>
                   {formData.document_ids.length === 0 && (
-                    <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-3 text-center text-sm text-muted-foreground">
+                    <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
                       No documents selected. Template will generate questions based on the title/topic.
-                    </div>
+                    </p>
                   )}
-                  <div className="grid gap-2 max-h-60 overflow-y-auto">
+                  <div className="grid max-h-60 gap-2 overflow-y-auto p-0.5">
                     {documents.map((doc) => (
-                      <button
+                      <OptionCard
                         key={doc.id}
-                        type="button"
+                        indicator="checkbox"
+                        selected={formData.document_ids.includes(doc.id)}
                         onClick={() => handleDocumentToggle(doc.id)}
-                        className={cn(
-                          'flex items-center gap-3 p-3 rounded-lg border text-left transition-all text-sm',
-                          formData.document_ids.includes(doc.id)
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                            : 'hover:bg-muted/50'
-                        )}
                       >
-                        <div
-                          className={cn(
-                            'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
-                            formData.document_ids.includes(doc.id)
-                              ? 'border-primary bg-primary'
-                              : 'border-muted-foreground/30'
-                          )}
-                        >
-                          {formData.document_ids.includes(doc.id) && (
-                            <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium">{doc.title}</h4>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {doc.doc_type.replace('_', ' ')}
-                          </p>
-                        </div>
-                      </button>
+                        <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
+                      </OptionCard>
                     ))}
                   </div>
                 </>
@@ -696,50 +605,16 @@ export default function TestTemplates() {
               
               <div className="space-y-2">
                 <Label>AI Model</Label>
-                <div className="grid gap-2 max-h-48 overflow-y-auto">
+                <div className="grid max-h-56 gap-2 overflow-y-auto p-0.5">
                   {models.map((model) => (
-                    <button
+                    <OptionCard
                       key={model.id}
-                      type="button"
+                      indicator="radio"
+                      selected={formData.ai_model_id === model.id}
                       onClick={() => setFormData({ ...formData, ai_model_id: model.id })}
-                      className={cn(
-                        'flex items-start gap-3 p-3 rounded-lg border text-left transition-all text-sm',
-                        formData.ai_model_id === model.id
-                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                          : 'hover:bg-muted/50'
-                      )}
                     >
-                      <div
-                        className={cn(
-                          'w-4 h-4 rounded-full border-2 flex items-center justify-center mt-0.5 transition-colors',
-                          formData.ai_model_id === model.id
-                            ? 'border-primary bg-primary'
-                            : 'border-muted-foreground/30'
-                        )}
-                      >
-                        {formData.ai_model_id === model.id && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <h4 className="font-medium">{model.name}</h4>
-                          {model.context_length && (
-                            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                              {formatContextLength(model.context_length)} ctx
-                            </span>
-                          )}
-                        </div>
-                        {model.description && (
-                          <p className="text-xs text-muted-foreground">{model.description}</p>
-                        )}
-                        {model.pricing && (
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {formatPricePerMillion(model.pricing.prompt)} / {formatPricePerMillion(model.pricing.completion)} per 1M tokens
-                          </p>
-                        )}
-                      </div>
-                    </button>
+                      <ModelOptionLabel model={model} />
+                    </OptionCard>
                   ))}
                 </div>
               </div>
@@ -768,30 +643,21 @@ export default function TestTemplates() {
               </div>
               
               {/* Summary */}
-              <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                <h4 className="font-medium text-sm">Template Summary</h4>
-                <div className="grid gap-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Name</span>
-                    <span>{formData.title}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Documents</span>
-                    <span>
-                      {formData.document_ids.length > 0
-                        ? `${formData.document_ids.length} selected`
-                        : 'Topic-based'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Default Questions</span>
-                    <span>{formData.num_questions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">AI Model</span>
-                    <span>{getModelName(formData.ai_model_id)}</span>
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Template summary</h4>
+                <dl className="divide-y rounded-lg border text-sm">
+                  {([
+                    ['Name', formData.title],
+                    ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : 'Topic-based'],
+                    ['Default questions', formData.num_questions],
+                    ['AI model', getModelName(formData.ai_model_id)],
+                  ] as const).map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-4 px-3 py-2">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="truncate text-right font-medium">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
             </div>
           )}
@@ -863,86 +729,36 @@ export default function TestTemplates() {
 
             {/* Cost Estimation */}
             {generateEstimates && (
-              <div className={cn(
-                "rounded-lg border p-3 space-y-2",
-                generateEstimates.contextUsage > 100 ? "border-destructive/50 bg-destructive/5" : "border-primary/20 bg-primary/5"
-              )}>
-                <div className="flex items-center gap-2 mb-1">
-                  <Coins className="h-3.5 w-3.5 text-primary" />
-                  <h4 className="font-medium text-xs">Estimated Cost & Usage</h4>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Est. Cost</span>
-                    {generateEstimates.hasPricing ? (
-                      <span className="font-semibold">
-                        ${generateEstimates.estimatedCost.toFixed(4)}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground italic">
-                        Pricing unavailable
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block mb-0.5">Context</span>
-                    <span className={cn(
-                      "font-semibold",
-                      generateEstimates.contextUsage > 100 ? "text-destructive" : "text-foreground"
-                    )}>
-                      {generateEstimates.contextUsage.toFixed(1)}%
-                    </span>
-                    <span className="text-[10px] text-muted-foreground ml-1">
-                      ({formatContextLength(generateEstimates.inputTokens)}/{formatContextLength(generateEstimates.contextLimit)})
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-muted-foreground">
-                  ~{generateEstimates.inputTokens.toLocaleString()} input + ~{generateEstimates.outputTokens.toLocaleString()} output tokens
-                  {generateEstimates.numBatches > 1 && (
-                    <span className="ml-1">({generateEstimates.numBatches} API calls)</span>
-                  )}
-                </div>
-
-                {generateEstimates.contextUsage > 100 && (
-                  <div className="text-[10px] text-destructive font-medium mt-1">
-                    Warning: Context limit exceeded. Generation may fail.
-                  </div>
-                )}
-              </div>
+              <CostEstimate
+                estimates={generateEstimates}
+                overLimitMessage="Warning: Context limit exceeded. Generation may fail."
+              />
             )}
+
+            {/* P6.2: real progress from the backend while waiting */}
+            {isGenerating && <GenerationStatus progress={progress} />}
           </div>
           
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            {/* P6.2: real progress from the backend while waiting */}
-            {isGenerating && (
-              <p className="text-sm text-muted-foreground text-center">
-                {describeProgress(progress) ?? 'This may take a minute depending on the AI model...'}
-              </p>
-            )}
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={isGenerating ? handleCancelGeneration : () => setShowGenerateDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleGenerate} disabled={isGenerating}>
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Generate
-                  </>
-                )}
-              </Button>
-            </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={isGenerating ? handleCancelGeneration : () => setShowGenerateDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleGenerate} disabled={isGenerating}>
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

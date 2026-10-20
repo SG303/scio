@@ -1,11 +1,44 @@
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Timer, Layers, TrendingUp } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { QueryState } from '@/components/QueryState'
+import { PageHeader } from '@/components/PageHeader'
 import { flashcardsApi } from '@/services/api'
-import { getScoreColor } from '@/lib/utils'
+import { cn, getScoreBgColor, getScoreColor } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import type { SubjectScoreSeries } from '@/types'
+
+const formatDay = (date: string, options: Intl.DateTimeFormatOptions) =>
+  new Date(date + 'T00:00:00').toLocaleDateString(undefined, options)
+
+// One series palette for every chart: the accent for activity, the
+// semantic tokens for card states. Phase 3 deck pages should reuse it.
+const cardStates = [
+  { key: 'new', label: 'New', className: 'bg-primary/40' },
+  { key: 'learning', label: 'Learning', className: 'bg-warning' },
+  { key: 'review', label: 'Review', className: 'bg-success' },
+] as const
+
+function ChartCard({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string
+  description?: ReactNode
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <section className={cn('rounded-xl border bg-card p-5 sm:p-6', className)}>
+      <div className="mb-5 space-y-1">
+        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      </div>
+      {children}
+    </section>
+  )
+}
 
 /**
  * P6.3: study statistics — reviews per day, card state distribution,
@@ -31,177 +64,189 @@ export default function Stats() {
     return <QueryState error={error ?? new Error('Failed to load analytics')} onRetry={refetch} />
   }
 
-  const maxReviews = Math.max(...analytics.reviews_per_day.map((d) => d.reviews), 1)
+  const days = analytics.reviews_per_day
+  const maxReviews = Math.max(...days.map((d) => d.reviews), 1)
+  const totalReviews = days.reduce((sum, d) => sum + d.reviews, 0)
   const stateTotal =
     analytics.state_distribution.new +
     analytics.state_distribution.learning +
     analytics.state_distribution.review
+  const maxDeckTime = Math.max(...analytics.per_deck.map((d) => d.avg_time_ms ?? 0), 1)
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Statistics</h1>
-        <p className="text-muted-foreground">Your study activity and progress.</p>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-8">
+      <PageHeader title="Statistics" description="Your study activity and progress." />
 
       {/* Reviews per day — simple CSS bar chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Reviews per Day
-          </CardTitle>
-          <CardDescription>Last 14 days</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-1.5 h-40">
-            {analytics.reviews_per_day.map((day) => (
+      <ChartCard
+        title="Reviews per day"
+        description={
+          days.length > 0 ? (
+            <>
+              {formatDay(days[0].date, { day: 'numeric', month: 'short' })} –{' '}
+              {formatDay(days[days.length - 1].date, { day: 'numeric', month: 'short' })} ·{' '}
+              <span className="tabular-nums">{totalReviews}</span> reviews
+            </>
+          ) : (
+            'Last 14 days'
+          )
+        }
+      >
+        <div className="flex h-44 items-end gap-1 border-b sm:gap-1.5">
+          {days.map((day) => (
+            <div
+              key={day.date}
+              className="group flex h-full flex-1 flex-col items-center justify-end gap-1"
+              title={`${day.date}: ${day.reviews} reviews`}
+            >
+              <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:block">
+                {day.reviews > 0 ? day.reviews : ''}
+              </span>
               <div
-                key={day.date}
-                className="flex flex-1 flex-col items-center gap-1"
-                title={`${day.date}: ${day.reviews} reviews`}
-              >
-                <span className="text-xs text-muted-foreground">
-                  {day.reviews > 0 ? day.reviews : ''}
-                </span>
-                <div
-                  className="w-full rounded-t bg-primary/80"
-                  style={{ height: `${Math.max((day.reviews / maxReviews) * 100, day.reviews > 0 ? 4 : 1)}%` }}
-                />
-                <span className="text-[10px] text-muted-foreground">
-                  {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
-                </span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+                className={cn(
+                  'w-full rounded-t-sm transition-colors',
+                  day.reviews > 0 ? 'bg-primary group-hover:bg-primary/80' : 'bg-border'
+                )}
+                style={{
+                  height: day.reviews > 0 ? `${Math.max((day.reviews / maxReviews) * 85, 3)}%` : '2px',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex gap-1 sm:gap-1.5">
+          {days.map((day, i) => (
+            <span
+              key={day.date}
+              className="flex-1 text-center text-[10px] tabular-nums text-muted-foreground sm:text-[11px]"
+            >
+              {/* day numbers keep phones readable; month at the edges from sm up */}
+              {(i === 0 || i === days.length - 1) && (
+                <span className="hidden sm:inline">{formatDay(day.date, { month: 'short' })} </span>
+              )}
+              {formatDay(day.date, { day: 'numeric' })}
+            </span>
+          ))}
+        </div>
+      </ChartCard>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-8 md:grid-cols-2 md:gap-6">
         {/* Card state distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Layers className="h-5 w-5" />
-              Card States
-            </CardTitle>
-            <CardDescription>Across all decks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {(
-              [
-                ['New', analytics.state_distribution.new, 'bg-blue-500'],
-                ['Learning', analytics.state_distribution.learning, 'bg-orange-500'],
-                ['Review', analytics.state_distribution.review, 'bg-emerald-500'],
-              ] as const
-            ).map(([label, value, color]) => (
-              <div key={label}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span>{label}</span>
-                  <span className="text-muted-foreground">
-                    {value} ({stateTotal > 0 ? Math.round((value / stateTotal) * 100) : 0}%)
-                  </span>
+        <ChartCard
+          title="Card states"
+          description={
+            <>
+              Across all decks · <span className="tabular-nums">{stateTotal}</span> cards
+            </>
+          }
+        >
+          <div className="flex h-2 overflow-hidden rounded-full bg-secondary">
+            {stateTotal > 0 &&
+              cardStates.map((state) => (
+                <div
+                  key={state.key}
+                  className={state.className}
+                  style={{ width: `${(analytics.state_distribution[state.key] / stateTotal) * 100}%` }}
+                />
+              ))}
+          </div>
+          <dl className="mt-5 space-y-2.5">
+            {cardStates.map((state) => {
+              const value = analytics.state_distribution[state.key]
+              return (
+                <div key={state.key} className="flex items-center justify-between text-sm">
+                  <dt className="flex items-center gap-2">
+                    <span className={cn('h-2.5 w-2.5 rounded-sm', state.className)} />
+                    {state.label}
+                  </dt>
+                  <dd className="tabular-nums text-muted-foreground">
+                    <span className="font-medium text-foreground">{value}</span>{' '}
+                    ({stateTotal > 0 ? Math.round((value / stateTotal) * 100) : 0}%)
+                  </dd>
                 </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full ${color}`}
-                    style={{ width: `${stateTotal > 0 ? (value / stateTotal) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              )
+            })}
+          </dl>
+        </ChartCard>
 
         {/* Average answer time per deck */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Timer className="h-5 w-5" />
-              Average Answer Time
-            </CardTitle>
-            <CardDescription>
-              {analytics.avg_answer_time_ms !== null
-                ? `Overall: ${(analytics.avg_answer_time_ms / 1000).toFixed(1)}s`
-                : 'No timed reviews yet'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {analytics.per_deck.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No reviews recorded yet.</p>
-            ) : (
-              <div className="space-y-1">
-                {analytics.per_deck.map((deck) => (
-                  <div key={deck.deck_id} className="flex justify-between text-sm">
-                    <span className="truncate pr-4">{deck.deck_title}</span>
-                    <span className="text-muted-foreground shrink-0">
-                      {deck.avg_time_ms !== null
-                        ? `${(deck.avg_time_ms / 1000).toFixed(1)}s · ${deck.review_count} reviews`
-                        : `${deck.review_count} reviews`}
+        <ChartCard
+          title="Average answer time"
+          description={
+            analytics.avg_answer_time_ms !== null
+              ? `Overall: ${(analytics.avg_answer_time_ms / 1000).toFixed(1)}s`
+              : 'No timed reviews yet'
+          }
+        >
+          {analytics.per_deck.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No reviews recorded yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {analytics.per_deck.map((deck) => (
+                <li key={deck.deck_id} className="space-y-1.5">
+                  <div className="flex justify-between gap-4 text-sm">
+                    <span className="truncate">{deck.deck_title}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {deck.avg_time_ms !== null && (
+                        <span className="font-medium text-foreground">
+                          {(deck.avg_time_ms / 1000).toFixed(1)}s
+                        </span>
+                      )}
+                      {deck.avg_time_ms !== null && ' · '}
+                      {deck.review_count} reviews
                     </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <div className="h-1 overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${((deck.avg_time_ms ?? 0) / maxDeckTime) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ChartCard>
       </div>
 
       {/* Score trend per subject */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            Test Scores per Subject
-          </CardTitle>
-          <CardDescription>Completed tests in chronological order</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {analytics.subject_scores.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No completed subject tests yet — scores appear here after you finish a test that
-              belongs to a subject.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {analytics.subject_scores.map((series) => (
-                <SubjectScoreRow key={series.subject_id} series={series} />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ChartCard title="Test scores per subject" description="Completed tests in chronological order">
+        {analytics.subject_scores.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No completed subject tests yet — scores appear here after you finish a test that
+            belongs to a subject.
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {analytics.subject_scores.map((series) => (
+              <SubjectScoreRow key={series.subject_id} series={series} />
+            ))}
+          </div>
+        )}
+      </ChartCard>
     </div>
   )
 }
 
 function SubjectScoreRow({ series }: { series: SubjectScoreSeries }) {
+  const last = series.points[series.points.length - 1].score
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="font-medium">{series.subject_title}</span>
-        <span className="text-sm">
-          {series.points.length} test{series.points.length !== 1 ? 's' : ''} · last:{' '}
-          <span className={`font-semibold ${getScoreColor(series.points[series.points.length - 1].score)}`}>
-            {series.points[series.points.length - 1].score}%
-          </span>
+      <div className="mb-2 flex items-baseline justify-between gap-4">
+        <span className="truncate text-sm font-medium">{series.subject_title}</span>
+        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+          {series.points.length} test{series.points.length !== 1 ? 's' : ''} · last{' '}
+          <span className={cn('font-semibold', getScoreColor(last))}>{last}%</span>
         </span>
       </div>
-      <div className="flex gap-1 items-center">
+      <div className="flex h-12 items-end gap-1 border-b">
         {series.points.map((point) => (
           <div
             key={point.test_id}
-            className="flex-1 h-6 rounded flex items-center justify-center text-[10px] font-medium"
-            style={{
-              backgroundColor: `hsl(${Math.round(point.score * 1.2)} 70% 45%)`,
-            }}
+            className={cn('max-w-10 flex-1 rounded-t-sm', getScoreBgColor(point.score))}
+            style={{ height: `${Math.max(point.score, 4)}%` }}
             title={`${point.date}: ${point.score}%`}
-          >
-            {point.score}%
-          </div>
+          />
         ))}
       </div>
     </div>

@@ -2,22 +2,26 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/Toaster'
 import { FileText, Upload, Plus, Trash2, BookOpen, ListChecks, HelpCircle, Loader2 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { QueryState } from '@/components/QueryState'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { List, ListIcon, ListRow, RowActions } from '@/components/List'
 import { documentsApi } from '@/services/api'
-import { formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import type { Document } from '@/types'
 import { queryKeys } from '@/lib/constants'
 
 const docTypeConfig = {
-  exam_objectives: { label: 'Exam Objectives', icon: ListChecks, color: 'text-blue-400' },
-  study_guide: { label: 'Study Guide', icon: BookOpen, color: 'text-green-400' },
-  example_questions: { label: 'Example Questions', icon: HelpCircle, color: 'text-purple-400' },
+  exam_objectives: { label: 'Exam Objectives', icon: ListChecks },
+  study_guide: { label: 'Study Guide', icon: BookOpen },
+  example_questions: { label: 'Example Questions', icon: HelpCircle },
 }
 
 export default function Documents() {
@@ -33,7 +37,7 @@ export default function Documents() {
   })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  const { data: documents = [], isLoading } = useQuery({
+  const { data: documents = [], isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
   })
@@ -106,205 +110,192 @@ export default function Documents() {
     return acc
   }, {} as Record<string, Document[]>)
 
+  // P3.3 pattern: a failed query is an error, not an empty document list
+  if (isLoading || error) {
+    return <QueryState loading={isLoading} error={error} onRetry={refetch} />
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Documents</h1>
-          <p className="text-muted-foreground">
-            Manage your study materials and context documents
-          </p>
-        </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Document
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <form onSubmit={handleSubmit}>
-              <DialogHeader>
-                <DialogTitle>Add Document</DialogTitle>
-                <DialogDescription>
-                  Add study material to use as context for generating tests
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                {/* Mode Toggle */}
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={addMode === 'text' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setAddMode('text')}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Paste Text
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={addMode === 'file' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setAddMode('file')}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload File
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="e.g., AWS Solutions Architect Study Guide"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="type">Document Type</Label>
-                  <Select
-                    value={formData.doc_type}
-                    onValueChange={(value) => setFormData({ ...formData, doc_type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(docTypeConfig).map(([key, config]) => (
-                        <SelectItem key={key} value={key}>
-                          <div className="flex items-center gap-2">
-                            <config.icon className={`h-4 w-4 ${config.color}`} />
-                            {config.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {addMode === 'text' ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="content">Content</Label>
-                    <Textarea
-                      id="content"
-                      value={formData.content}
-                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                      placeholder="Paste your study material here..."
-                      className="min-h-[200px] font-mono text-sm"
-                      required
-                    />
+    <div className="mx-auto max-w-5xl space-y-8">
+      <PageHeader
+        title="Documents"
+        description="Manage your study materials and context documents."
+        actions={
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Document
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <form onSubmit={handleSubmit}>
+                <DialogHeader>
+                  <DialogTitle>Add Document</DialogTitle>
+                  <DialogDescription>
+                    Add study material to use as context for generating tests
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {/* Mode Toggle */}
+                  <div className="inline-flex rounded-lg bg-muted p-1" role="group" aria-label="Input mode">
+                    {([
+                      ['text', FileText, 'Paste Text'],
+                      ['file', Upload, 'Upload File'],
+                    ] as const).map(([mode, Icon, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={addMode === mode}
+                        onClick={() => setAddMode(mode)}
+                        className={cn(
+                          'inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          addMode === mode
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        <Icon className="h-4 w-4 mr-2" />
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                ) : (
+
                   <div className="space-y-2">
-                    <Label htmlFor="file">File</Label>
+                    <Label htmlFor="title">Title</Label>
                     <Input
-                      id="file"
-                      type="file"
-                      accept=".pdf,.docx,.doc,.txt,.md"
-                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="e.g., AWS Solutions Architect Study Guide"
                       required
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Supported formats: PDF, DOCX, TXT, Markdown
-                    </p>
                   </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={createMutation.isPending || isUploading}
-                >
-                  {(createMutation.isPending || isUploading) && (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  )}
-                  {addMode === 'file' ? 'Upload' : 'Add Document'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
 
-      {/* Documents List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : documents.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No documents yet</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Add your study materials to start generating practice tests
-            </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Document Type</Label>
+                    <Select
+                      value={formData.doc_type}
+                      onValueChange={(value) => setFormData({ ...formData, doc_type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(docTypeConfig).map(([key, config]) => (
+                          <SelectItem key={key} value={key}>
+                            <div className="flex items-center gap-2">
+                              <config.icon className="h-4 w-4 text-muted-foreground" />
+                              {config.label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {addMode === 'text' ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="content">Content</Label>
+                      <Textarea
+                        id="content"
+                        value={formData.content}
+                        onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                        placeholder="Paste your study material here..."
+                        className="min-h-[200px] font-mono text-sm"
+                        required
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="file">File</Label>
+                      <Input
+                        id="file"
+                        type="file"
+                        accept=".pdf,.docx,.doc,.txt,.md"
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Supported formats: PDF, DOCX, TXT, Markdown
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createMutation.isPending || isUploading}
+                  >
+                    {(createMutation.isPending || isUploading) && (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    )}
+                    {addMode === 'file' ? 'Upload' : 'Add Document'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      {documents.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="No documents yet"
+          description="Add your study materials to start generating practice tests."
+          action={
             <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Your First Document
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       ) : (
-        <div className="space-y-6">
-          {Object.entries(docTypeConfig).map(([type, config]) => {
-            const docs = groupedDocs[type] || []
-            if (docs.length === 0) return null
+        Object.entries(docTypeConfig).map(([type, config]) => {
+          const docs = groupedDocs[type] || []
+          if (docs.length === 0) return null
 
-            return (
-              <Card key={type}>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <config.icon className={`h-5 w-5 ${config.color}`} />
-                    <CardTitle className="text-lg">{config.label}</CardTitle>
-                  </div>
-                  <CardDescription>
-                    {docs.length} document{docs.length !== 1 ? 's' : ''}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {docs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-4 rounded-lg border bg-card/50"
+          return (
+            <section key={type} className="space-y-3">
+              <SectionHeader title={config.label} meta={docs.length} />
+              <List>
+                {docs.map((doc) => (
+                  <ListRow key={doc.id}>
+                    <ListIcon>
+                      <config.icon />
+                    </ListIcon>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-medium">{doc.title}</h3>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {doc.file_name && <>{doc.file_name} · </>}
+                        Added {formatDate(doc.created_at)}
+                      </p>
+                      {doc.content && (
+                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                          {doc.content.substring(0, 150)}...
+                        </p>
+                      )}
+                    </div>
+                    <RowActions label={`Actions for ${doc.title}`}>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setDeletingDocId(doc.id)}
                       >
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium truncate">{doc.title}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {doc.file_name && <span className="mr-2">{doc.file_name} •</span>}
-                            Added {formatDate(doc.created_at)}
-                          </p>
-                          {doc.content && (
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                              {doc.content.substring(0, 150)}...
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeletingDocId(doc.id)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </RowActions>
+                  </ListRow>
+                ))}
+              </List>
+            </section>
+          )
+        })
       )}
 
       {/* Delete Confirmation Dialog */}

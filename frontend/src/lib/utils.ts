@@ -24,12 +24,34 @@ export function formatScore(score: number): string {
   return 'Need more study'
 }
 
+// Three score bands mapped to the semantic tokens, so scores read the same
+// in light and dark mode: >= 80 success, >= 60 warning, below destructive.
+export type ScoreTone = 'success' | 'warning' | 'destructive'
+
+export function getScoreTone(score: number): ScoreTone {
+  if (score >= 80) return 'success'
+  if (score >= 60) return 'warning'
+  return 'destructive'
+}
+
+const scoreTextClass: Record<ScoreTone, string> = {
+  success: 'text-success',
+  warning: 'text-warning',
+  destructive: 'text-destructive',
+}
+
+const scoreBgClass: Record<ScoreTone, string> = {
+  success: 'bg-success',
+  warning: 'bg-warning',
+  destructive: 'bg-destructive',
+}
+
 export function getScoreColor(score: number): string {
-  if (score >= 90) return 'text-green-600 dark:text-green-400'
-  if (score >= 80) return 'text-emerald-600 dark:text-emerald-400'
-  if (score >= 70) return 'text-yellow-600 dark:text-yellow-400'
-  if (score >= 60) return 'text-orange-600 dark:text-orange-400'
-  return 'text-red-600 dark:text-red-400'
+  return scoreTextClass[getScoreTone(score)]
+}
+
+export function getScoreBgColor(score: number): string {
+  return scoreBgClass[getScoreTone(score)]
 }
 
 export function estimateTokens(text: string): number {
