@@ -128,6 +128,20 @@
   display: none;
 }
 
+/*
+ * Dialog backdrop: the generated overlay (components/ui/dialog.tsx, not
+ * edited by project rule) ships bg-black/80 + backdrop-blur. Calmer scrim
+ * without blur; the two-class selector only matches that overlay.
+ */
+.bg-black\/80.backdrop-blur-sm {
+  background-color: rgb(0 0 0 / 0.4);
+  backdrop-filter: none;
+}
+
+.dark .bg-black\/80.backdrop-blur-sm {
+  background-color: rgb(0 0 0 / 0.65);
+}
+
 /* Stagger animation delays */
 .stagger-1 { animation-delay: 0.05s; }
 .stagger-2 { animation-delay: 0.1s; }
