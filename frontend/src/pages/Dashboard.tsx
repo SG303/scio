@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { FileText, GraduationCap, Clock, CheckCircle2, ArrowRight, Plus, Sparkles, Layers, Flame } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { FileText, ClipboardList, ArrowRight, Plus, Layers, Flame } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { QueryState } from '@/components/QueryState'
+import { PageHeader, SectionHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
+import { List } from '@/components/List'
+import { TestRow } from '@/components/TestRow'
 import { documentsApi, testsApi, flashcardsApi } from '@/services/api'
-import { formatDate, getScoreColor } from '@/lib/utils'
+import { cn, getScoreColor } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 
 export default function Dashboard() {
@@ -75,273 +78,176 @@ export default function Dashboard() {
   const averageScore = completedTests.length > 0
     ? Math.round(completedTests.reduce((acc, t) => acc + (t.score || 0), 0) / completedTests.length)
     : 0
+  const inProgressCount = tests.filter(t => t.status === 'in_progress').length
+
+  const kpis = [
+    { label: 'Documents', value: documents.length, hint: 'Study materials' },
+    { label: 'Tests taken', value: completedTests.length, hint: 'Completed' },
+    {
+      label: 'Average score',
+      value: completedTests.length > 0 ? `${averageScore}%` : '—',
+      hint: 'Across all tests',
+      className: completedTests.length > 0 ? getScoreColor(averageScore) : undefined,
+    },
+    { label: 'In progress', value: inProgressCount, hint: 'Tests to continue' },
+  ]
 
   return (
-    <div className="space-y-8">
-      {/* Hero Section */}
-      <div className="rounded-xl border bg-card p-8">
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium text-primary">AI-Powered Learning</span>
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">
-            Welcome to Scio
-          </h1>
-          <p className="text-muted-foreground max-w-2xl mb-6">
-            Your AI Learning Hub. Upload study materials, generate practice tests, create flashcards, and organize your learning journey.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <Link to="/create">
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Test
-              </Link>
-            </Button>
-            <Button variant="outline" size="lg" asChild>
+    <div className="mx-auto max-w-5xl space-y-8">
+      <PageHeader
+        title="Dashboard"
+        description="Upload study materials, generate practice tests and keep your flashcards on track."
+        actions={
+          <>
+            <Button variant="outline" asChild>
               <Link to="/documents">
                 <FileText className="h-4 w-4 mr-2" />
                 Manage Documents
               </Link>
             </Button>
-          </div>
-        </div>
-      </div>
+            <Button asChild>
+              <Link to="/create">
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Test
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="opacity-0 animate-fade-in stagger-1">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Documents
-            </CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{documents.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Study materials uploaded
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="opacity-0 animate-fade-in stagger-2">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Tests Taken
-            </CardTitle>
-            <GraduationCap className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{completedTests.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Practice tests completed
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="opacity-0 animate-fade-in stagger-3">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Average Score
-            </CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-3xl font-bold ${getScoreColor(averageScore)}`}>
-              {averageScore}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Across all tests
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="opacity-0 animate-fade-in stagger-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              In Progress
-            </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {tests.filter(t => t.status === 'in_progress').length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Tests to continue
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* P4.2: Streak & Daily Goal Widget */}
+      {/* P4.2: streak, daily goal and due cards in one place */}
       {streak && (
-        <Card className="opacity-0 animate-fade-in stagger-5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Flame className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">
-                  {streak.current_streak > 0
-                    ? `${streak.current_streak}-Day Streak`
-                    : 'Start a new streak today'}
-                </CardTitle>
-                <CardDescription>
-                  {streak.longest_streak > 0 && <>Longest: {streak.longest_streak} days · </>}
-                  {streak.due_today > 0 ? `${streak.due_today} cards due today` : 'Nothing due today'}
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-muted-foreground">Daily goal</span>
-              <span className="font-medium">
-                {streak.reviews_today}/{streak.daily_goal} cards today
-              </span>
-            </div>
-            <Progress
-              value={Math.min(100, (streak.reviews_today / streak.daily_goal) * 100)}
-              className="h-2"
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Flashcards Due Today Widget */}
-      {flashcardStats && flashcardStats.total_cards > 0 && (
-        <Card className="opacity-0 animate-fade-in stagger-5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <Flame className="h-5 w-5 text-amber-500" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Flashcards Due Today</CardTitle>
-                <CardDescription>Cards ready for review</CardDescription>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-amber-500">{flashcardStats.due_today}</div>
-              <div className="text-xs text-muted-foreground">cards</div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 text-sm mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <span className="text-muted-foreground">{flashcardStats.new_available} New</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <span className="text-muted-foreground">{flashcardStats.due_reviews} Review</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-muted-foreground"></div>
-                <span className="text-muted-foreground">{flashcardStats.total_decks} Decks</span>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button className="flex-1" asChild>
-                <Link to="/flashcards">
-                  <Layers className="h-4 w-4 mr-2" />
-                  View Decks
-                </Link>
-              </Button>
-              {flashcardStats.due_today > 0 && (
-                <Button variant="outline" asChild>
+        <section className="space-y-3">
+          <SectionHeader
+            title="Today"
+            action={
+              flashcardStats && flashcardStats.due_today > 0 ? (
+                <Button variant="outline" size="sm" asChild>
                   <Link to="/flashcards">
-                    <Sparkles className="h-4 w-4 mr-2" />
                     Start Studying
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
                   </Link>
                 </Button>
-              )}
+              ) : (
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/flashcards">
+                    <Layers className="h-4 w-4 mr-2" />
+                    View Decks
+                  </Link>
+                </Button>
+              )
+            }
+          />
+          <div className="grid divide-y rounded-xl border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="p-5">
+              <p className="text-sm text-muted-foreground">Streak</p>
+              <div className="mt-1 flex items-center gap-2">
+                <Flame
+                  className={cn(
+                    'h-5 w-5',
+                    streak.current_streak > 0 ? 'text-warning' : 'text-muted-foreground'
+                  )}
+                />
+                <span className="text-2xl font-semibold tabular-nums tracking-tight">
+                  {streak.current_streak}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {streak.current_streak === 1 ? 'day' : 'days'}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {streak.current_streak > 0
+                  ? `Longest: ${streak.longest_streak} days`
+                  : 'Study today to start a new streak'}
+              </p>
             </div>
-          </CardContent>
-        </Card>
+
+            <div className="p-5">
+              <p className="text-sm text-muted-foreground">Cards due</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
+                {streak.due_today}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {flashcardStats && flashcardStats.total_cards > 0
+                  ? `${flashcardStats.new_available} new · ${flashcardStats.due_reviews} review · ${flashcardStats.total_decks} decks`
+                  : 'No flashcards yet'}
+              </p>
+            </div>
+
+            <div className="p-5">
+              <p className="text-sm text-muted-foreground">Daily goal</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
+                {streak.reviews_today}
+                <span className="text-sm font-normal text-muted-foreground">
+                  {' '}/ {streak.daily_goal} cards
+                </span>
+              </p>
+              <Progress
+                value={Math.min(100, (streak.reviews_today / streak.daily_goal) * 100)}
+                className="mt-3 h-1.5"
+                aria-label="Daily goal progress"
+              />
+            </div>
+          </div>
+        </section>
       )}
 
-      {/* Recent Tests */}
-      <Card className="opacity-0 animate-fade-in stagger-5">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Recent Tests</CardTitle>
-              <CardDescription>Your latest practice sessions</CardDescription>
+      <section className="space-y-3">
+        <SectionHeader title="Overview" />
+        <dl className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card md:grid-cols-4">
+          {kpis.map((kpi, i) => (
+            <div
+              key={kpi.label}
+              className={cn(
+                'p-5',
+                i % 2 === 1 && 'border-l',
+                i >= 2 && 'border-t md:border-t-0',
+                i === 2 && 'md:border-l'
+              )}
+            >
+              <dt className="text-sm text-muted-foreground">{kpi.label}</dt>
+              <dd className={cn('mt-1 text-2xl font-semibold tabular-nums tracking-tight', kpi.className)}>
+                {kpi.value}
+              </dd>
+              <p className="mt-1 text-xs text-muted-foreground">{kpi.hint}</p>
             </div>
-            {tests.length > 5 && (
+          ))}
+        </dl>
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader
+          title="Recent tests"
+          action={
+            tests.length > 5 && (
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/tests">
                   View all
                   <ArrowRight className="h-4 w-4 ml-1" />
                 </Link>
               </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {recentTests.length === 0 ? (
-            <div className="text-center py-12">
-              <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No tests yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Upload some documents and create your first practice test
-              </p>
+            )
+          }
+        />
+        {recentTests.length === 0 ? (
+          <EmptyState
+            icon={ClipboardList}
+            title="No tests yet"
+            description="Upload some documents and create your first practice test."
+            action={
               <Button asChild>
                 <Link to="/create">Create Test</Link>
               </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentTests.map((test) => (
-                <Link
-                  key={test.id}
-                  to={test.status === 'completed' ? `/results/${test.id}` : `/test/${test.id}`}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card/50 hover:bg-card transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                      test.status === 'completed' ? 'bg-success/10' : 
-                      test.status === 'in_progress' ? 'bg-primary/10' : 'bg-muted'
-                    }`}>
-                      {test.status === 'completed' ? (
-                        <CheckCircle2 className="h-5 w-5 text-success" />
-                      ) : test.status === 'in_progress' ? (
-                        <Clock className="h-5 w-5 text-primary" />
-                      ) : (
-                        <GraduationCap className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-medium">{test.config_title || `Test #${test.id}`}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {test.total_questions} questions • {formatDate(test.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    {test.status === 'completed' && test.score !== null && (
-                      <span className={`text-lg font-bold ${getScoreColor(test.score)}`}>
-                        {test.score}%
-                      </span>
-                    )}
-                    {test.status === 'in_progress' && (
-                      <span className="text-sm text-primary">Continue →</span>
-                    )}
-                    {test.status === 'generated' && (
-                      <span className="text-sm text-muted-foreground">Start →</span>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            }
+          />
+        ) : (
+          <List>
+            {recentTests.map((test) => (
+              <TestRow key={test.id} test={test} />
+            ))}
+          </List>
+        )}
+      </section>
     </div>
   )
 }
-
