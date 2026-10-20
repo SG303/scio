@@ -85,27 +85,25 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
           <div
             className={cn(
               'absolute inset-0 backface-hidden rounded-2xl',
-              'bg-gradient-to-br from-slate-800 to-slate-900',
-              'border border-slate-700/50 shadow-2xl shadow-black/20',
+              'bg-card border shadow-xl',
               'flex flex-col items-center justify-center p-6 sm:p-10 text-center'
             )}
           >
-            <p className="text-xl sm:text-2xl font-medium text-white leading-relaxed">
+            <p className="text-xl sm:text-2xl font-medium text-card-foreground leading-relaxed">
               {card.front}
             </p>
-            <p className="absolute bottom-6 text-sm text-slate-400">Tap or press Space to reveal answer</p>
+            <p className="absolute bottom-6 text-sm text-muted-foreground">Tap or press Space to reveal answer</p>
           </div>
 
           {/* Back Face */}
           <div
             className={cn(
               'absolute inset-0 backface-hidden rounded-2xl rotate-y-180',
-              'bg-gradient-to-br from-emerald-900/80 to-emerald-950',
-              'border border-emerald-700/30 shadow-2xl shadow-black/20',
+              'bg-muted border shadow-xl',
               'flex flex-col items-center justify-center p-6 sm:p-10 text-center overflow-auto'
             )}
           >
-            <p className="text-lg sm:text-xl text-emerald-50 leading-relaxed whitespace-pre-wrap">
+            <p className="text-lg sm:text-xl text-foreground leading-relaxed whitespace-pre-wrap">
               {card.back}
             </p>
           </div>
