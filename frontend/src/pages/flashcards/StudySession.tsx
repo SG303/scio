@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, CloudOff, History, Loader2 } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/EmptyState'
 import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
+import { ratingStyles } from '@/lib/studyColors'
 import {
   cacheStudyQueue,
   getCachedStudyQueue,
@@ -490,17 +492,20 @@ export default function StudySession() {
   // Resume prompt
   if (showResumePrompt) {
     return (
-      <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center p-4">
-        <h2 className="text-2xl font-semibold mb-4">Continue your study session?</h2>
-        <p className="text-muted-foreground mb-6">
+      <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center p-4 text-center">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border bg-card">
+          <History className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-semibold tracking-tight">Continue your study session?</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           You studied {cardsStudiedCount} card{cardsStudiedCount !== 1 ? 's' : ''} earlier today.
         </p>
-        <div className="flex gap-4">
-          <Button onClick={handleResume}>
-            Continue Session
-          </Button>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button variant="outline" onClick={handleStartFresh}>
             Start Fresh
+          </Button>
+          <Button onClick={handleResume}>
+            Continue Session
           </Button>
         </div>
       </div>
@@ -531,14 +536,18 @@ export default function StudySession() {
     || !effectiveQueue
   ) {
     return (
-      <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center">
-        <h2 className="text-xl font-semibold mb-2">Failed to load study session</h2>
-        <button
-          onClick={() => navigate(`/flashcards/${deckId}`)}
-          className="text-primary hover:underline"
-        >
-          Go back to deck
-        </button>
+      <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center p-4 text-center">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10">
+          <CloudOff className="h-5 w-5 text-destructive" />
+        </div>
+        <h2 className="text-xl font-semibold tracking-tight">Failed to load study session</h2>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Go back to the deck and try again.
+        </p>
+        <Button variant="outline" className="mt-6" onClick={() => navigate(`/flashcards/${deckId}`)}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to deck
+        </Button>
       </div>
     )
   }
@@ -546,18 +555,18 @@ export default function StudySession() {
   if (effectiveQueue.cards.length === 0) {
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center p-4">
-        <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-2">All caught up!</h2>
-          <p className="text-muted-foreground mb-6">
-            No cards are due for review right now. Check back later!
-          </p>
-          <button
-            onClick={() => navigate(`/flashcards/${deckId}`)}
-            className="text-primary hover:underline"
-          >
-            Go back to deck
-          </button>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="All caught up"
+          description="No cards are due for review right now. Check back later."
+          className="border-0"
+          action={
+            <Button variant="outline" onClick={() => navigate(`/flashcards/${deckId}`)}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to deck
+            </Button>
+          }
+        />
       </div>
     )
   }
@@ -568,29 +577,37 @@ export default function StudySession() {
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
       {/* Header - Compact */}
-      <header className="flex items-center justify-between px-4 py-3 border-b">
-        <button
+      <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-2 py-2 sm:px-4 border-b">
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleExit}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          className="justify-self-start text-muted-foreground hover:text-foreground"
+          aria-label="Exit session"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-4 w-4 sm:mr-2" />
           <span className="hidden sm:inline">Exit</span>
-        </button>
-        <h1 className="font-medium text-sm truncate max-w-[200px]">
+          <kbd className="ml-2 hidden rounded border bg-muted px-1 font-mono text-[11px] font-normal sm:inline">Esc</kbd>
+        </Button>
+        <h1 className="max-w-[40vw] truncate text-sm font-medium sm:max-w-xs">
           {deck?.title || 'Study Session'}
         </h1>
 
-        <div className="text-sm text-muted-foreground flex items-center gap-2">
+        <div className="justify-self-end flex items-center gap-3 pr-2 text-sm text-muted-foreground">
           {isOffline && (
             <span
-              className="text-orange-400 text-xs"
+              className="flex items-center gap-1.5 text-xs font-medium text-warning"
               title="Ratings are saved locally and synced once you're back online"
             >
-              Offline — saved locally
+              <CloudOff className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Offline — saved locally</span>
             </span>
           )}
-          <span className="font-medium text-foreground">{currentIndex + 1}</span>
-          <span> / {effectiveQueue.cards.length}</span>
+          <span className="tabular-nums">
+            <span className="font-medium text-foreground">{currentIndex + 1}</span>
+            {' / '}
+            {effectiveQueue.cards.length}
+          </span>
         </div>
       </header>
 
@@ -600,7 +617,10 @@ export default function StudySession() {
       {/* P2.2: exit could not be saved — visible error instead of a silent
           no-op; the user decides between retry and leaving anyway */}
       {exitFailed && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 m-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+        <div
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 m-4 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
           <span>Could not save your session. Your reviewed cards are already saved.</span>
           <div className="flex gap-2 shrink-0">
             <Button size="sm" onClick={() => { setExitFailed(false); handleExit() }}>
@@ -624,7 +644,10 @@ export default function StudySession() {
       <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden">
         {/* P2.2: inline retry banner for a failed review save */}
         {saveError && (
-          <div className="mb-4 w-full rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div
+            className="mb-4 w-full max-w-2xl rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+            role="alert"
+          >
             <span>Save failed — your rating was not saved.</span>
             <Button size="sm" onClick={handleRetrySave} className="shrink-0">
               Try again
@@ -649,19 +672,27 @@ export default function StudySession() {
       </div>
 
       {/* Mini stats footer */}
-      <div className="flex justify-center gap-6 py-3 border-t text-xs text-muted-foreground">
-        <span className={cn(sessionStats.again > 0 && 'text-red-400')}>
-          Again: {sessionStats.again}
-        </span>
-        <span className={cn(sessionStats.hard > 0 && 'text-orange-400')}>
-          Hard: {sessionStats.hard}
-        </span>
-        <span className={cn(sessionStats.good > 0 && 'text-blue-400')}>
-          Good: {sessionStats.good}
-        </span>
-        <span className={cn(sessionStats.easy > 0 && 'text-emerald-400')}>
-          Easy: {sessionStats.easy}
-        </span>
+      <div className="flex justify-center gap-5 sm:gap-6 py-3 border-t text-xs text-muted-foreground">
+        {ratingStyles.map((style) => (
+          <span key={style.key} className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                sessionStats[style.key] > 0 ? style.fill : 'bg-border'
+              )}
+              aria-hidden
+            />
+            {style.label}
+            <span
+              className={cn(
+                'tabular-nums font-medium',
+                sessionStats[style.key] > 0 ? 'text-foreground' : 'text-muted-foreground'
+              )}
+            >
+              {sessionStats[style.key]}
+            </span>
+          </span>
+        ))}
       </div>
     </div>
   )
