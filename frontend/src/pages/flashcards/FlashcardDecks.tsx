@@ -147,17 +147,23 @@ export default function FlashcardDecks() {
                     )}
                   </div>
 
-                  <Button
-                    size="sm"
-                    variant={studiable ? 'default' : 'outline'}
-                    className="relative z-10 shrink-0"
-                    disabled={!studiable}
-                    asChild
-                  >
-                    <Link to={`/flashcards/${deck.id}/study`}>
+                  {studiable ? (
+                    <Button size="sm" className="relative z-10 shrink-0" asChild>
+                      <Link to={`/flashcards/${deck.id}/study`}>
+                        Study
+                      </Link>
+                    </Button>
+                  ) : (
+                    // pointer-events stay on so the click does not fall through to the row link
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="relative z-10 shrink-0 disabled:pointer-events-auto"
+                      disabled
+                    >
                       Study
-                    </Link>
-                  </Button>
+                    </Button>
+                  )}
                   <RowActions label={`Actions for ${deck.title}`}>
                     <DropdownMenuItem asChild>
                       <Link to={`/flashcards/${deck.id}`}>
