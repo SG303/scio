@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, and_, update, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -9,7 +9,7 @@ import logging
 from app.database import get_db
 from app.models import Test, TestConfig, Question, Document, AIModel, Flashcard
 from app.schemas.test import (
-    TestConfigCreate, TestConfigResponse,
+    TestConfigCreate, TestConfigUpdate, TestConfigResponse,
     TestResponse, TestDetailResponse,
     QuestionResponse, AnswerSubmit, TestResultResponse,
     Choice, GenerateFromTemplateRequest, CreateAndGenerateRequest
@@ -18,6 +18,7 @@ from app.services.test_generator import generate_test_questions, verify_question
 from app.routers.settings import get_verification_model
 from app.services import generation_progress
 from app.services.generation_progress import GenerationCancelled
+from app.services.subject_materials import ensure_subject_exists, existing_subject_questions
 
 
 def _progress_reporter(token: Optional[str]):
@@ -29,6 +30,25 @@ def _progress_reporter(token: Optional[str]):
         generation_progress.update(token, status="running", **kw)
 
     return report
+
+
+def build_test_response(test: Test, config: Optional[TestConfig]) -> TestResponse:
+    """Single place that maps a Test (+ its config) to TestResponse, so
+    config-derived fields cannot be forgotten in one of the endpoints."""
+    return TestResponse(
+        id=test.id,
+        config_id=test.config_id,
+        config_title=config.title if config else None,
+        subject_id=config.subject_id if config else None,
+        from_template=bool(config.is_template) if config else False,
+        status=test.status,
+        started_at=test.started_at,
+        completed_at=test.completed_at,
+        score=test.score,
+        total_questions=test.total_questions,
+        correct_answers=test.correct_answers,
+        created_at=test.created_at,
+    )
 
 router = APIRouter(prefix="/api/tests", tags=["tests"])
 logger = logging.getLogger(__name__)
@@ -57,6 +77,10 @@ async def create_test_config(
         missing_ids = set(config.document_ids) - found_ids
         if missing_ids:
             raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
+
+    if config.is_template and config.subject_id is not None:
+        raise HTTPException(status_code=400, detail="Templates cannot belong to a subject")
+    await ensure_subject_exists(db, config.subject_id)
     
     db_config = TestConfig(**config.model_dump())
     db.add(db_config)
@@ -75,6 +99,52 @@ async def list_test_configs(db: AsyncSession = Depends(get_db)):
     )
     configs = result.scalars().all()
     return configs
+
+
+@router.patch("/configs/{config_id}", response_model=TestConfigResponse)
+async def update_test_config(
+    config_id: int,
+    update_data: TestConfigUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Assign or unassign a subject for a (non-template) test config."""
+    result = await db.execute(
+        select(TestConfig).where(
+            TestConfig.id == config_id,
+            TestConfig.is_template.is_(False)
+        )
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        raise HTTPException(status_code=404, detail="Test configuration not found")
+
+    fields = update_data.model_dump(exclude_unset=True)
+    if "subject_id" in fields:
+        await ensure_subject_exists(db, fields["subject_id"])
+        config.subject_id = fields["subject_id"]
+
+    await db.commit()
+    await db.refresh(config)
+    return config
+
+
+@router.delete("/configs/{config_id}")
+async def delete_test_config(config_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a (non-template) test config together with all of its tests."""
+    result = await db.execute(
+        select(TestConfig).where(
+            TestConfig.id == config_id,
+            TestConfig.is_template.is_(False)
+        )
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        raise HTTPException(status_code=404, detail="Test configuration not found")
+
+    await _clear_flashcard_source_for_config(config.id, db)
+    await db.delete(config)
+    await db.commit()
+    return {"message": "Test configuration deleted successfully"}
 
 
 @router.get("/configs/{config_id}/scores", response_model=List[int])
@@ -105,7 +175,23 @@ async def list_test_templates(db: AsyncSession = Depends(get_db)):
         .order_by(TestConfig.created_at.desc())
     )
     templates = result.scalars().all()
-    return templates
+
+    # Tests still attached to a template (legacy "Generate" from the template
+    # page) are deleted with it — the UI shows this count before deleting.
+    result = await db.execute(
+        select(Test.config_id, func.count(Test.id))
+        .join(TestConfig, Test.config_id == TestConfig.id)
+        .where(TestConfig.is_template.is_(True))
+        .group_by(Test.config_id)
+    )
+    test_count_by_config = dict(result.all())
+
+    response = []
+    for template in templates:
+        item = TestConfigResponse.model_validate(template)
+        item.test_count = test_count_by_config.get(template.id, 0)
+        response.append(item)
+    return response
 
 
 @router.get("/templates/{template_id}", response_model=TestConfigResponse)
@@ -228,6 +314,16 @@ async def create_and_generate_test(
                 status_code=404, detail=f"Document(s) not found: {missing_ids}"
             )
 
+    await ensure_subject_exists(db, request.subject_id)
+
+    # Inside a subject, avoid regenerating questions the subject already has
+    # (same dedupe as POST /subjects/{id}/generate-test — saves paid calls)
+    existing_questions = (
+        await existing_subject_questions(db, request.subject_id)
+        if request.subject_id is not None
+        else []
+    )
+
     num_questions = (
         request.generate_num_questions
         if request.generate_num_questions is not None
@@ -247,6 +343,7 @@ async def create_and_generate_test(
             model_id=ai_model.openrouter_id,
             topic=request.title,
             custom_prompt=request.custom_prompt,
+            existing_questions=existing_questions if existing_questions else None,
             on_progress=_progress_reporter(progress_token),
         )
         if progress_token:
@@ -273,8 +370,9 @@ async def create_and_generate_test(
         num_choices=request.num_choices,
         ai_model_id=request.ai_model_id,
         document_ids=request.document_ids,
-        is_template=request.is_template,
+        is_template=False,
         custom_prompt=request.custom_prompt,
+        subject_id=request.subject_id,
     )
     db.add(db_config)
     await db.flush()
@@ -301,18 +399,7 @@ async def create_and_generate_test(
     await db.commit()
     await db.refresh(test)
 
-    return TestResponse(
-        id=test.id,
-        config_id=test.config_id,
-        config_title=db_config.title,
-        status=test.status,
-        started_at=test.started_at,
-        completed_at=test.completed_at,
-        score=test.score,
-        total_questions=test.total_questions,
-        correct_answers=test.correct_answers,
-        created_at=test.created_at,
-    )
+    return build_test_response(test, db_config)
 
 
 @router.post("/generate/{config_id}", response_model=TestResponse)
@@ -332,6 +419,15 @@ async def generate_test(
     config = result.scalar_one_or_none()
     if not config:
         raise HTTPException(status_code=404, detail="Test configuration not found")
+
+    # Tests generated here hang on the config; for a template, deleting the
+    # template would cascade to them. Templates are used via the create
+    # wizard (create-and-generate) instead.
+    if config.is_template:
+        raise HTTPException(
+            status_code=400,
+            detail="Templates cannot generate tests directly. Use the template in the Create Test wizard.",
+        )
     
     # Validate AI model exists
     if not config.ai_model:
@@ -418,18 +514,7 @@ async def generate_test(
     await db.commit()
     await db.refresh(test)
     
-    return TestResponse(
-        id=test.id,
-        config_id=test.config_id,
-        config_title=config.title,
-        status=test.status,
-        started_at=test.started_at,
-        completed_at=test.completed_at,
-        score=test.score,
-        total_questions=test.total_questions,
-        correct_answers=test.correct_answers,
-        created_at=test.created_at
-    )
+    return build_test_response(test, config)
 
 
 @router.get("", response_model=List[TestResponse])
@@ -442,21 +527,7 @@ async def list_tests(db: AsyncSession = Depends(get_db)):
     )
     tests = result.scalars().all()
     
-    return [
-        TestResponse(
-            id=t.id,
-            config_id=t.config_id,
-            config_title=t.config.title if t.config else None,
-            status=t.status,
-            started_at=t.started_at,
-            completed_at=t.completed_at,
-            score=t.score,
-            total_questions=t.total_questions,
-            correct_answers=t.correct_answers,
-            created_at=t.created_at
-        )
-        for t in tests
-    ]
+    return [build_test_response(t, t.config) for t in tests]
 
 
 @router.get("/{test_id}", response_model=TestDetailResponse)
@@ -520,18 +591,7 @@ async def start_test(test_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(test)
     
-    return TestResponse(
-        id=test.id,
-        config_id=test.config_id,
-        config_title=test.config.title if test.config else None,
-        status=test.status,
-        started_at=test.started_at,
-        completed_at=test.completed_at,
-        score=test.score,
-        total_questions=test.total_questions,
-        correct_answers=test.correct_answers,
-        created_at=test.created_at
-    )
+    return build_test_response(test, test.config)
 
 
 @router.post("/{test_id}/answer")
