@@ -78,7 +78,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
         tabIndex={0}
         aria-pressed={isFlipped}
         aria-label={isFlipped ? 'Hide answer' : 'Show answer'}
-        className="w-full max-w-2xl aspect-[4/3] sm:aspect-[3/2] perspective-1000 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="w-full max-w-2xl aspect-[4/3] sm:aspect-[3/2] max-h-[calc(100dvh-12rem)] perspective-1000 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onClick={handleFlip}
         onKeyDown={handleKeyDown}
       >
