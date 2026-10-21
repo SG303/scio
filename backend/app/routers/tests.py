@@ -25,7 +25,7 @@ def _progress_reporter(token: Optional[str]):
     if not token:
         return None
 
-    def report(**kw):
+    async def report(**kw):
         generation_progress.update(token, status="running", **kw)
 
     return report
