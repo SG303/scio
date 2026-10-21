@@ -285,12 +285,19 @@ export default function DeckDetail() {
                 Add Card
               </Button>
               {/* P4.3: honest count — remaining new cards respect today's deck-wide quota */}
-              <Button asChild disabled={!deckIsStudiable(deck)}>
-                <Link to={`/flashcards/${deckId}/study`}>
+              {deckIsStudiable(deck) ? (
+                <Button asChild>
+                  <Link to={`/flashcards/${deckId}/study`}>
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Study ({deckStudyCount(deck)})
+                  </Link>
+                </Button>
+              ) : (
+                <Button disabled>
                   <BookOpen className="h-4 w-4 mr-2" />
                   Study ({deckStudyCount(deck)})
-                </Link>
-              </Button>
+                </Button>
+              )}
             </>
           }
         />
