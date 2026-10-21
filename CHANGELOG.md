@@ -88,6 +88,19 @@ und verwendet [Semantic Versioning](https://semver.org/lang/de/).
   Rating-Statistiken nicht mehr.
 - Die SM-2-Ease-Factor-Strafe wird nicht mehr doppelt angewendet, und
   Lernsitzungen erhalten bei jedem Review ein korrektes Tagesdatum.
+- Datums- und Zeitangaben sowie der Hinweis „see again in …" nach einer
+  Bewertung sind ausserhalb von UTC nicht mehr um die Zeitzonen-
+  Verschiebung des Browsers versetzt (API-Zeitstempel ohne Zone werden
+  als UTC gelesen).
+- Im Querformat auf dem Smartphone sind die Bewertungsknöpfe der
+  Lernsitzung wieder erreichbar (Kartenbereich scrollt, Kartenhöhe
+  begrenzt).
+- Vor dem Umdrehen einer Karte sind Antwort und Bewertungsknöpfe weder
+  per Tab noch für Screenreader erreichbar.
+- Der „Study"-Knopf eines Decks ohne fällige Karten ist tatsächlich
+  deaktiviert und öffnet keine Lernsitzung mehr.
+- Die installierte PWA startet mit hellem statt fast schwarzem
+  Splash-Screen.
 - Die Flashcard-Generierung mit mehr als 30 Karten schlägt nicht mehr
   mit einem Serverfehler ab, und Karten mit JSON-`null` als Front/Back
   verwerfen nicht mehr die gesamte Charge.
