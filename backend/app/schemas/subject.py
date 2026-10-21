@@ -49,6 +49,7 @@ class SubjectListResponse(BaseModel):
     average_score: Optional[float] = None
     total_cards: int = 0
     mastered_cards: int = 0
+    due_cards: int = 0  # cards due today across the subject's decks
     created_at: datetime
     updated_at: datetime
     

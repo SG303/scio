@@ -12,10 +12,12 @@ type TestRowProps = {
   scores?: number[]
   /** Trailing actions (e.g. a RowActions menu). */
   actions?: ReactNode
+  /** Shown before the metadata line, e.g. a SubjectBadge. */
+  badge?: ReactNode
 }
 
 /** One test in a List: opens results when completed, the test otherwise. */
-export function TestRow({ test, scores, actions }: TestRowProps) {
+export function TestRow({ test, scores, actions, badge }: TestRowProps) {
   const title = test.config_title || `Test #${test.id}`
   const href = test.status === 'completed' ? `/results/${test.id}` : `/test/${test.id}`
 
@@ -35,6 +37,7 @@ export function TestRow({ test, scores, actions }: TestRowProps) {
           {title}
         </Link>
         <p className="truncate text-xs text-muted-foreground">
+          {badge && <>{badge} </>}
           {test.total_questions} questions · {formatDate(test.created_at)}
         </p>
       </div>

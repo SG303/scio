@@ -35,6 +35,3 @@ export const CHOICES_COUNT_OPTIONS = [3, 4, 5, 6] as const
 export const DEFAULT_NUM_QUESTIONS = 10
 export const DEFAULT_NUM_CHOICES = 4
 
-// Template default question count options (subset for templates)
-export const TEMPLATE_QUESTION_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30] as const
-

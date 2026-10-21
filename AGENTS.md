@@ -94,7 +94,8 @@ backend/
     schemas/             # Pydantic-Request/Response-Modelle (ein Modul pro Domäne)
     services/            # Geschäftslogik: spaced_repetition (SM-2), test_generator,
                          # flashcard_generator, document_parser, openrouter (Model-Cache),
-                         # openrouter_client (gemeinsamer JSON-API-Call mit response_format)
+                         # openrouter_client (gemeinsamer JSON-API-Call mit response_format),
+                         # subject_materials (Subject-Prüfung + Dedupe-Quellen)
     migrations/          # idempotente Migrations-Skripte, laufen beim Startup (lifespan)
 frontend/
   src/
@@ -203,3 +204,5 @@ Zusätzlich gilt für jedes abgeschlossene Arbeitspaket: Der Besitzer prüft das
 - **Offline-Studium (P6.4) — localStorage-Queue:** Die Study-Queue eines Decks wird beim Laden in `localStorage` gespiegelt; offline abgegebene Bewertungen landen in einer Queue (`lib/offlineQueue.ts`) und werden bei `online`-Event **in Reihenfolge** repliziert (letzte Bewertung gewinnt, SM-2-Reihenfolge bleibt erhalten). HTTP-Fehler beim Replizieren (z. B. 404 für gelöschte Karte) werden verworfen, Netzwerkfehler bleiben queued. Nur wenn das Gerät **online**, der Server aber nicht erreichbar ist (z. B. Tailscale down), greift die localStorage-Queue; ist das Gerät selbst offline, pausiert TanStack Query die Rating-Anfrage und setzt sie bei wiederhergestellter Verbindung fort — die lokale Queue kommt dann nicht zum Zug (verhalten unverändert, durch manuellen Test bestätigt).
 - **PWA (P6.4):** Manifest + Service Worker über `vite-plugin-pwa` (autoUpdate). `/api/**` ist nie im Service-Worker-Cache (`navigateFallbackDenylist`) — die API braucht den Server, offline fliegen API-Calls kontrolliert in die react-query-Fehlerpfade.
 - **SQLite-Pragmas (Runde 4):** WAL + `busy_timeout=5000 ms` werden pro Verbindung via `connect`-Event in `database.py` gesetzt — die offene READ-Transaktion über den AI-Call blockiert keine Writes mehr. In-Memory-Test-Engines erstellen eigene Engines und hängen nicht am App-Engine-Event.
+- **Menü & Subjects (Runde 5):** Vier Hauptbereiche (Dashboard, Subjects, Flashcards, Tests), „New"-Menü und Zahnrad (`/settings`, Tabs AI models | Test templates). Documents sind global und liegen als Tab unter Subjects; ein Subject merkt sich nur Standard-Dokumente (Vorauswahl, nie exklusiv). Tests und Decks werden in den normalen Wizards optional einem Subject zugewiesen (`subject_id`), nachträglich über „Assign subject". Mit `subject_id` dedupliziert `create-and-generate` gegen die vorhandenen Fragen/Karten des Subjects (`subject_materials.py`).
+- **Templates sind reine Vorlagen:** Ein Template wird im Wizard nur *kopiert* (`?template=`), nie verknüpft. `create-and-generate` schreibt immer `is_template=False`, `POST /tests/generate/{id}` lehnt Template-IDs ab und Templates bekommen nie ein `subject_id`. Grund: der `TestConfig.tests`-Cascade würde beim Löschen eines Templates alle daran hängenden Tests mitlöschen. Alt-Tests, die noch an einem Template hängen, zeigt die Löschbestätigung über `test_count` an.

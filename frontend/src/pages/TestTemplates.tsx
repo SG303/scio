@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/Toaster'
 import {
@@ -12,8 +12,6 @@ import {
   ChevronDown,
   ChevronUp,
   Pencil,
-  ArrowRight,
-  ClipboardList,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
@@ -30,19 +28,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { documentsApi, modelsApi, testsApi } from '@/services/api'
-import { cn, calculateEstimatedCost, calculateTestGenerationTokens, getScoreColor } from '@/lib/utils'
-import { TEMPLATE_QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
+import { cn, getScoreColor } from '@/lib/utils'
+import { CHOICES_COUNT_OPTIONS, QUESTION_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 import { ScoreSparkline } from '@/components/ScoreSparkline'
 import { QueryState } from '@/components/QueryState'
 import { PageHeader, SectionHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { List, ListIcon, ListRow, RowActions } from '@/components/List'
-import { TestRow } from '@/components/TestRow'
 import { StepIndicator } from '@/components/StepIndicator'
-import { CostEstimate } from '@/components/CostEstimate'
+import { SectionTabs, settingsTabs } from '@/components/SectionTabs'
 import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
-import { useGenerationProgress } from '@/hooks/useGenerationProgress'
-import { GenerationStatus } from '@/components/GenerationStatus'
 import type { TestConfig } from '@/types'
 
 export default function TestTemplates() {
@@ -62,20 +57,11 @@ export default function TestTemplates() {
     custom_prompt: '',
   })
   
-  // State for generate dialog
-  const [showGenerateDialog, setShowGenerateDialog] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<TestConfig | null>(null)
-  const [generateNumQuestions, setGenerateNumQuestions] = useState(10)
-  const [isGenerating, setIsGenerating] = useState(false)
-  // P6.2: live progress instead of an endless spinner
-  const { progress, start: startProgress, cancel: cancelProgress, reset: resetProgress } = useGenerationProgress()
-  const generationAbortRef = useRef<AbortController | null>(null)
-  
   // State for expanded templates (to show custom prompt)
   const [expandedTemplates, setExpandedTemplates] = useState<Set<number>>(new Set())
   
-  // Track which template is being deleted
-  const [deletingTemplateId, setDeletingTemplateId] = useState<number | null>(null)
+  // Template awaiting delete confirmation
+  const [deletingTemplate, setDeletingTemplate] = useState<TestConfig | null>(null)
   
   // Queries
   const { data: templates = [], isLoading, error: templatesError, refetch: refetchTemplates } = useQuery({
@@ -93,11 +79,6 @@ export default function TestTemplates() {
     queryFn: () => modelsApi.list(true),
   })
   
-  const { data: tests = [] } = useQuery({
-    queryKey: queryKeys.tests,
-    queryFn: testsApi.list,
-  })
-
   // P5.1: score history per template for the sparkline cards.
   // With few templates a query per template is cheap and keeps the code simple.
   const { data: templatesWithTests = [] } = useQuery({
@@ -141,28 +122,12 @@ export default function TestTemplates() {
     mutationFn: testsApi.deleteTemplate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templates })
-      setDeletingTemplateId(null)
+      // legacy tests attached to the template are deleted with it
+      queryClient.invalidateQueries({ queryKey: queryKeys.tests })
+      setDeletingTemplate(null)
     },
     onError: () => {
-      setDeletingTemplateId(null)
       toast.error('Could not delete the template.')
-    },
-  })
-  
-  const generateMutation = useMutation({
-    mutationFn: ({ templateId, numQuestions, progressToken, signal }: {
-      templateId: number
-      numQuestions: number
-      progressToken?: string
-      signal?: AbortSignal
-    }) => testsApi.generateFromTemplate(templateId, numQuestions, progressToken, signal),
-    onSuccess: (test) => {
-      setShowGenerateDialog(false)
-      setIsGenerating(false)
-      navigate(`/test/${test.id}`)
-    },
-    onError: () => {
-      setIsGenerating(false)
     },
   })
   
@@ -227,51 +192,6 @@ export default function TestTemplates() {
     setShowCreateDialog(true)
   }
   
-  const handleOpenGenerateDialog = (template: TestConfig) => {
-    setSelectedTemplate(template)
-    setGenerateNumQuestions(template.num_questions)
-    setShowGenerateDialog(true)
-  }
-  
-  const handleGenerate = async () => {
-    if (!selectedTemplate) return
-    setIsGenerating(true)
-    // P6.2: token lets the backend report batch progress while we wait
-    const progressToken = crypto.randomUUID()
-    startProgress(progressToken)
-    const abortController = new AbortController()
-    generationAbortRef.current = abortController
-    try {
-      await generateMutation.mutateAsync({
-        templateId: selectedTemplate.id,
-        numQuestions: generateNumQuestions,
-        progressToken,
-        signal: abortController.signal,
-      })
-    } catch {
-      if (!abortController.signal.aborted) {
-        // generateMutation.onError already resets isGenerating
-        toast.error('Could not generate the test. Please try again.')
-      }
-    } finally {
-      generationAbortRef.current = null
-      setIsGenerating(false)
-      resetProgress()
-    }
-  }
-
-  // P6.2: stop waiting — the backend aborts at the next batch boundary
-  // and discards the partial result
-  const handleCancelGeneration = async () => {
-    const accepted = await cancelProgress()
-    if (accepted) {
-      generationAbortRef.current?.abort()
-      toast.success('Cancellation requested.')
-    } else {
-      toast.error('Generation has already finished and can no longer be cancelled.')
-    }
-  }
-  
   const toggleExpanded = (templateId: number) => {
     setExpandedTemplates((prev) => {
       const next = new Set(prev)
@@ -289,55 +209,7 @@ export default function TestTemplates() {
     return model?.name || 'Unknown Model'
   }
   
-  // Calculate estimated cost and tokens for the Generate Dialog
-  const generateEstimates = useMemo(() => {
-    if (!selectedTemplate || !showGenerateDialog) return null
-
-    const selectedModel = models.find(m => m.id === selectedTemplate.ai_model_id)
-    if (!selectedModel) return null
-
-    // Get document contents
-    const documentContents = selectedTemplate.document_ids.map(id => {
-      const doc = documents.find(d => d.id === id)
-      return doc?.content || ''
-    })
-
-    // Calculate tokens using improved estimation
-    const { inputTokens, outputTokens, numBatches } = calculateTestGenerationTokens(
-      documentContents,
-      generateNumQuestions,
-      !!selectedTemplate.custom_prompt
-    )
-
-    const contextLimit = selectedModel.context_length || 128000
-    // Context usage is per-batch (each batch must fit in context)
-    const perBatchInputTokens = inputTokens / numBatches
-    const perBatchOutputTokens = outputTokens / numBatches
-    const perBatchTotal = perBatchInputTokens + perBatchOutputTokens
-    const contextUsage = (perBatchTotal / contextLimit) * 100
-    
-    // Check if pricing is available
-    const hasPricing = selectedModel.pricing?.prompt && selectedModel.pricing?.completion
-    
-    const { estimatedCost } = calculateEstimatedCost(
-      inputTokens,
-      outputTokens,
-      selectedModel
-    )
-
-    return {
-      inputTokens,
-      outputTokens,
-      estimatedCost,
-      contextUsage,
-      contextLimit,
-      hasPricing,
-      numBatches
-    }
-  }, [selectedTemplate, generateNumQuestions, documents, models, showGenerateDialog])
-
   const canProceedStep2 = formData.ai_model_id > 0 && formData.title.trim() !== ''
-  const recentTests = tests.slice(0, 5)
   
   // P3.3 pattern: a failed query is an error, not an empty template list
   if (isLoading || templatesError) {
@@ -346,9 +218,11 @@ export default function TestTemplates() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
+      <SectionTabs tabs={settingsTabs} label="Settings section" />
+
       <PageHeader
         title="Test Templates"
-        description="Create reusable templates for daily practice tests."
+        description="Reusable settings for practice tests. Use a template when creating a test."
         actions={
           <Button onClick={() => setShowCreateDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -361,7 +235,7 @@ export default function TestTemplates() {
         <EmptyState
           icon={Copy}
           title="No templates yet"
-          description="Create a template to quickly generate practice tests for daily learning."
+          description="Create a template here, or tick “Save these settings as a template” when creating a test."
           action={
             <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -411,44 +285,35 @@ export default function TestTemplates() {
                       variant="outline"
                       size="sm"
                       className="shrink-0"
-                      onClick={() => handleOpenGenerateDialog(template)}
+                      onClick={() => navigate(`/create?template=${template.id}`)}
                     >
                       <Sparkles className="h-4 w-4 sm:mr-2" />
-                      <span className="sr-only sm:not-sr-only">Generate Test</span>
+                      <span className="sr-only sm:not-sr-only">Use Template</span>
                     </Button>
-                    {deletingTemplateId === template.id ? (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <RowActions label={`Actions for ${template.title}`}>
-                        <DropdownMenuItem onClick={() => handleOpenEditDialog(template)}>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Edit
+                    <RowActions label={`Actions for ${template.title}`}>
+                      <DropdownMenuItem onClick={() => handleOpenEditDialog(template)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      {template.custom_prompt && (
+                        <DropdownMenuItem onClick={() => toggleExpanded(template.id)}>
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 mr-2" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 mr-2" />
+                          )}
+                          {isExpanded ? 'Hide custom prompt' : 'Show custom prompt'}
                         </DropdownMenuItem>
-                        {template.custom_prompt && (
-                          <DropdownMenuItem onClick={() => toggleExpanded(template.id)}>
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4 mr-2" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 mr-2" />
-                            )}
-                            {isExpanded ? 'Hide custom prompt' : 'Show custom prompt'}
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => {
-                            setDeletingTemplateId(template.id)
-                            deleteMutation.mutate(template.id)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </RowActions>
-                    )}
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setDeletingTemplate(template)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </RowActions>
                   </ListRow>
                   {template.custom_prompt && isExpanded && (
                     <div className="px-4 pb-4 sm:pl-16">
@@ -464,36 +329,6 @@ export default function TestTemplates() {
           </List>
         </section>
       )}
-
-      <section className="space-y-3">
-        <SectionHeader
-          title="Recent tests"
-          action={
-            tests.length > 5 && (
-              <Button variant="ghost" size="sm" asChild>
-                {/* P5.1: points to the real test history instead of the dashboard */}
-                <Link to="/tests">
-                  View all
-                  <ArrowRight className="h-4 w-4 ml-1" />
-                </Link>
-              </Button>
-            )
-          }
-        />
-        {recentTests.length === 0 ? (
-          <EmptyState
-            icon={ClipboardList}
-            title="No tests yet"
-            description="Generate a test from your templates to get started."
-          />
-        ) : (
-          <List>
-            {recentTests.map((test) => (
-              <TestRow key={test.id} test={test} />
-            ))}
-          </List>
-        )}
-      </section>
 
       {/* Create Template Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={(open) => {
@@ -574,7 +409,7 @@ export default function TestTemplates() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {TEMPLATE_QUESTION_COUNT_OPTIONS.map((n) => (
+                      {QUESTION_COUNT_OPTIONS.map((n) => (
                         <SelectItem key={n} value={String(n)}>
                           {n} questions
                         </SelectItem>
@@ -694,70 +529,28 @@ export default function TestTemplates() {
         </DialogContent>
       </Dialog>
       
-      {/* Generate Test Dialog */}
-      <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
+      {/* Delete Template Confirmation */}
+      <Dialog open={deletingTemplate !== null} onOpenChange={() => setDeletingTemplate(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Generate Test from Template</DialogTitle>
+            <DialogTitle>Delete Template</DialogTitle>
             <DialogDescription>
-              {selectedTemplate?.title}
+              Are you sure you want to delete "{deletingTemplate?.title}"?
+              {deletingTemplate && deletingTemplate.test_count > 0
+                ? ` ${deletingTemplate.test_count} test${deletingTemplate.test_count !== 1 ? 's' : ''} generated directly from this template will also be deleted.`
+                : ' Tests created from it are not affected.'}
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="num_questions">Number of Questions</Label>
-              <Select
-                value={String(generateNumQuestions)}
-                onValueChange={(v) => setGenerateNumQuestions(parseInt(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {QUESTION_COUNT_OPTIONS.slice(0, -1).map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n} questions
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Template default: {selectedTemplate?.num_questions} questions
-              </p>
-            </div>
-
-            {/* Cost Estimation */}
-            {generateEstimates && (
-              <CostEstimate
-                estimates={generateEstimates}
-                overLimitMessage="Warning: Context limit exceeded. Generation may fail."
-              />
-            )}
-
-            {/* P6.2: real progress from the backend while waiting */}
-            {isGenerating && <GenerationStatus progress={progress} />}
-          </div>
-          
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={isGenerating ? handleCancelGeneration : () => setShowGenerateDialog(false)}
-            >
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingTemplate(null)}>
               Cancel
             </Button>
-            <Button onClick={handleGenerate} disabled={isGenerating}>
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate
-                </>
-              )}
+            <Button
+              variant="destructive"
+              onClick={() => deletingTemplate && deleteMutation.mutate(deletingTemplate.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

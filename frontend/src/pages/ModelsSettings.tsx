@@ -10,6 +10,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { QueryState } from '@/components/QueryState'
 import { PageHeader, SectionHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
+import { SectionTabs, settingsTabs } from '@/components/SectionTabs'
 import { List, ListRow, RowActions } from '@/components/List'
 import { modelsApi, settingsApi } from '@/services/api'
 import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
@@ -135,6 +136,8 @@ export default function ModelsSettings() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
+      <SectionTabs tabs={settingsTabs} label="Settings section" />
+
       <PageHeader
         title="AI Models"
         description="Configure which AI models are available for test generation."

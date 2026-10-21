@@ -2,14 +2,15 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/Toaster'
-import { Trash2, ClipboardList, Sparkles } from 'lucide-react'
+import { Trash2, ClipboardList, Sparkles, FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { QueryState } from '@/components/QueryState'
 import { PageHeader, SectionHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { List, RowActions } from '@/components/List'
 import { TestRow } from '@/components/TestRow'
+import { AssignSubjectDialog, SubjectBadge, type AssignTarget } from '@/components/SubjectAssignment'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { testsApi } from '@/services/api'
+import { subjectsApi, testsApi } from '@/services/api'
 import { queryKeys } from '@/lib/constants'
 
 /**
@@ -29,6 +30,7 @@ import { queryKeys } from '@/lib/constants'
 export default function TestHistory() {
   const queryClient = useQueryClient()
   const [deletingTestId, setDeletingTestId] = useState<number | null>(null)
+  const [assigning, setAssigning] = useState<AssignTarget | null>(null)
 
   const {
     data: tests = [],
@@ -39,6 +41,13 @@ export default function TestHistory() {
     queryKey: queryKeys.tests,
     queryFn: testsApi.list,
   })
+
+  // Only used for badge titles and the assign dialog — no blocking state
+  const { data: subjects = [] } = useQuery({
+    queryKey: queryKeys.subjects,
+    queryFn: subjectsApi.list,
+  })
+  const subjectTitle = (id: number | null) => subjects.find((s) => s.id === id)?.title
 
   const deleteMutation = useMutation({
     mutationFn: testsApi.delete,
@@ -116,8 +125,28 @@ export default function TestHistory() {
                 key={test.id}
                 test={test}
                 scores={scoresByConfig.get(test.config_id)}
+                badge={!test.from_template && <SubjectBadge title={subjectTitle(test.subject_id)} />}
                 actions={
                   <RowActions label={`Actions for ${test.config_title || `Test #${test.id}`}`}>
+                    {/* legacy tests hang on a template config, which never gets a subject */}
+                    {!test.from_template && (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setAssigning({
+                              kind: 'test-config',
+                              id: test.config_id,
+                              title: test.config_title || `Test #${test.id}`,
+                              subjectId: test.subject_id,
+                            })
+                          }
+                        >
+                          <FolderOpen className="h-4 w-4 mr-2" />
+                          Assign subject
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
                       onClick={() => setDeletingTestId(test.id)}
@@ -132,6 +161,8 @@ export default function TestHistory() {
           </List>
         </section>
       )}
+
+      <AssignSubjectDialog target={assigning} subjects={subjects} onClose={() => setAssigning(null)} />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deletingTestId !== null} onOpenChange={() => setDeletingTestId(null)}>

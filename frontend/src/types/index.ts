@@ -52,6 +52,9 @@ export interface TestConfig {
   document_ids: number[]
   is_template: boolean
   custom_prompt: string | null
+  subject_id: number | null
+  /** Templates: tests still attached to this config (deleted with it) */
+  test_count: number
   created_at: string
 }
 
@@ -59,6 +62,9 @@ export interface Test {
   id: number
   config_id: number
   config_title: string | null
+  subject_id: number | null
+  /** Legacy test generated directly from a template config */
+  from_template: boolean
   status: 'generated' | 'in_progress' | 'completed'
   started_at: string | null
   completed_at: string | null
@@ -91,20 +97,16 @@ export interface CreateTestConfig {
   custom_prompt?: string | null
 }
 
-// P5.2: config + generated test in one call
+// P5.2: config + generated test in one call (never a template)
 export interface CreateAndGenerateTestRequest {
   title: string
   num_questions: number
   num_choices: number
   ai_model_id: number
   document_ids: number[]
-  is_template?: boolean
   custom_prompt?: string | null
+  subject_id?: number | null
   generate_num_questions?: number
-}
-
-export interface GenerateFromTemplateRequest {
-  num_questions?: number
 }
 
 export interface CreateDocument {
@@ -123,6 +125,7 @@ export interface FlashcardDeck {
   document_ids: number[] | null
   custom_prompt: string | null
   new_cards_per_day: number
+  subject_id: number | null
   created_at: string
   updated_at: string
 }
@@ -221,6 +224,7 @@ export interface CreateFlashcardDeck {
   document_ids?: number[] | null
   custom_prompt?: string | null
   new_cards_per_day?: number
+  subject_id?: number | null
 }
 
 // P5.2: deck + generated cards in one call
@@ -324,6 +328,7 @@ export interface SubjectListItem extends Subject {
   average_score: number | null
   total_cards: number
   mastered_cards: number
+  due_cards: number
 }
 
 export interface TestConfigInSubject {
@@ -374,24 +379,6 @@ export interface UpdateSubject {
   description?: string | null
   ai_model_id?: number | null
   document_ids?: number[] | null
-}
-
-export interface GenerateTestInSubjectRequest {
-  title: string
-  num_questions?: number
-  num_choices?: number
-  ai_model_id?: number | null
-  document_ids?: number[] | null
-  custom_prompt?: string | null
-}
-
-export interface GenerateFlashcardsInSubjectRequest {
-  title: string
-  description?: string | null
-  num_cards?: number
-  ai_model_id?: number | null
-  document_ids?: number[] | null
-  custom_prompt?: string | null
 }
 
 export interface AddQuestionsRequest {

@@ -7,7 +7,6 @@ import type {
   TestResult,
   CreateTestConfig,
   CreateDocument,
-  GenerateFromTemplateRequest,
   FlashcardDeck,
   FlashcardDeckWithStats,
   Flashcard,
@@ -28,8 +27,6 @@ import type {
   SubjectDetail,
   CreateSubject,
   UpdateSubject,
-  GenerateTestInSubjectRequest,
-  GenerateFlashcardsInSubjectRequest,
   AddQuestionsRequest,
   AddCardsRequest,
   CreateAndGenerateTestRequest,
@@ -215,13 +212,18 @@ export const testsApi = {
   
   listConfigs: () =>
     fetchApi<TestConfig[]>('/tests/configs'),
-  
-  generate: (configId: number, options?: GenerateFromTemplateRequest, progressToken?: string) =>
-    fetchApi<Test>(`/tests/generate/${configId}${progressToken ? `?progress_token=${progressToken}` : ''}`, {
-      method: 'POST',
-      body: JSON.stringify(options || {}),
+
+  // Assign (number) or unassign (null) the subject of a test config
+  setConfigSubject: (configId: number, subjectId: number | null) =>
+    fetchApi<TestConfig>(`/tests/configs/${configId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ subject_id: subjectId }),
     }),
 
+  // Deletes a (non-template) config with all of its tests
+  deleteConfig: (configId: number) =>
+    fetchApi<void>(`/tests/configs/${configId}`, { method: 'DELETE' }),
+  
   // P5.1: score history for the template sparkline
   getConfigScores: (configId: number, limit = 20) =>
     fetchApi<number[]>(`/tests/configs/${configId}/scores?limit=${limit}`),
@@ -281,19 +283,6 @@ export const testsApi = {
   
   deleteTemplate: (id: number) =>
     fetchApi<void>(`/tests/templates/${id}`, { method: 'DELETE' }),
-  
-  // P6.2: optional progress token for live progress while generating
-  generateFromTemplate: (
-    templateId: number,
-    numQuestions?: number,
-    progressToken?: string,
-    signal?: AbortSignal,
-  ) =>
-    fetchApi<Test>(`/tests/generate/${templateId}${progressToken ? `?progress_token=${progressToken}` : ''}`, {
-      method: 'POST',
-      body: JSON.stringify({ num_questions: numQuestions }),
-      signal,
-    }),
 }
 
 // Flashcards
@@ -473,19 +462,6 @@ export const subjectsApi = {
   
   delete: (id: number, cascade = false) =>
     fetchApi<void>(`/subjects/${id}?cascade=${cascade}`, { method: 'DELETE' }),
-  
-  // Generate materials
-  generateTest: (subjectId: number, data: GenerateTestInSubjectRequest) =>
-    fetchApi<Test>(`/subjects/${subjectId}/generate-test`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  
-  generateFlashcards: (subjectId: number, data: GenerateFlashcardsInSubjectRequest) =>
-    fetchApi<GenerateFlashcardsResponse>(`/subjects/${subjectId}/generate-flashcards`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
   
   // Add to existing
   addQuestions: (subjectId: number, configId: number, data: AddQuestionsRequest) =>
