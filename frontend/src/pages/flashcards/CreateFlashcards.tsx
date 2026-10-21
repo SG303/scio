@@ -1,26 +1,52 @@
 import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Sparkles, Loader2, FileText } from 'lucide-react'
+import { Sparkles, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { documentsApi, modelsApi, flashcardsApi } from '@/services/api'
+import { documentsApi, modelsApi, flashcardsApi, subjectsApi } from '@/services/api'
 import { calculateEstimatedCost, calculateFlashcardGenerationTokens } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
-import { EmptyState } from '@/components/EmptyState'
+import { QueryState } from '@/components/QueryState'
 import { StepIndicator } from '@/components/StepIndicator'
 import { CostEstimate } from '@/components/CostEstimate'
 import { GenerationStatus } from '@/components/GenerationStatus'
-import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
+import { MaterialsStep, withSubjectDefaults } from '@/components/MaterialsStep'
+import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
 import { queryKeys } from '@/lib/constants'
+import type { SubjectListItem } from '@/types'
 
 const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
 
+/** Loads subjects first, so `?subject=` can pre-fill the wizard's initial state. */
 export default function CreateFlashcards() {
+  const [searchParams] = useSearchParams()
+
+  const { data: subjects = [], isLoading } = useQuery({
+    queryKey: queryKeys.subjects,
+    queryFn: subjectsApi.list,
+  })
+
+  if (isLoading) {
+    return <QueryState loading />
+  }
+
+  const initialSubject = subjects.find((s) => String(s.id) === searchParams.get('subject')) ?? null
+
+  return <CreateFlashcardsWizard subjects={subjects} initialSubject={initialSubject} />
+}
+
+function CreateFlashcardsWizard({
+  subjects,
+  initialSubject,
+}: {
+  subjects: SubjectListItem[]
+  initialSubject: SubjectListItem | null
+}) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
@@ -28,9 +54,10 @@ export default function CreateFlashcards() {
     title: '',
     description: '',
     num_cards: 20,
-    ai_model_id: 0,
-    document_ids: [] as number[],
+    ai_model_id: initialSubject?.ai_model_id ?? 0,
+    document_ids: withSubjectDefaults([], null, initialSubject),
     custom_prompt: '',
+    subject_id: initialSubject?.id ?? null,
   })
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,12 +72,14 @@ export default function CreateFlashcards() {
     queryFn: () => modelsApi.list(true),
   })
 
-  const handleDocumentToggle = (docId: number) => {
+  const selectedSubject = subjects.find((s) => s.id === formData.subject_id) ?? null
+
+  const handleSubjectChange = (subject: SubjectListItem | null) => {
     setFormData((prev) => ({
       ...prev,
-      document_ids: prev.document_ids.includes(docId)
-        ? prev.document_ids.filter((id) => id !== docId)
-        : [...prev.document_ids, docId],
+      subject_id: subject?.id ?? null,
+      // the subject's default model only fills an empty choice
+      ai_model_id: prev.ai_model_id || subject?.ai_model_id || 0,
     }))
   }
 
@@ -68,11 +97,17 @@ export default function CreateFlashcards() {
         document_ids: formData.document_ids.length > 0 ? formData.document_ids : undefined,
         custom_prompt: formData.custom_prompt || undefined,
         num_cards: formData.num_cards,
+        subject_id: formData.subject_id,
       })
 
       // Refresh the deck list so it shows the new deck when the user
       // navigates back (staleTime 5 min would otherwise serve stale data)
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardStats })
+      if (formData.subject_id !== null) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
+        queryClient.invalidateQueries({ queryKey: queryKeys.subject(formData.subject_id) })
+      }
 
       // Navigate to the deck
       navigate(`/flashcards/${result.deck.id}`)
@@ -82,7 +117,7 @@ export default function CreateFlashcards() {
     }
   }
 
-  const canProceedStep2 = formData.title && formData.ai_model_id > 0
+  const canProceedStep2 = formData.title && models.some((m) => m.id === formData.ai_model_id)
 
   // Calculate estimated cost
   const estimates = useMemo(() => {
@@ -127,60 +162,20 @@ export default function CreateFlashcards() {
         description="Generate AI-powered flashcards from your study materials."
       />
 
-      <StepIndicator steps={['Select Documents', 'Configure', 'Generate']} current={step} />
+      <StepIndicator steps={['Subject & Materials', 'Configure', 'Generate']} current={step} />
 
-      {/* Step 1: Select Documents */}
+      {/* Step 1: Subject and documents */}
       {step === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Select Study Materials (Optional)</CardTitle>
-            <CardDescription>
-              Choose documents to generate flashcards from, or skip to create cards on a topic
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {documents.length === 0 ? (
-              <EmptyState
-                icon={FileText}
-                title="No documents available"
-                description="You can still create flashcards by specifying a topic."
-                action={
-                  <>
-                    <Button variant="outline" onClick={() => navigate('/documents')}>
-                      Add Documents
-                    </Button>
-                    <Button onClick={() => setStep(2)}>
-                      Continue Without Documents
-                    </Button>
-                  </>
-                }
-              />
-            ) : (
-              <>
-                {formData.document_ids.length === 0 && (
-                  <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                    No documents selected. The AI will generate flashcards based on your deck title/topic.
-                  </p>
-                )}
-                <div className="grid gap-2">
-                  {documents.map((doc) => (
-                    <OptionCard
-                      key={doc.id}
-                      indicator="checkbox"
-                      selected={formData.document_ids.includes(doc.id)}
-                      onClick={() => handleDocumentToggle(doc.id)}
-                    >
-                      <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
-                    </OptionCard>
-                  ))}
-                </div>
-                <div className="flex justify-end border-t pt-4">
-                  <Button onClick={() => setStep(2)}>Continue</Button>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <MaterialsStep
+          subjects={subjects}
+          subjectId={formData.subject_id}
+          onSubjectChange={handleSubjectChange}
+          documents={documents}
+          documentIds={formData.document_ids}
+          onDocumentIdsChange={(ids) => setFormData((prev) => ({ ...prev, document_ids: ids }))}
+          generates="flashcards"
+          onContinue={() => setStep(2)}
+        />
       )}
 
       {/* Step 2: Configure */}
@@ -293,6 +288,7 @@ export default function CreateFlashcards() {
             <dl className="divide-y rounded-lg border text-sm">
               {([
                 ['Title', formData.title],
+                ['Subject', selectedSubject?.title ?? 'No subject'],
                 ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : 'None (topic-based)'],
                 ['Flashcards', formData.num_cards],
                 ['AI model', selectedModelName],
