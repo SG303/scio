@@ -50,6 +50,12 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
     }
   }
 
+  // Until the flip, the answer and the rating buttons are only visually
+  // hidden — inert keeps them out of the tab order and the accessibility
+  // tree. React 18 has no typed inert prop, so the attribute is spread in
+  // as an empty string (present = inert).
+  const hiddenUntilFlipped = isFlipped ? {} : { inert: '', 'aria-hidden': true }
+
   // P4.1: rate with keys 1–4 — only after the answer was revealed and
   // while no save is in flight
   useEffect(() => {
@@ -112,6 +118,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
               'bg-card border shadow-md',
               'flex flex-col p-5 sm:p-8'
             )}
+            {...hiddenUntilFlipped}
           >
             <p className="flex items-center gap-1.5 text-xs font-medium text-primary">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
@@ -132,6 +139,7 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
           'w-full max-w-lg mt-6 transition-all duration-300',
           isFlipped ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         )}
+        {...hiddenUntilFlipped}
       >
         <p className="text-center text-sm text-muted-foreground mb-3">
           How well did you know this? <span className="hidden sm:inline">(press 1–4)</span>
