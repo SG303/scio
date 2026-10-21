@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/EmptyState'
 import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
-import { cn } from '@/lib/utils'
+import { cn, parseApiDate } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import { ratingStyles } from '@/lib/studyColors'
 import {
@@ -31,7 +31,7 @@ type SaveError = {
 // schedule, shown after a rating instead of made-up numbers
 function formatNextReview(nextReviewAt: string | null, intervalDays: number): string {
   if (nextReviewAt) {
-    const diffMs = new Date(nextReviewAt).getTime() - Date.now()
+    const diffMs = parseApiDate(nextReviewAt).getTime() - Date.now()
     if (Number.isFinite(diffMs)) {
       const minutes = Math.round(diffMs / 60000)
       if (minutes < 1) return 'under a minute'
@@ -284,7 +284,7 @@ export default function StudySession() {
       // P2.3 (M3): base total_time_ms on the session's real start, not on
       // when this page happened to load
       if (pendingStartedAt) {
-        const startedAtMs = new Date(pendingStartedAt).getTime()
+        const startedAtMs = parseApiDate(pendingStartedAt).getTime()
         if (Number.isFinite(startedAtMs)) {
           sessionStartTime.current = startedAtMs
         }
