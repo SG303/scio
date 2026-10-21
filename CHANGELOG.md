@@ -4,6 +4,33 @@ Alle wesentlichen Änderungen an Scio werden in dieser Datei dokumentiert.
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/)
 und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
+## [v0.3.0] - 2026-10-21
+
+### Hinzugefügt
+
+- Subject-Auswahl direkt in den Wizards für Tests und Decks; die
+  Standard-Dokumente des Subjects sind vorausgewählt, alle anderen
+  bleiben wählbar. Dokumente lassen sich im Wizard hochladen und sind
+  danach automatisch ausgewählt.
+- „Assign subject" und Subject-Etikett in den Listen Tests und
+  Flashcards; „Your subjects" und „View statistics" auf dem Dashboard.
+- Vorlagen im Test-Wizard verwenden („Start from template") und
+  Einstellungen beim Generieren als Vorlage speichern.
+
+### Geändert
+
+- Menü auf vier Bereiche reduziert (Dashboard, Subjects, Flashcards,
+  Tests) mit „New"-Menü und Zahnrad für die Einstellungen; Documents
+  ist ein Tab unter Subjects, Vorlagen liegen unter Settings.
+- Mit gesetztem Subject werden keine Fragen/Karten erneut generiert,
+  die das Subject schon hat.
+- Vorlagen erzeugen keine Tests mehr direkt; Löschen einer Vorlage
+  fragt nach und nennt betroffene Alt-Tests.
+
+### Behoben
+
+- Löschen eines Tests auf der Subject-Seite schlug immer fehl.
+
 ## [v0.2.1] - 2026-10-21
 
 ### Behoben
