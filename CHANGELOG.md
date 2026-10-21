@@ -4,6 +4,16 @@ Alle wesentlichen Änderungen an Scio werden in dieser Datei dokumentiert.
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/)
 und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
+## [v0.2.1] - 2026-10-21
+
+### Behoben
+
+- Die Test-Generierung schlug in allen Strategien mit dem Fehler
+  „object NoneType can't be used in 'await' expression" fehl: Der
+  Fortschritts-Callback im Router war synchron, der Generator awaited
+  aber dessen Rückgabewert. Der Callback ist jetzt asynchron; eine
+  Regressionstest-Datei sichert das ab.
+
 ## [v0.2.0] - 2026-10-21
 
 ### Hinzugefügt
