@@ -132,7 +132,7 @@ Hinweis: Ohne Docker-`/app/data`-Verzeichnis landet die lokale DB relativ zum CW
 ```bash
 cd frontend
 npm install
-npm run dev        # Vite-Dev-Server (Port 5173, API-Proxy s. vite.config.ts)
+npm run dev        # Vite-Dev-Server (Port 3000, API-Proxy s. vite.config.ts)
 npm run build      # tsc + vite build → dist/
 ```
 

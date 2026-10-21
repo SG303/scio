@@ -4,7 +4,7 @@ Your AI Learning Hub. Upload study materials, generate practice tests, create fl
 
 ![Scio](https://img.shields.io/badge/AI-Powered-blue)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
-![Python](https://img.shields.io/badge/Python-3.11-green)
+![Python](https://img.shields.io/badge/Python-3.12-green)
 ![React](https://img.shields.io/badge/React-18-blue)
 
 ## Features
@@ -123,7 +123,7 @@ The app creates automatic daily backups of the database (about a minute after
 startup, then every 24 hours) into `data/backups/`. Each backup is a consistent
 snapshot named `scio-backup-YYYYMMDD-HHMMSS.db`, verified with an integrity
 check, and the 14 most recent backups are kept. You can also trigger a backup
-any time via the Settings page or `POST /api/settings/backups`
+any time via `POST /api/settings/backups`
 (`GET /api/settings/backups` lists them).
 
 To backup your data manually:
@@ -153,7 +153,7 @@ pytest
 # Frontend (in another terminal)
 cd frontend
 npm install
-npm run dev        # Vite dev server on port 5173, API proxied to port 8000
+npm run dev        # Vite dev server on port 3000, API proxied to port 8000
 npm test           # Vitest unit tests
 npm run typecheck
 npm run lint
