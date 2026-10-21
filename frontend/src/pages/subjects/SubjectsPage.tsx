@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
 import { PageHeader, SectionHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
+import { SectionTabs, subjectTabs } from '@/components/SectionTabs'
 import { List, ListRow, ListIcon, RowActions, rowLinkClass } from '@/components/List'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import {
@@ -66,6 +67,8 @@ export default function SubjectsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
+      <SectionTabs tabs={subjectTabs} label="Subjects section" />
+
       <PageHeader
         title="Subjects"
         description="Organize your learning materials by subject."

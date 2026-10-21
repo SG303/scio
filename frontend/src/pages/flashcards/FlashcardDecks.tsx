@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Plus, Layers, Trash2, BookOpen } from 'lucide-react'
+import { Plus, Layers, Trash2, BookOpen, FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
 import { PageHeader, SectionHeader } from '@/components/PageHeader'
@@ -18,7 +18,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/components/Toaster'
-import { flashcardsApi } from '@/services/api'
+import { flashcardsApi, subjectsApi } from '@/services/api'
+import { AssignSubjectDialog, SubjectBadge, type AssignTarget } from '@/components/SubjectAssignment'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 import { queryKeys } from '@/lib/constants'
@@ -26,11 +27,19 @@ import { queryKeys } from '@/lib/constants'
 export default function FlashcardDecks() {
   const queryClient = useQueryClient()
   const [deletingDeckId, setDeletingDeckId] = useState<number | null>(null)
+  const [assigning, setAssigning] = useState<AssignTarget | null>(null)
 
   const { data: decks = [], isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.flashcardDecks,
     queryFn: flashcardsApi.listDecks,
   })
+
+  // Only used for badge titles and the assign dialog — no blocking state
+  const { data: subjects = [] } = useQuery({
+    queryKey: queryKeys.subjects,
+    queryFn: subjectsApi.list,
+  })
+  const subjectTitle = (id: number | null) => subjects.find((s) => s.id === id)?.title
 
   const deleteMutation = useMutation({
     mutationFn: flashcardsApi.deleteDeck,
@@ -115,6 +124,7 @@ export default function FlashcardDecks() {
                       {deck.title}
                     </Link>
                     <p className="truncate text-xs text-muted-foreground">
+                      <SubjectBadge title={subjectTitle(deck.subject_id)} />{' '}
                       {/* P4.3: honest count — what a fresh queue would deliver now */}
                       {studiable && (
                         <span className="font-medium text-primary sm:hidden">
@@ -171,6 +181,19 @@ export default function FlashcardDecks() {
                         Browse Cards
                       </Link>
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        setAssigning({
+                          kind: 'deck',
+                          id: deck.id,
+                          title: deck.title,
+                          subjectId: deck.subject_id,
+                        })
+                      }
+                    >
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Assign subject
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
@@ -186,6 +209,8 @@ export default function FlashcardDecks() {
           </List>
         </section>
       )}
+
+      <AssignSubjectDialog target={assigning} subjects={subjects} onClose={() => setAssigning(null)} />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deletingDeckId !== null} onOpenChange={() => setDeletingDeckId(null)}>
