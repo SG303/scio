@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { FileText, ClipboardList, ArrowRight, Plus, Layers, Flame } from 'lucide-react'
+import { FileText, ClipboardList, ArrowRight, Plus, Layers, Flame, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { QueryState } from '@/components/QueryState'
@@ -8,7 +8,7 @@ import { PageHeader, SectionHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { List } from '@/components/List'
 import { TestRow } from '@/components/TestRow'
-import { documentsApi, testsApi, flashcardsApi } from '@/services/api'
+import { documentsApi, testsApi, flashcardsApi, subjectsApi } from '@/services/api'
 import { cn, getScoreColor } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 
@@ -54,6 +54,13 @@ export default function Dashboard() {
     queryFn: flashcardsApi.getStreak,
   })
 
+  // Secondary block — a failure only hides "Your subjects", it does not
+  // replace the whole dashboard with an error
+  const { data: subjects = [] } = useQuery({
+    queryKey: queryKeys.subjects,
+    queryFn: subjectsApi.list,
+  })
+
   // P3.3: a down backend must not look like an empty account — show an
   // error with retry instead of all-zero stats
   const anyLoading = documentsLoading || testsLoading || statsLoading || streakLoading
@@ -74,6 +81,11 @@ export default function Dashboard() {
   }
 
   const recentTests = tests.slice(0, 5)
+  // Active = has at least one test or deck; most due cards first
+  const activeSubjects = subjects
+    .filter((s) => s.test_count + s.deck_count > 0)
+    .sort((a, b) => b.due_cards - a.due_cards || a.title.localeCompare(b.title))
+  const shownSubjects = activeSubjects.slice(0, 4)
   const completedTests = tests.filter(t => t.status === 'completed')
   const averageScore = completedTests.length > 0
     ? Math.round(completedTests.reduce((acc, t) => acc + (t.score || 0), 0) / completedTests.length)
@@ -192,8 +204,69 @@ export default function Dashboard() {
         </section>
       )}
 
+      {shownSubjects.length > 0 && (
+        <section className="space-y-3">
+          <SectionHeader
+            title="Your subjects"
+            action={
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/subjects">
+                  All subjects
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Link>
+              </Button>
+            }
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {shownSubjects.map((subject) => (
+              <Link
+                key={subject.id}
+                to={`/subjects/${subject.id}`}
+                className={cn(
+                  'rounded-xl border bg-card p-4 transition-colors hover:bg-accent/60',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="truncate text-sm font-medium">{subject.title}</h3>
+                  {subject.due_cards > 0 ? (
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium tabular-nums text-primary">
+                      {subject.due_cards} due
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-xs text-muted-foreground">Nothing due</span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {subject.test_count} test{subject.test_count !== 1 ? 's' : ''} ·{' '}
+                  {subject.deck_count} deck{subject.deck_count !== 1 ? 's' : ''}
+                  {subject.total_tests_taken > 0 && subject.average_score !== null && (
+                    <>
+                      {' · '}
+                      <span className={cn('font-medium', getScoreColor(subject.average_score))}>
+                        Avg. {Math.round(subject.average_score)}%
+                      </span>
+                    </>
+                  )}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="space-y-3">
-        <SectionHeader title="Overview" />
+        <SectionHeader
+          title="Overview"
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/stats">
+                <BarChart3 className="h-4 w-4 mr-1.5" />
+                View statistics
+              </Link>
+            </Button>
+          }
+        />
         <dl className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card md:grid-cols-4">
           {kpis.map((kpi, i) => (
             <div
