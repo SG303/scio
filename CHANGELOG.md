@@ -4,7 +4,7 @@ Alle wesentlichen Änderungen an Scio werden in dieser Datei dokumentiert.
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/)
 und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
-## [Unreleased]
+## [v0.2.0] - 2026-10-21
 
 ### Hinzugefügt
 
