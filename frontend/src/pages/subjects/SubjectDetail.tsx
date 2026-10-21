@@ -280,18 +280,25 @@ export default function SubjectDetail() {
                     </p>
                   </div>
                   {/* P4.3: disabled when today's quota is actually empty */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="relative z-10 shrink-0"
-                    asChild
-                    disabled={!deckIsStudiable(deck)}
-                  >
-                    <Link to={`/flashcards/${deck.id}/study`}>
+                  {deckIsStudiable(deck) ? (
+                    <Button variant="outline" size="sm" className="relative z-10 shrink-0" asChild>
+                      <Link to={`/flashcards/${deck.id}/study`}>
+                        <BookOpen className="h-4 w-4 sm:mr-1.5" />
+                        <span className="sr-only sm:not-sr-only">Study</span>
+                      </Link>
+                    </Button>
+                  ) : (
+                    // pointer-events stay on so the click does not fall through to the row link
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="relative z-10 shrink-0 disabled:pointer-events-auto"
+                      disabled
+                    >
                       <BookOpen className="h-4 w-4 sm:mr-1.5" />
                       <span className="sr-only sm:not-sr-only">Study</span>
-                    </Link>
-                  </Button>
+                    </Button>
+                  )}
                   <RowActions label={`Actions for ${deck.title}`}>
                     <DropdownMenuItem
                       onClick={() => setAddToExisting({ type: 'deck', item: deck })}
