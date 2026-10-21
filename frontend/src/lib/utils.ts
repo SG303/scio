@@ -6,8 +6,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// The API emits UTC datetimes without a timezone designator
+// ("2026-10-20T20:12:21.484349"), which new Date() would read as local time.
+// Datetimes without "Z" or an offset are therefore parsed as UTC.
+export function parseApiDate(date: string | Date): Date {
+  if (date instanceof Date) return new Date(date.getTime())
+  const hasTime = /T\d{2}:\d{2}/.test(date)
+  const hasZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(date)
+  return new Date(hasTime && !hasZone ? `${date}Z` : date)
+}
+
 export function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString('en-US', {
+  return parseApiDate(date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

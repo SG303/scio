@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/EmptyState'
 import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
-import { cn } from '@/lib/utils'
+import { cn, parseApiDate } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import { ratingStyles } from '@/lib/studyColors'
 import {
@@ -31,7 +31,7 @@ type SaveError = {
 // schedule, shown after a rating instead of made-up numbers
 function formatNextReview(nextReviewAt: string | null, intervalDays: number): string {
   if (nextReviewAt) {
-    const diffMs = new Date(nextReviewAt).getTime() - Date.now()
+    const diffMs = parseApiDate(nextReviewAt).getTime() - Date.now()
     if (Number.isFinite(diffMs)) {
       const minutes = Math.round(diffMs / 60000)
       if (minutes < 1) return 'under a minute'
@@ -96,6 +96,8 @@ export default function StudySession() {
   const exitRequestedRef = useRef(false)
   // P2.2: pending timeout must not fire after unmount
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Scrollable card area (short viewports): each new card starts at the top
+  const cardAreaRef = useRef<HTMLDivElement>(null)
 
   // Clean up pending timeouts on unmount
   useEffect(() => {
@@ -113,6 +115,10 @@ export default function StudySession() {
     sessionStartTime.current = Date.now()
     cardStartTime.current = Date.now()
   }, [])
+
+  useEffect(() => {
+    cardAreaRef.current?.scrollTo({ top: 0 })
+  }, [currentIndex])
 
   // Check for incomplete session.
   // P2.1: isLoading is exposed — a new session must never start while this
@@ -284,7 +290,7 @@ export default function StudySession() {
       // P2.3 (M3): base total_time_ms on the session's real start, not on
       // when this page happened to load
       if (pendingStartedAt) {
-        const startedAtMs = new Date(pendingStartedAt).getTime()
+        const startedAtMs = parseApiDate(pendingStartedAt).getTime()
         if (Number.isFinite(startedAtMs)) {
           sessionStartTime.current = startedAtMs
         }
@@ -640,34 +646,40 @@ export default function StudySession() {
         </p>
       )}
 
-      {/* Card Area - Takes remaining space */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 overflow-hidden">
-        {/* P2.2: inline retry banner for a failed review save */}
-        {saveError && (
-          <div
-            className="mb-4 w-full max-w-2xl rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-            role="alert"
-          >
-            <span>Save failed — your rating was not saved.</span>
-            <Button size="sm" onClick={handleRetrySave} className="shrink-0">
-              Try again
-            </Button>
-          </div>
-        )}
-        <div
-          className={cn(
-            'w-full transition-all duration-500 ease-in-out',
-            isTransitioning
-              ? 'opacity-0 translate-x-[-100px] scale-95'
-              : 'opacity-100 translate-x-0 scale-100'
+      {/* Card Area - Takes remaining space; scrolls on short viewports
+          (phone landscape) so the rating row stays reachable */}
+      <div
+        ref={cardAreaRef}
+        className="flex-1 min-h-0 flex flex-col items-center p-4 sm:p-8 overflow-x-hidden overflow-y-auto"
+      >
+        <div className="my-auto flex w-full flex-col items-center">
+          {/* P2.2: inline retry banner for a failed review save */}
+          {saveError && (
+            <div
+              className="mb-4 w-full max-w-2xl rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+              role="alert"
+            >
+              <span>Save failed — your rating was not saved.</span>
+              <Button size="sm" onClick={handleRetrySave} className="shrink-0">
+                Try again
+              </Button>
+            </div>
           )}
-        >
-          <FlashcardStudy
-            key={card.id}
-            card={card}
-            onRate={handleRate}
-            isSubmitting={reviewMutation.isPending || isTransitioning}
-          />
+          <div
+            className={cn(
+              'w-full transition-all duration-500 ease-in-out',
+              isTransitioning
+                ? 'opacity-0 translate-x-[-100px] scale-95'
+                : 'opacity-100 translate-x-0 scale-100'
+            )}
+          >
+            <FlashcardStudy
+              key={card.id}
+              card={card}
+              onRate={handleRate}
+              isSubmitting={reviewMutation.isPending || isTransitioning}
+            />
+          </div>
         </div>
       </div>
 
