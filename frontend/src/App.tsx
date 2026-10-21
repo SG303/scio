@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -56,12 +56,14 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/tests" element={<TestHistory />} />
-            <Route path="/templates" element={<TestTemplates />} />
+            {/* Templates are managed in Settings; old links keep working */}
+            <Route path="/templates" element={<Navigate to="/settings/templates" replace />} />
             <Route path="/stats" element={<Stats />} />
             <Route path="/create" element={<CreateTest />} />
             <Route path="/test/:testId" element={<TakeTest />} />
             <Route path="/results/:testId" element={<Results />} />
             <Route path="/settings" element={<ModelsSettings />} />
+            <Route path="/settings/templates" element={<TestTemplates />} />
             {/* Subject Routes */}
             <Route path="/subjects" element={<SubjectsPage />} />
             <Route path="/subjects/:subjectId" element={<SubjectDetail />} />

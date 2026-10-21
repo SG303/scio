@@ -24,10 +24,12 @@ from app.schemas.subject import (
     AddQuestionsRequest, AddCardsRequest
 )
 from app.schemas.test import TestResponse
+from app.routers.tests import build_test_response
 from app.schemas.flashcard import FlashcardDeckResponse, GenerateFlashcardsResponse, FlashcardResponse
 from app.services.test_generator import generate_test_questions
 from app.services.flashcard_generator import generate_flashcards
 from app.routers.flashcards import get_deck_stats_map
+from app.services.subject_materials import existing_subject_fronts, existing_subject_questions
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
 logger = logging.getLogger(__name__)
@@ -98,10 +100,12 @@ async def list_subjects(db: AsyncSession = Depends(get_db)):
         decks = decks_by_subject.get(subject.id, [])
         total_cards = 0
         mastered_cards = 0
+        due_cards = 0
         for deck in decks:
             stats = stats_map.get(deck.id, {})
             total_cards += stats.get('total_cards', 0)
             mastered_cards += stats.get('mastered_cards', 0)
+            due_cards += stats.get('due_today', 0)
 
         response.append(SubjectListResponse(
             id=subject.id,
@@ -117,6 +121,7 @@ async def list_subjects(db: AsyncSession = Depends(get_db)):
             average_score=avg_score_by_subject.get(subject.id),
             total_cards=total_cards,
             mastered_cards=mastered_cards,
+            due_cards=due_cards,
             created_at=subject.created_at,
             updated_at=subject.updated_at
         ))
@@ -410,13 +415,7 @@ async def generate_test_in_subject(
     
     # Get existing questions from this subject to avoid duplicates
     # (read before the AI call — does not depend on the config created below)
-    existing_result = await db.execute(
-        select(Question.question_text)
-        .join(Test, Question.test_id == Test.id)
-        .join(TestConfig, Test.config_id == TestConfig.id)
-        .where(TestConfig.subject_id == subject_id)
-    )
-    existing_questions = [row[0] for row in existing_result.fetchall()]
+    existing_questions = await existing_subject_questions(db, subject_id)
 
     # Generate questions — the AI call runs before anything is written, so a
     # failed generation leaves no empty config behind (P5.2, Landmine 4)
@@ -475,18 +474,7 @@ async def generate_test_in_subject(
     await db.commit()
     await db.refresh(test)
     
-    return TestResponse(
-        id=test.id,
-        config_id=test.config_id,
-        config_title=test_config.title,
-        status=test.status,
-        started_at=test.started_at,
-        completed_at=test.completed_at,
-        score=test.score,
-        total_questions=test.total_questions,
-        correct_answers=test.correct_answers,
-        created_at=test.created_at
-    )
+    return build_test_response(test, test_config)
 
 
 @router.post("/{subject_id}/generate-flashcards", response_model=GenerateFlashcardsResponse)
@@ -535,12 +523,7 @@ async def generate_flashcards_in_subject(
     
     # Get existing card fronts from this subject to avoid duplicates
     # (read before the AI call — does not depend on the deck created below)
-    existing_result = await db.execute(
-        select(Flashcard.front)
-        .join(FlashcardDeck, Flashcard.deck_id == FlashcardDeck.id)
-        .where(FlashcardDeck.subject_id == subject_id)
-    )
-    existing_fronts = [row[0] for row in existing_result.fetchall()]
+    existing_fronts = await existing_subject_fronts(db, subject_id)
 
     # Generate flashcards — the AI call runs before anything is written, so a
     # failed generation leaves no empty deck behind (P5.2, Landmine 4)
@@ -697,18 +680,7 @@ async def add_questions_to_test_config(
     await db.commit()
     await db.refresh(test)
     
-    return TestResponse(
-        id=test.id,
-        config_id=test.config_id,
-        config_title=test_config.title,
-        status=test.status,
-        started_at=test.started_at,
-        completed_at=test.completed_at,
-        score=test.score,
-        total_questions=test.total_questions,
-        correct_answers=test.correct_answers,
-        created_at=test.created_at
-    )
+    return build_test_response(test, test_config)
 
 
 @router.post("/{subject_id}/decks/{deck_id}/add-cards", response_model=GenerateFlashcardsResponse)

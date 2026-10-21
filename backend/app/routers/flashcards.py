@@ -71,6 +71,7 @@ from app.services.spaced_repetition import (
     get_incomplete_session,
     get_streak_stats,
 )
+from app.services.subject_materials import ensure_subject_exists, existing_subject_fronts
 from app.services.flashcard_generator import (
     generate_flashcards,
     create_flashcards_from_questions,
@@ -215,6 +216,7 @@ async def list_decks(db: AsyncSession = Depends(get_db)):
                 document_ids=deck.document_ids,
                 custom_prompt=deck.custom_prompt,
                 new_cards_per_day=deck.new_cards_per_day,
+                subject_id=deck.subject_id,
                 created_at=deck.created_at,
                 updated_at=deck.updated_at,
                 total_cards=stats.get("total_cards", 0),
@@ -258,6 +260,8 @@ async def create_deck(
                 status_code=404, detail=f"Document(s) not found: {missing_ids}"
             )
 
+    await ensure_subject_exists(db, deck_data.subject_id)
+
     deck = FlashcardDeck(**deck_data.model_dump())
     db.add(deck)
     await db.commit()
@@ -285,6 +289,7 @@ async def get_deck(deck_id: int, db: AsyncSession = Depends(get_db)):
         document_ids=deck.document_ids,
         custom_prompt=deck.custom_prompt,
         new_cards_per_day=deck.new_cards_per_day,
+        subject_id=deck.subject_id,
         created_at=deck.created_at,
         updated_at=deck.updated_at,
         due_reviews=stats.get("due_reviews", 0),
@@ -309,6 +314,8 @@ async def update_deck(
         raise HTTPException(status_code=404, detail="Deck not found")
 
     update_data = deck_data.model_dump(exclude_unset=True)
+    if "subject_id" in update_data:
+        await ensure_subject_exists(db, update_data["subject_id"])
     for key, value in update_data.items():
         setattr(deck, key, value)
 
@@ -608,6 +615,16 @@ async def create_and_generate_deck(
                 status_code=404, detail=f"Document(s) not found: {missing_ids}"
             )
 
+    await ensure_subject_exists(db, request.subject_id)
+
+    # Inside a subject, avoid regenerating cards the subject already has
+    # (same dedupe as POST /subjects/{id}/generate-flashcards)
+    existing_fronts = (
+        await existing_subject_fronts(db, request.subject_id)
+        if request.subject_id is not None
+        else []
+    )
+
     # AI call first — nothing is persisted if it fails
     topic = request.topic or request.title
     try:
@@ -617,6 +634,7 @@ async def create_and_generate_deck(
             model_id=ai_model.openrouter_id,
             topic=topic,
             custom_prompt=request.custom_prompt,
+            existing_fronts=existing_fronts if existing_fronts else None,
         )
     except ValueError as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)

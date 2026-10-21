@@ -16,6 +16,7 @@ class FlashcardDeckCreate(BaseModel):
     document_ids: Optional[List[int]] = None
     custom_prompt: Optional[str] = None
     new_cards_per_day: int = Field(default=20, ge=1, le=100)
+    subject_id: Optional[int] = None  # Optional subject grouping
 
 
 class FlashcardDeckUpdate(BaseModel):
@@ -23,6 +24,7 @@ class FlashcardDeckUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     new_cards_per_day: Optional[int] = Field(None, ge=1, le=100)
+    subject_id: Optional[int] = None  # explicit null unassigns the subject
 
 
 class FlashcardDeckResponse(BaseModel):
@@ -34,6 +36,7 @@ class FlashcardDeckResponse(BaseModel):
     document_ids: Optional[List[int]] = None
     custom_prompt: Optional[str] = None
     new_cards_per_day: int
+    subject_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     

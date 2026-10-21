@@ -11,6 +11,8 @@ import {
   BookOpen,
   FileText,
   SearchX,
+  ChevronDown,
+  ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
@@ -18,7 +20,13 @@ import { PageHeader, SectionHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { List, ListRow, ListIcon, RowActions, rowLinkClass } from '@/components/List'
 import { deckIsStudiable } from '@/lib/decks'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -28,19 +36,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/components/Toaster'
-import { subjectsApi, testsApi, flashcardsApi } from '@/services/api'
+import { subjectsApi, testsApi, flashcardsApi, documentsApi } from '@/services/api'
 import { cn, getScoreColor } from '@/lib/utils'
 import type { TestConfigInSubject, FlashcardDeckInSubject } from '@/types'
-import GenerateMaterialDialog from './GenerateMaterialDialog'
 import AddToExistingDialog from './AddToExistingDialog'
 import { queryKeys } from '@/lib/constants'
+import { docTypeConfig } from '@/components/AddDocumentDialog'
 
 export default function SubjectDetail() {
   const { subjectId } = useParams<{ subjectId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const [showGenerateDialog, setShowGenerateDialog] = useState(false)
   const [addToExisting, setAddToExisting] = useState<{
     type: 'test' | 'deck'
     item: TestConfigInSubject | FlashcardDeckInSubject
@@ -54,13 +61,17 @@ export default function SubjectDetail() {
     enabled: !!subjectId,
   })
 
+  const { data: documents = [] } = useQuery({
+    queryKey: queryKeys.documents,
+    queryFn: documentsApi.list,
+  })
+
   const deleteTestMutation = useMutation({
-    mutationFn: (configId: number) => testsApi.deleteTemplate(configId),
+    mutationFn: (configId: number) => testsApi.deleteConfig(configId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.subject(subjectId) })
-      // P3.2: the deleted template also lives in the templates and tests
-      // lists — invalidate those views too
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates })
+      // P3.2: the deleted tests also live in the tests and subjects lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
       queryClient.invalidateQueries({ queryKey: queryKeys.tests })
       setDeletingTest(null)
     },
@@ -109,6 +120,11 @@ export default function SubjectDetail() {
     )
   }
 
+  // Material is created in the regular wizards with this subject pre-selected
+  const createTestHref = `/create?subject=${subject.id}`
+  const createDeckHref = `/flashcards/create?subject=${subject.id}`
+  const defaultDocuments = documents.filter((d) => subject.document_ids?.includes(d.id))
+
   const kpis = [
     { label: 'Tests', value: subject.test_configs.length, className: undefined },
     { label: 'Decks', value: subject.flashcard_decks.length, className: undefined },
@@ -139,27 +155,38 @@ export default function SubjectDetail() {
           title={<span className="break-words">{subject.title}</span>}
           description={subject.description || undefined}
           actions={
-            <Button onClick={() => setShowGenerateDialog(true)}>
-              <Sparkles className="h-4 w-4 mr-2" />
-              Create Learning Material
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Create Learning Material
+                  <ChevronDown className="h-4 w-4 ml-1.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[12rem]">
+                <DropdownMenuItem asChild>
+                  <Link to={createTestHref}>
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Practice test
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={createDeckHref}>
+                    <Layers className="h-4 w-4 mr-2" />
+                    Flashcard deck
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           }
         />
         {/* Subject defaults */}
-        {(subject.ai_model_name || subject.document_count > 0) && (
+        {subject.ai_model_name && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            {subject.ai_model_name && (
-              <span className="inline-flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5" />
-                {subject.ai_model_name}
-              </span>
-            )}
-            {subject.document_count > 0 && (
-              <span className="inline-flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" />
-                {subject.document_count} document{subject.document_count !== 1 ? 's' : ''}
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              {subject.ai_model_name}
+            </span>
           </div>
         )}
       </div>
@@ -193,9 +220,11 @@ export default function SubjectDetail() {
               icon={ClipboardList}
               title="No tests yet"
               action={
-                <Button variant="outline" onClick={() => setShowGenerateDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Test
+                <Button variant="outline" asChild>
+                  <Link to={createTestHref}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Test
+                  </Link>
                 </Button>
               }
             />
@@ -251,9 +280,11 @@ export default function SubjectDetail() {
               icon={Layers}
               title="No decks yet"
               action={
-                <Button variant="outline" onClick={() => setShowGenerateDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Deck
+                <Button variant="outline" asChild>
+                  <Link to={createDeckHref}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Deck
+                  </Link>
                 </Button>
               }
             />
@@ -322,14 +353,46 @@ export default function SubjectDetail() {
         </section>
       </div>
 
-      {/* Generate Material Dialog */}
-      <GenerateMaterialDialog
-        open={showGenerateDialog}
-        onClose={() => setShowGenerateDialog(false)}
-        subjectId={parseInt(subjectId!)}
-        defaultAiModelId={subject.ai_model_id}
-        defaultDocumentIds={subject.document_ids}
-      />
+      {/* Default documents — pre-selected when creating material here */}
+      <section className="space-y-3">
+        <SectionHeader
+          title="Default documents"
+          meta={defaultDocuments.length}
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/documents">
+                All documents
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Link>
+            </Button>
+          }
+        />
+        {defaultDocuments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No default documents. Edit the subject to pick documents that are pre-selected
+            whenever you create material for it — any other document stays available.
+          </p>
+        ) : (
+          <List>
+            {defaultDocuments.map((doc) => {
+              const Icon = docTypeConfig[doc.doc_type]?.icon ?? FileText
+              return (
+                <ListRow key={doc.id}>
+                  <ListIcon>
+                    <Icon />
+                  </ListIcon>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-medium">{doc.title}</h3>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {docTypeConfig[doc.doc_type]?.label ?? doc.doc_type}
+                    </p>
+                  </div>
+                </ListRow>
+              )
+            })}
+          </List>
+        )}
+      </section>
 
       {/* Add to Existing Dialog */}
       {addToExisting && (
