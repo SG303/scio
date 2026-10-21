@@ -30,6 +30,13 @@ class TestConfigCreate(BaseModel):
     document_ids: List[int]
     is_template: bool = False
     custom_prompt: Optional[str] = None
+    # Optional subject grouping; templates never belong to a subject
+    subject_id: Optional[int] = None
+
+
+class TestConfigUpdate(BaseModel):
+    """Partial update of a (non-template) config — used to (un)assign a subject."""
+    subject_id: Optional[int] = None
 
 
 class TestConfigResponse(BaseModel):
@@ -41,6 +48,9 @@ class TestConfigResponse(BaseModel):
     document_ids: List[int]
     is_template: bool
     custom_prompt: Optional[str] = None
+    subject_id: Optional[int] = None
+    # Templates: number of tests attached to this config (deleted with it)
+    test_count: int = 0
     created_at: datetime
     
     class Config:
@@ -53,14 +63,18 @@ class GenerateFromTemplateRequest(BaseModel):
 
 class CreateAndGenerateRequest(BaseModel):
     """P5.2: create a config and generate a test in one transaction —
-    a failed generation leaves no empty config behind."""
+    a failed generation leaves no empty config behind.
+
+    Deliberately no is_template: a generated test must never hang on a
+    template config (deleting the template would cascade to its tests).
+    Templates are saved separately via POST /configs."""
     title: str
     num_questions: int = Field(default=10, ge=1, le=100)
     num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: int
     document_ids: List[int]
-    is_template: bool = False
     custom_prompt: Optional[str] = None
+    subject_id: Optional[int] = None
     # optional override of num_questions for the generated test
     generate_num_questions: Optional[int] = None
 
@@ -69,6 +83,9 @@ class TestResponse(BaseModel):
     id: int
     config_id: int
     config_title: Optional[str] = None
+    subject_id: Optional[int] = None
+    # Legacy tests generated directly from a template config
+    from_template: bool = False
     status: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
