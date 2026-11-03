@@ -429,6 +429,7 @@ export interface LectureListItem {
   subject_id: number
   title: string
   word_count: number
+  formatted_at: string | null
   created_at: string
   updated_at: string
 }
@@ -438,6 +439,9 @@ export interface Lecture {
   subject_id: number
   title: string
   content: string
+  /** Text before the last AI formatting (compare/restore). */
+  original_content: string | null
+  formatted_at: string | null
   created_at: string
   updated_at: string
 }

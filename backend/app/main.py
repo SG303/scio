@@ -26,6 +26,7 @@ from app.services import claude_cli, db_backup
 from app.migrations.add_template_fields import migrate as migrate_template_fields
 from app.migrations.add_flashcard_tables import migrate as migrate_flashcard_tables
 from app.migrations.add_subjects_table import migrate as migrate_subjects_table
+from app.migrations.add_lecture_formatting import migrate as migrate_lecture_formatting
 
 settings = get_settings()
 
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
     migrate_template_fields()
     migrate_flashcard_tables()
     migrate_subjects_table()
+    migrate_lecture_formatting()
     
     # Seed default AI models
     async with async_session() as db:

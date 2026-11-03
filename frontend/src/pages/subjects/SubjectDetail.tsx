@@ -291,6 +291,7 @@ export default function SubjectDetail() {
                   </button>
                   <p className="truncate text-xs text-muted-foreground">
                     {lecture.word_count} {lecture.word_count === 1 ? 'word' : 'words'} · Edited {formatDate(lecture.updated_at)}
+                    {lecture.formatted_at && ' · Formatted'}
                   </p>
                 </div>
                 <RowActions label={`Actions for ${lecture.title}`}>

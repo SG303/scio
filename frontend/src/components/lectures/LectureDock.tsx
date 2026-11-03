@@ -1,10 +1,13 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, CloudOff, Loader2, Maximize2, Minimize2, NotebookPen, X } from 'lucide-react'
+import { Check, CloudOff, GitCompare, Loader2, Maximize2, Minimize2, NotebookPen, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
+import { GenerationStatus } from '@/components/GenerationStatus'
+import { FinishLectureDialog } from './FinishLectureDialog'
+import { LectureCompare } from './LectureCompare'
 import { toast } from '@/components/Toaster'
-import { lecturesApi } from '@/services/api'
+import { lecturesApi, subjectsApi } from '@/services/api'
 import { queryKeys } from '@/lib/constants'
 import type { Lecture } from '@/types'
 import {
@@ -21,6 +24,8 @@ const MarkdownEditor = lazy(() => import('./MarkdownEditor'))
 
 const AUTOSAVE_DELAY_MS = 1200
 const RETRY_DELAY_MS = 10_000
+
+type Mode = 'edit' | 'formatting' | 'compare'
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'offline'
 
@@ -84,6 +89,17 @@ function EditorSession({
   })
   const [title, setTitle] = useState(start.draft.title)
   const [status, setStatus] = useState<SaveStatus>(start.restored ? 'unsaved' : 'saved')
+  const [mode, setMode] = useState<Mode>('edit')
+  const [finishOpen, setFinishOpen] = useState(false)
+  // The editor is remounted with this text after formatting or restoring
+  const [editorContent, setEditorContent] = useState(start.draft.content)
+  const [editorKey, setEditorKey] = useState(0)
+  const [original, setOriginal] = useState(server.original_content)
+
+  const { data: subject } = useQuery({
+    queryKey: queryKeys.subject(lecture.subjectId),
+    queryFn: () => subjectsApi.get(lecture.subjectId),
+  })
 
   // Current editor state and the state last confirmed by the server
   const latest = useRef<LectureDraft>(start.draft)
@@ -183,6 +199,62 @@ function EditorSession({
     }
   }, [minimized])
 
+  // The server changed the notes (formatting/restore): adopt its copy
+  const applyServer = (result: Lecture) => {
+    const copy = { title: result.title, content: result.content }
+    saved.current = copy
+    latest.current = copy
+    clearDraft(lecture.id)
+    setStatus('saved')
+    setTitle(result.title)
+    setEditorContent(result.content)
+    setEditorKey((key) => key + 1)
+    setOriginal(result.original_content)
+    queryClient.setQueryData(queryKeys.lecture(lecture.id), result)
+    queryClient.invalidateQueries({ queryKey: queryKeys.lectures(lecture.subjectId) })
+  }
+
+  const formatMutation = useMutation({
+    mutationFn: (modelId: number) => lecturesApi.format(lecture.id, modelId),
+    onSuccess: (result) => {
+      applyServer(result)
+      setMode('compare')
+    },
+    onError: (err) => {
+      setMode('edit')
+      toast.error(err instanceof Error ? err.message : 'Formatting failed. Your notes are unchanged.')
+    },
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (text: string) => lecturesApi.update(lecture.id, { content: text }),
+    onSuccess: (result) => {
+      applyServer(result)
+      setMode('edit')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to restore the original')
+    },
+  })
+
+  const startFormatting = async (modelId: number) => {
+    setFinishOpen(false)
+    setEditorContent(latest.current.content)
+    setMode('formatting')
+    // The AI must see exactly what is on the server
+    if (!(await save())) {
+      setMode('edit')
+      toast.error('Your latest changes are not saved to the server yet. Reconnect, then try again.')
+      return
+    }
+    formatMutation.mutate(modelId)
+  }
+
+  const openCompare = () => {
+    setEditorContent(latest.current.content)
+    setMode('compare')
+  }
+
   const uploadImage = async (file: File) => {
     try {
       return await lecturesApi.uploadImage(lecture.id, file)
@@ -225,12 +297,31 @@ function EditorSession({
                   update({ title: saved.current.title })
                 }
               }}
+              disabled={mode === 'formatting'}
               aria-label="Lecture title"
               placeholder="Lecture title"
               className="block w-full truncate rounded-sm bg-transparent text-[15px] font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <SaveIndicator status={status} />
+          {mode === 'edit' && original !== null && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-muted-foreground hover:text-foreground"
+              onClick={openCompare}
+              aria-label="Compare with the text before formatting"
+              title="Compare with the text before formatting"
+            >
+              <GitCompare className="h-[18px] w-[18px]" />
+            </Button>
+          )}
+          {mode === 'edit' && (
+            <Button variant="outline" size="sm" className="h-9" onClick={() => setFinishOpen(true)}>
+              <Sparkles className="h-4 w-4 sm:mr-1.5" />
+              <span className="sr-only sm:not-sr-only">Finish lecture</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -254,17 +345,39 @@ function EditorSession({
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl">
-            <Suspense fallback={<QueryState loading />}>
-              <MarkdownEditor
-                defaultValue={start.draft.content}
-                onChange={(content) => update({ content })}
-                onUploadImage={uploadImage}
-              />
-            </Suspense>
-          </div>
+          {mode === 'compare' && original !== null ? (
+            <LectureCompare
+              original={original}
+              formatted={editorContent}
+              onKeep={() => setMode('edit')}
+              onRestore={() => restoreMutation.mutate(original)}
+              restoring={restoreMutation.isPending}
+            />
+          ) : mode === 'formatting' ? (
+            <div className="mx-auto max-w-3xl p-6">
+              <GenerationStatus progress={null} />
+            </div>
+          ) : (
+            <div className="mx-auto max-w-3xl">
+              <Suspense fallback={<QueryState loading />}>
+                <MarkdownEditor
+                  key={editorKey}
+                  defaultValue={editorContent}
+                  onChange={(content) => update({ content })}
+                  onUploadImage={uploadImage}
+                />
+              </Suspense>
+            </div>
+          )}
         </div>
       </div>
+
+      <FinishLectureDialog
+        open={finishOpen}
+        onOpenChange={setFinishOpen}
+        defaultModelId={subject?.ai_model_id ?? null}
+        onConfirm={(modelId) => void startFormatting(modelId)}
+      />
 
       {minimized && (
         <div className="fixed bottom-4 right-4 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-1 rounded-lg border bg-card p-1 shadow-lg">
