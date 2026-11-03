@@ -27,6 +27,7 @@ from app.schemas.test import TestResponse
 from app.routers.tests import build_test_response
 from app.schemas.flashcard import FlashcardDeckResponse, GenerateFlashcardsResponse, FlashcardResponse
 from app.services.default_model import resolve_ai_model_id
+from app.services.language import clean_language
 from app.services.test_generator import generate_test_questions
 from app.services.flashcard_generator import generate_flashcards
 from app.routers.flashcards import get_deck_stats_map
@@ -115,6 +116,7 @@ async def list_subjects(db: AsyncSession = Depends(get_db)):
             description=subject.description,
             ai_model_id=subject.ai_model_id,
             ai_model_name=subject.ai_model.name if subject.ai_model else None,
+            language=subject.language,
             document_ids=subject.document_ids,
             document_count=len(subject.document_ids) if subject.document_ids else 0,
             test_count=config_count_by_subject.get(subject.id, 0),
@@ -265,6 +267,7 @@ async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
         description=subject.description,
         ai_model_id=subject.ai_model_id,
         ai_model_name=subject.ai_model.name if subject.ai_model else None,
+        language=subject.language,
         document_ids=subject.document_ids,
         document_count=len(subject.document_ids) if subject.document_ids else 0,
         created_at=subject.created_at,
@@ -409,6 +412,8 @@ async def generate_test_in_subject(
             status_code=400,
             detail="No AI model specified. Choose one or set a default model in Settings.",
         )
+    # Output language (request override > subject default; None = auto)
+    language = clean_language(request.language) or subject.language
     
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
@@ -445,6 +450,7 @@ async def generate_test_in_subject(
             model_id=ai_model.openrouter_id,
             topic=request.title,
             custom_prompt=request.custom_prompt,
+            language=language,
             existing_questions=existing_questions if existing_questions else None
         )
     except ValueError as e:
@@ -462,6 +468,7 @@ async def generate_test_in_subject(
         ai_model_id=ai_model_id,
         document_ids=document_ids or [],
         custom_prompt=request.custom_prompt,
+        language=language,
         subject_id=subject_id,
         is_template=False
     )
@@ -520,6 +527,8 @@ async def generate_flashcards_in_subject(
             status_code=400,
             detail="No AI model specified. Choose one or set a default model in Settings.",
         )
+    # Output language (request override > subject default; None = auto)
+    language = clean_language(request.language) or subject.language
     
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
@@ -555,6 +564,7 @@ async def generate_flashcards_in_subject(
             model_id=ai_model.openrouter_id,
             topic=request.title,
             custom_prompt=request.custom_prompt,
+            language=language,
             existing_fronts=existing_fronts if existing_fronts else None
         )
     except ValueError as e:
@@ -571,6 +581,7 @@ async def generate_flashcards_in_subject(
         ai_model_id=ai_model_id,
         document_ids=document_ids,
         custom_prompt=request.custom_prompt,
+        language=language,
         subject_id=subject_id
     )
     db.add(deck)
@@ -669,6 +680,7 @@ async def add_questions_to_test_config(
             model_id=ai_model.openrouter_id,
             topic=test_config.title,
             custom_prompt=request.custom_prompt or test_config.custom_prompt,
+            language=test_config.language,
             existing_questions=existing_questions if existing_questions else None
         )
     except ValueError as e:
@@ -774,6 +786,7 @@ async def add_cards_to_deck(
             model_id=ai_model.openrouter_id,
             topic=deck.title,
             custom_prompt=request.custom_prompt or deck.custom_prompt,
+            language=deck.language,
             existing_fronts=existing_fronts if existing_fronts else None
         )
     except ValueError as e:

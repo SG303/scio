@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 
+from app.services.language import Language
+
 
 # ============== Flashcard Deck Schemas ==============
 
@@ -15,6 +17,7 @@ class FlashcardDeckCreate(BaseModel):
     ai_model_id: Optional[int] = None
     document_ids: Optional[List[int]] = None
     custom_prompt: Optional[str] = None
+    language: Language = None  # None = language of the material
     new_cards_per_day: int = Field(default=20, ge=1, le=100)
     subject_id: Optional[int] = None  # Optional subject grouping
 
@@ -35,6 +38,7 @@ class FlashcardDeckResponse(BaseModel):
     ai_model_id: Optional[int] = None
     document_ids: Optional[List[int]] = None
     custom_prompt: Optional[str] = None
+    language: Language = None  # None = language of the material
     new_cards_per_day: int
     subject_id: Optional[int] = None
     created_at: datetime

@@ -43,3 +43,7 @@ export const CHOICES_COUNT_OPTIONS = [3, 4, 5, 6] as const
 export const DEFAULT_NUM_QUESTIONS = 10
 export const DEFAULT_NUM_CHOICES = 4
 
+
+// Output language of generated cards and questions ("" = language of the material)
+export const LANGUAGE_PRESETS = ['German', 'English', 'French', 'Italian', 'Spanish'] as const
+export const LANGUAGE_MAX_LENGTH = 50

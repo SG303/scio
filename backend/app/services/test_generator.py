@@ -9,13 +9,14 @@ from app.services.exam_objectives import (
     format_documents,
     split_exam_objectives,
 )
+from app.services.language import language_section
 from app.services.openrouter_client import chat_completion_json
 from app.services.generation_progress import GenerationCancelled
 
 logger = logging.getLogger(__name__)
 
 
-def build_prompt(documents: List[Document], num_questions: int, num_choices: int, topic: str = "", custom_prompt: str = None, existing_questions: List[str] = None) -> str:
+def build_prompt(documents: List[Document], num_questions: int, num_choices: int, topic: str = "", custom_prompt: str = None, existing_questions: List[str] = None, language: Optional[str] = None) -> str:
     """Build the prompt for generating test questions"""
     
     # Normalize empty strings to None for consistency
@@ -135,6 +136,8 @@ PREVIOUSLY GENERATED QUESTIONS (DO NOT REPEAT):
 
 IMPORTANT: Create NEW questions that are different from the ones listed above. Do not rephrase or create variations of these existing questions."""
     
+    prompt += f"\n\n{language_section(language)}"
+
     return prompt
 
 
@@ -146,7 +149,8 @@ async def generate_test_questions(
     topic: str = "",
     custom_prompt: str = None,
     existing_questions: List[str] = None,
-    on_progress=None
+    on_progress=None,
+    language: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Generate test questions using OpenRouter API.
@@ -202,7 +206,8 @@ async def generate_test_questions(
                 model_id, 
                 topic, 
                 custom_prompt, 
-                current_existing
+                current_existing,
+                language,
             )
             _merge(questions)
             if len(collected) >= num_questions * 0.8:  # Accept if we got at least 80%
@@ -226,7 +231,7 @@ async def generate_test_questions(
         strategy_questions = await _generate_with_batch_size(
             documents, remaining, num_choices, model_id,
             topic, custom_prompt, current_existing, MEDIUM_BATCH_SIZE, report,
-            progress_done=len(collected), progress_total=num_questions
+            progress_done=len(collected), progress_total=num_questions, language=language
         )
         _merge(strategy_questions)
         if len(collected) >= num_questions * 0.8:
@@ -242,7 +247,7 @@ async def generate_test_questions(
     strategy_questions = await _generate_with_batch_size(
         documents, remaining, num_choices, model_id,
         topic, custom_prompt, current_existing, SMALL_BATCH_SIZE, report,
-        progress_done=len(collected), progress_total=num_questions
+        progress_done=len(collected), progress_total=num_questions, language=language
     )
     _merge(strategy_questions)
     
@@ -260,7 +265,8 @@ async def _generate_with_batch_size(
     batch_size: int,
     on_progress=None,
     progress_done: int = 0,
-    progress_total: Optional[int] = None
+    progress_total: Optional[int] = None,
+    language: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Generate questions using the specified batch size.
     
@@ -305,7 +311,8 @@ async def _generate_with_batch_size(
                 model_id, 
                 topic, 
                 custom_prompt, 
-                current_existing
+                current_existing,
+                language,
             )
             
             # A repeated question must not eat into the remaining budget
@@ -340,11 +347,14 @@ async def _generate_batch(
     model_id: str,
     topic: str = "",
     custom_prompt: str = None,
-    existing_questions: List[str] = None
+    existing_questions: List[str] = None,
+    language: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Generate a single batch of test questions using OpenRouter API"""
     
-    prompt = build_prompt(documents, num_questions, num_choices, topic, custom_prompt, existing_questions)
+    prompt = build_prompt(
+        documents, num_questions, num_choices, topic, custom_prompt, existing_questions, language
+    )
     
     content = await chat_completion_json(
         model_id=model_id,

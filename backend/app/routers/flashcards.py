@@ -218,6 +218,7 @@ async def list_decks(db: AsyncSession = Depends(get_db)):
                 ai_model_id=deck.ai_model_id,
                 document_ids=deck.document_ids,
                 custom_prompt=deck.custom_prompt,
+                language=deck.language,
                 new_cards_per_day=deck.new_cards_per_day,
                 subject_id=deck.subject_id,
                 created_at=deck.created_at,
@@ -291,6 +292,7 @@ async def get_deck(deck_id: int, db: AsyncSession = Depends(get_db)):
         ai_model_id=deck.ai_model_id,
         document_ids=deck.document_ids,
         custom_prompt=deck.custom_prompt,
+        language=deck.language,
         new_cards_per_day=deck.new_cards_per_day,
         subject_id=deck.subject_id,
         created_at=deck.created_at,
@@ -638,6 +640,7 @@ async def create_and_generate_deck(
             model_id=ai_model.openrouter_id,
             topic=topic,
             custom_prompt=request.custom_prompt,
+            language=request.language,
             existing_fronts=existing_fronts if existing_fronts else None,
         )
     except ValueError as e:
@@ -730,6 +733,7 @@ async def generate_cards_for_deck(
             model_id=ai_model.openrouter_id,
             topic=topic,
             custom_prompt=deck.custom_prompt,
+            language=deck.language,
             existing_fronts=existing_fronts if existing_fronts else None,
         )
     except ValueError as e:

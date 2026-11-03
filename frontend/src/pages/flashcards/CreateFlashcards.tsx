@@ -18,6 +18,7 @@ import { GenerationStatus } from '@/components/GenerationStatus'
 import { MaterialsStep, withSubjectDefaults } from '@/components/MaterialsStep'
 import { useLectureContents } from '@/hooks/useLectureContents'
 import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
+import { LanguageSelect } from '@/components/LanguageSelect'
 import { queryKeys } from '@/lib/constants'
 import type { SubjectListItem } from '@/types'
 
@@ -79,6 +80,7 @@ function CreateFlashcardsWizard({
     document_ids: withSubjectDefaults([], null, initialSubject),
     lecture_ids: initialLectureIds,
     custom_prompt: '',
+    language: initialSubject?.language ?? '',
     subject_id: initialSubject?.id ?? null,
   })
   const [isGenerating, setIsGenerating] = useState(false)
@@ -102,12 +104,16 @@ function CreateFlashcardsWizard({
     setFormData((prev) => ({
       ...prev,
       subject_id: subject?.id ?? null,
-      // the subject's default model only fills an empty choice
       // the subject's model replaces only an empty choice or the global default
       ai_model_id:
         prev.ai_model_id && prev.ai_model_id !== defaultModelId
           ? prev.ai_model_id
           : subject?.ai_model_id || defaultModelId,
+      // same for the language: a choice the user made is kept
+      language:
+        prev.language === (subjects.find((s) => s.id === prev.subject_id)?.language ?? '')
+          ? subject?.language ?? ''
+          : prev.language,
     }))
   }
 
@@ -125,6 +131,7 @@ function CreateFlashcardsWizard({
         document_ids: formData.document_ids.length > 0 ? formData.document_ids : undefined,
         lecture_ids: formData.lecture_ids,
         custom_prompt: formData.custom_prompt || undefined,
+        language: formData.language || undefined,
         num_cards: formData.num_cards,
         subject_id: formData.subject_id,
       })
@@ -285,6 +292,13 @@ function CreateFlashcardsWizard({
               </div>
             </div>
 
+            <LanguageSelect
+              id="language"
+              value={formData.language}
+              onChange={(language) => setFormData({ ...formData, language })}
+              hint="The language of the questions and answers on the cards."
+            />
+
             <div className="space-y-2">
               <Label htmlFor="custom_prompt">Custom Instructions (Optional)</Label>
               <Textarea
@@ -325,6 +339,7 @@ function CreateFlashcardsWizard({
                 ...(formData.lecture_ids.length > 0 ? [['Lectures', `${formData.lecture_ids.length} selected`] as const] : []),
                 ['Flashcards', formData.num_cards],
                 ['AI model', selectedModelName],
+                ['Language', formData.language || 'Same as the material'],
               ] as const).map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4 px-4 py-2.5">
                   <dt className="text-muted-foreground">{label}</dt>
