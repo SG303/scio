@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { Toaster } from '@/components/Toaster'
 import { ThemeProvider } from '@/lib/theme'
+import { LectureEditorProvider } from '@/lib/lectureEditor'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -19,7 +20,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <LectureEditorProvider>
+          <App />
+        </LectureEditorProvider>
         {/* P3.1: global toast notifications for failed backend calls */}
         <Toaster />
       </QueryClientProvider>

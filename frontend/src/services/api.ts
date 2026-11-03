@@ -36,7 +36,9 @@ import type {
   FlashcardAnalytics,
   AppSettings,
   OpenRouterKeyStatus,
-  ClaudeStatus
+  ClaudeStatus,
+  Lecture,
+  LectureListItem
 } from '@/types'
 
 const API_BASE = '/api'
@@ -513,4 +515,43 @@ export const subjectsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+}
+
+// Lecture notes
+export const lecturesApi = {
+  list: (subjectId: number) =>
+    fetchApi<LectureListItem[]>(`/subjects/${subjectId}/lectures`),
+
+  create: (subjectId: number, title: string) =>
+    fetchApi<Lecture>(`/subjects/${subjectId}/lectures`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+
+  get: (id: number) =>
+    fetchApi<Lecture>(`/lectures/${id}`),
+
+  update: (id: number, data: { title?: string; content?: string }) =>
+    fetchApi<Lecture>(`/lectures/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    fetchApi<{ message: string }>(`/lectures/${id}`, { method: 'DELETE' }),
+
+  /** Stores a pasted/dropped image and returns the URL the Markdown links to. */
+  uploadImage: async (id: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${API_BASE}/lectures/${id}/images`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Image upload failed' }))
+      throw new ApiError(formatErrorDetail(error.detail) || 'Image upload failed', response.status)
+    }
+    return (await response.json() as { url: string }).url
+  },
 }

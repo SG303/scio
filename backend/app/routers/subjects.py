@@ -15,7 +15,7 @@ import logging
 from app.database import get_db
 from app.models import (
     Subject, TestConfig, Test, Question, FlashcardDeck, Flashcard,
-    Document, AIModel
+    Document, AIModel, Lecture
 )
 from app.schemas.subject import (
     SubjectCreate, SubjectUpdate, SubjectResponse, SubjectListResponse,
@@ -332,6 +332,19 @@ async def delete_subject(
     
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
+
+    # Lecture notes cannot exist without their subject and are never
+    # deleted implicitly — the user deletes them one by one first.
+    lecture_count = (
+        await db.execute(
+            select(func.count()).select_from(Lecture).where(Lecture.subject_id == subject_id)
+        )
+    ).scalar_one()
+    if lecture_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This subject still has {lecture_count} lecture(s). Delete them first.",
+        )
     
     if cascade:
         # Delete all test configs (tests and questions will cascade)

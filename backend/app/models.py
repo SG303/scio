@@ -68,6 +68,27 @@ class Subject(Base):
     ai_model = relationship("AIModel", back_populates="subjects")
     test_configs = relationship("TestConfig", back_populates="subject")
     flashcard_decks = relationship("FlashcardDeck", back_populates="subject")
+    lectures = relationship("Lecture", back_populates="subject")
+
+
+class Lecture(Base):
+    """Notes of one lecture, written in the editor (Markdown) inside a subject.
+
+    Images live on disk under ``<uploads>/lectures/<id>/`` and are referenced
+    from the Markdown by URL.
+    """
+
+    __tablename__ = "lectures"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False, default="")
+
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    subject = relationship("Subject", back_populates="lectures")
 
 
 class Document(Base):
