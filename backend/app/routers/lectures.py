@@ -11,12 +11,12 @@ from typing import List
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import AIModel, Lecture, Subject, utc_now
+from app.models import AIModel, FlashcardDeck, Lecture, Subject, TestConfig, utc_now
 from app.schemas.lecture import (
     LectureCreate,
     LectureFormatRequest,
@@ -159,6 +159,19 @@ async def format_lecture_notes(
 @router.delete("/lectures/{lecture_id}")
 async def delete_lecture(lecture_id: int, db: AsyncSession = Depends(get_db)):
     lecture = await _get_lecture(db, lecture_id)
+    # lecture_ids are JSON lists (no FK): drop the id so later generations of
+    # those tests/decks keep working with their remaining material
+    for model_cls in (TestConfig, FlashcardDeck):
+        result = await db.execute(
+            select(model_cls.id, model_cls.lecture_ids).where(model_cls.lecture_ids.isnot(None))
+        )
+        rows = [
+            {"id": row_id, "lecture_ids": [i for i in ids if i != lecture_id]}
+            for row_id, ids in result.fetchall()
+            if ids and lecture_id in ids
+        ]
+        if rows:
+            await db.execute(update(model_cls), rows)
     await db.delete(lecture)
     await db.commit()
     remove_lecture_images(lecture_id)

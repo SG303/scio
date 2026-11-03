@@ -165,6 +165,7 @@ class CreateAndGenerateDeckRequest(FlashcardDeckCreate):
     a failed generation leaves no empty deck behind."""
     num_cards: int = Field(ge=1, le=100)  # required, no default
     topic: Optional[str] = None
+    lecture_ids: List[int] = []  # lecture notes as additional study material
 
 
 class CreateAndGenerateDeckResponse(BaseModel):

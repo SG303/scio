@@ -15,7 +15,7 @@ from app.services.openrouter_client import chat_completion_json
 logger = logging.getLogger(__name__)
 
 # ![alt](url "title") — the URL is what identifies an uploaded image
-_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
+IMAGE_RE = re.compile(r"!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 
 SYSTEM_PROMPT = (
     "You are a meticulous copy editor for a student's lecture notes. "
@@ -46,7 +46,7 @@ LECTURE NOTES:
 
 def image_urls(markdown: str) -> Counter:
     """Multiset of image URLs referenced in the Markdown."""
-    return Counter(_IMAGE_RE.findall(markdown))
+    return Counter(IMAGE_RE.findall(markdown))
 
 
 def parse_format_response(content: str) -> str:

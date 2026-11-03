@@ -71,6 +71,7 @@ from app.services.spaced_repetition import (
     get_incomplete_session,
     get_streak_stats,
 )
+from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import ensure_subject_exists, existing_subject_fronts
 from app.services.flashcard_generator import (
     generate_flashcards,
@@ -627,9 +628,10 @@ async def create_and_generate_deck(
 
     # AI call first — nothing is persisted if it fails
     topic = request.topic or request.title
+    lectures = await load_lecture_sources(db, request.lecture_ids)
     try:
         cards_data = await generate_flashcards(
-            documents=documents,
+            documents=documents + lectures,
             num_cards=request.num_cards,
             model_id=ai_model.openrouter_id,
             topic=topic,
@@ -718,9 +720,10 @@ async def generate_cards_for_deck(
 
     # Generate flashcards
     topic = request.topic or deck.title
+    lectures = await load_lecture_sources(db, deck.lecture_ids)
     try:
         cards_data = await generate_flashcards(
-            documents=documents,
+            documents=documents + lectures,
             num_cards=request.num_cards,
             model_id=ai_model.openrouter_id,
             topic=topic,
