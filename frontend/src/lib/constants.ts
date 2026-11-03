@@ -15,6 +15,8 @@ export const queryKeys = {
   claudeStatus: ['providers', 'claude'] as const,
   subjects: ['subjects'] as const,
   subject: (id: QueryId) => ['subject', String(id ?? '')] as const,
+  lectures: (subjectId: QueryId) => ['lectures', String(subjectId ?? '')] as const,
+  lecture: (id: QueryId) => ['lecture', String(id ?? '')] as const,
   templates: ['templates'] as const,
   tests: ['tests'] as const,
   test: (id: QueryId) => ['test', String(id ?? '')] as const,

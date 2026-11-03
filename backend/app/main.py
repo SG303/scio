@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 import os
 
 from app.database import init_db, async_session
-from app.routers import documents, ai_models, tests, flashcards, subjects, generation, providers
+from app.routers import documents, ai_models, tests, flashcards, subjects, generation, providers, lectures
 from app.routers.settings import router as settings_router
 from app.routers.ai_models import seed_default_models
 from app.config import get_settings
@@ -98,6 +98,7 @@ app.include_router(ai_models.router)
 app.include_router(tests.router)
 app.include_router(flashcards.router)
 app.include_router(subjects.router)
+app.include_router(lectures.router)
 app.include_router(settings_router)
 app.include_router(providers.router)
 # P6.2: progress polling for long-running AI generations

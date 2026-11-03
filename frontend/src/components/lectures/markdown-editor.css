@@ -1,0 +1,73 @@
+/*
+ * Crepe themed with Scio's design tokens (index.css), so light and dark
+ * follow the app theme. Only the variables and a few spacing/type rules are
+ * set here; everything else comes from Crepe's common theme.
+ */
+.scio-editor .milkdown {
+  --crepe-color-background: hsl(var(--background));
+  --crepe-color-on-background: hsl(var(--foreground));
+  --crepe-color-surface: hsl(var(--popover));
+  --crepe-color-surface-low: hsl(var(--muted));
+  --crepe-color-on-surface: hsl(var(--popover-foreground));
+  --crepe-color-on-surface-variant: hsl(var(--muted-foreground));
+  --crepe-color-outline: hsl(var(--input));
+  --crepe-color-primary: hsl(var(--primary));
+  --crepe-color-secondary: hsl(var(--secondary));
+  --crepe-color-on-secondary: hsl(var(--secondary-foreground));
+  --crepe-color-inverse: hsl(var(--foreground));
+  --crepe-color-on-inverse: hsl(var(--background));
+  --crepe-color-inline-code: hsl(var(--primary));
+  --crepe-color-error: hsl(var(--destructive));
+  --crepe-color-hover: hsl(var(--accent));
+  --crepe-color-selected: hsl(var(--primary) / 0.16);
+  --crepe-color-inline-area: hsl(var(--muted));
+
+  --crepe-base-font-size: 16px;
+  --crepe-font-title: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --crepe-font-default: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --crepe-font-code: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --crepe-shadow-1: var(--shadow-md);
+  --crepe-shadow-2: var(--shadow-xl);
+}
+
+/* Room on the left for Crepe's block handle, less on small screens */
+.scio-editor .milkdown .ProseMirror {
+  padding: 24px 16px 40vh 40px;
+  line-height: 1.65;
+}
+
+@media (min-width: 768px) {
+  .scio-editor .milkdown .ProseMirror {
+    padding: 32px 48px 40vh 64px;
+  }
+}
+
+/* A note-taking scale: clear hierarchy without poster-sized headings */
+.scio-editor .milkdown .ProseMirror h1 {
+  font-size: 1.875em;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.scio-editor .milkdown .ProseMirror h2 {
+  font-size: 1.5em;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.scio-editor .milkdown .ProseMirror h3 {
+  font-size: 1.25em;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.scio-editor .milkdown .ProseMirror h4,
+.scio-editor .milkdown .ProseMirror h5,
+.scio-editor .milkdown .ProseMirror h6 {
+  font-size: 1.0625em;
+  line-height: 1.45;
+  font-weight: 600;
+}

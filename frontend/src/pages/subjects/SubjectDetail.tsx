@@ -13,6 +13,7 @@ import {
   SearchX,
   ChevronDown,
   ArrowRight,
+  NotebookPen,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { QueryState } from '@/components/QueryState'
@@ -36,9 +37,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/components/Toaster'
-import { subjectsApi, testsApi, flashcardsApi, documentsApi } from '@/services/api'
-import { cn, getScoreColor } from '@/lib/utils'
-import type { TestConfigInSubject, FlashcardDeckInSubject } from '@/types'
+import { subjectsApi, testsApi, flashcardsApi, documentsApi, lecturesApi } from '@/services/api'
+import { cn, formatDate, getScoreColor } from '@/lib/utils'
+import { useLectureEditor } from '@/lib/lectureEditor'
+import type { TestConfigInSubject, FlashcardDeckInSubject, LectureListItem } from '@/types'
 import AddToExistingDialog from './AddToExistingDialog'
 import { queryKeys } from '@/lib/constants'
 import { docTypeConfig } from '@/components/AddDocumentDialog'
@@ -54,6 +56,8 @@ export default function SubjectDetail() {
   } | null>(null)
   const [deletingTest, setDeletingTest] = useState<TestConfigInSubject | null>(null)
   const [deletingDeck, setDeletingDeck] = useState<FlashcardDeckInSubject | null>(null)
+  const [deletingLecture, setDeletingLecture] = useState<LectureListItem | null>(null)
+  const { openLecture, discardLecture } = useLectureEditor()
 
   const { data: subject, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.subject(subjectId),
@@ -64,6 +68,40 @@ export default function SubjectDetail() {
   const { data: documents = [] } = useQuery({
     queryKey: queryKeys.documents,
     queryFn: documentsApi.list,
+  })
+
+  const lecturesQuery = useQuery({
+    queryKey: queryKeys.lectures(subjectId),
+    queryFn: () => lecturesApi.list(parseInt(subjectId!)),
+    enabled: !!subjectId,
+  })
+  const lectures = lecturesQuery.data ?? []
+
+  const createLectureMutation = useMutation({
+    mutationFn: () => {
+      const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      return lecturesApi.create(parseInt(subjectId!), `Lecture ${today}`)
+    },
+    onSuccess: (lecture) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lectures(subjectId) })
+      void openLecture({ id: lecture.id, subjectId: lecture.subject_id, subjectTitle: subject?.title ?? '' })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to create lecture')
+    },
+  })
+
+  const deleteLectureMutation = useMutation({
+    mutationFn: (lectureId: number) => lecturesApi.delete(lectureId),
+    onSuccess: (_result, lectureId) => {
+      discardLecture(lectureId)
+      queryClient.invalidateQueries({ queryKey: queryKeys.lectures(subjectId) })
+      queryClient.removeQueries({ queryKey: queryKeys.lecture(lectureId) })
+      setDeletingLecture(null)
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete lecture')
+    },
   })
 
   const deleteTestMutation = useMutation({
@@ -210,6 +248,65 @@ export default function SubjectDetail() {
           </div>
         ))}
       </dl>
+
+      {/* Lecture notes — written in the editor dock */}
+      <section className="space-y-3">
+        <SectionHeader
+          title="Lectures"
+          meta={lectures.length}
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => createLectureMutation.mutate()}
+              disabled={createLectureMutation.isPending}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              New lecture
+            </Button>
+          }
+        />
+        {lecturesQuery.error ? (
+          <QueryState error={lecturesQuery.error} onRetry={() => lecturesQuery.refetch()} />
+        ) : lectures.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No lectures yet. Start one during class to take notes; it stays open while you use the rest of Scio.
+          </p>
+        ) : (
+          <List>
+            {lectures.map((lecture) => (
+              <ListRow key={lecture.id} interactive>
+                <ListIcon>
+                  <NotebookPen />
+                </ListIcon>
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void openLecture({ id: lecture.id, subjectId: subject.id, subjectTitle: subject.title })
+                    }
+                    className={cn('block w-full truncate text-left text-sm font-medium', rowLinkClass)}
+                  >
+                    {lecture.title}
+                  </button>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {lecture.word_count} {lecture.word_count === 1 ? 'word' : 'words'} · Edited {formatDate(lecture.updated_at)}
+                  </p>
+                </div>
+                <RowActions label={`Actions for ${lecture.title}`}>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeletingLecture(lecture)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </RowActions>
+              </ListRow>
+            ))}
+          </List>
+        )}
+      </section>
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Tests Section */}
@@ -426,6 +523,30 @@ export default function SubjectDetail() {
               disabled={deleteTestMutation.isPending}
             >
               {deleteTestMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Lecture Confirmation */}
+      <Dialog open={deletingLecture !== null} onOpenChange={() => setDeletingLecture(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Lecture</DialogTitle>
+            <DialogDescription>
+              Delete "{deletingLecture?.title}"? The notes and their images are deleted permanently.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingLecture(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingLecture && deleteLectureMutation.mutate(deletingLecture.id)}
+              disabled={deleteLectureMutation.isPending}
+            >
+              {deleteLectureMutation.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
