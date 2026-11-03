@@ -3,6 +3,7 @@ import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ratingStyles } from '@/lib/studyColors'
+import { studyKeyAction } from '@/lib/studyKeys'
 import type { FlashcardStudy as FlashcardStudyType } from '@/types'
 
 interface FlashcardStudyProps {
@@ -41,30 +42,34 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
     setIsFlipped(!isFlipped)
   }
 
-  // P4.1: the flip surface is a real button — keyboard operable (Space/Enter
-  // via the native button semantics) and announced by screen readers
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault()
-      handleFlip()
-    }
-  }
-
   // Until the flip, the answer and the rating buttons are only visually
   // hidden — inert keeps them out of the tab order and the accessibility
   // tree. React 18 has no typed inert prop, so the attribute is spread in
   // as an empty string (present = inert).
   const hiddenUntilFlipped = isFlipped ? {} : { inert: '', 'aria-hidden': true }
 
-  // P4.1: rate with keys 1–4 — only after the answer was revealed and
-  // while no save is in flight
+  // P4.1: keyboard shortcuts (Space/Enter flips, 1–4 rates after the flip).
+  // Listening on window keeps them working without clicking the card first —
+  // every new card remounts, so no element on it ever has focus.
   useEffect(() => {
-    if (!isFlipped || isSubmitting) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key >= '1' && e.key <= '4') {
-        e.preventDefault()
-        handleRate(Number(e.key) as 1 | 2 | 3 | 4)
-      }
+      const target = e.target instanceof HTMLElement ? e.target : null
+      const action = studyKeyAction(
+        {
+          key: e.key,
+          repeat: e.repeat,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
+          altKey: e.altKey,
+          targetTag: target?.tagName ?? '',
+          targetEditable: target?.isContentEditable ?? false,
+        },
+        { isFlipped, isSubmitting: !!isSubmitting },
+      )
+      if (!action) return
+      e.preventDefault()
+      if (action.type === 'flip') setIsFlipped((flipped) => !flipped)
+      else handleRate(action.rating)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -80,7 +85,6 @@ export function FlashcardStudy({ card, onRate, isSubmitting }: FlashcardStudyPro
         aria-label={isFlipped ? 'Hide answer' : 'Show answer'}
         className="w-full max-w-2xl aspect-[4/3] sm:aspect-[3/2] max-h-[calc(100dvh-12rem)] perspective-1000 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onClick={handleFlip}
-        onKeyDown={handleKeyDown}
       >
         <div
           className={cn(
