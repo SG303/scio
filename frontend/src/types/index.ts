@@ -422,3 +422,22 @@ export interface AddCardsRequest {
   ai_model_id?: number | null
   custom_prompt?: string | null
 }
+
+// Lecture notes (Markdown, written in the editor dock)
+export interface LectureListItem {
+  id: number
+  subject_id: number
+  title: string
+  word_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Lecture {
+  id: number
+  subject_id: number
+  title: string
+  content: string
+  created_at: string
+  updated_at: string
+}

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-ro
 import { useQueryClient } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { LectureDock } from '@/components/lectures/LectureDock'
 import { flushOfflineReviews } from '@/lib/offlineQueue'
 import { queryKeys } from '@/lib/constants'
 import Dashboard from '@/pages/Dashboard'
@@ -90,6 +91,8 @@ function App() {
             />
           </Routes>
         </AppLayout>
+        {/* Lecture editor: stays open across navigation */}
+        <LectureDock />
       </Router>
     </ErrorBoundary>
   )
