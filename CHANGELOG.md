@@ -4,6 +4,34 @@ Alle wesentlichen Änderungen an Scio werden in dieser Datei dokumentiert.
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/)
 und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
+## [v0.4.0] - 2026-11-03
+
+### Hinzugefügt
+
+- Neuer Tab „AI providers" unter Settings. Dort lässt sich der
+  OpenRouter-API-Key speichern, ersetzen und entfernen (er wird vor dem
+  Speichern bei OpenRouter geprüft und hat Vorrang vor der Umgebungsvariable
+  `OPENROUTER_API_KEY`).
+- Claude-Abo als zweiter KI-Anbieter: Die offizielle Claude-Code-CLI wird
+  per Klick installiert (Volume `./claude:/app/claude`), die Anmeldung
+  läuft über die Seite von Anthropic. Danach stehen Opus, Sonnet und Haiku
+  „(subscription)" zur Auswahl; die Kostenschätzung zeigt „Included in your
+  Claude plan".
+- Anzeige der Abo-Nutzung (5-Stunden-Fenster und Woche) mit Reset-Zeit und
+  Button „Check now".
+
+### Behoben
+
+- Die Test-Generierung blieb bei Zugriff über `http://<IP>` (LAN oder
+  Tailscale) für immer auf „Generating" hängen, weil `crypto.randomUUID()`
+  nur in sicheren Kontexten (HTTPS, localhost) existiert.
+
+### Hinweis zum Update
+
+In der eigenen `docker-compose.yml` das neue Volume `./claude:/app/claude`
+ergänzen (siehe `docker-compose.yml.template`), sonst gehen CLI und
+Anmeldung bei jedem Neubau des Containers verloren.
+
 ## [v0.3.0] - 2026-10-21
 
 ### Hinzugefügt
