@@ -4,6 +4,32 @@ Alle wesentlichen Änderungen an Scio werden in dieser Datei dokumentiert.
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/)
 und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
+## [v0.6.0] - 2026-11-03
+
+### Hinzugefügt
+
+- Standard-KI-Modell unter Settings → AI models; ein Subject kann es mit
+  seinem eigenen Modell überschreiben. „Finish lecture“ nutzt das aufgelöste
+  Modell direkt, ohne bei jedem Abschluss erneut danach zu fragen.
+- Neue Karteikarten können im Wizard einem bestehenden Deck hinzugefügt
+  werden, auch aus Vorlesungsnotizen. Vorhandene Karten werden beim
+  Generieren berücksichtigt; neue Quellen bleiben für spätere Ergänzungen
+  im Deck gespeichert.
+- Sprache für generierte Fragen, Antworten und Karten pro Subject und in
+  den Wizards. „Auto“ übernimmt die Sprache des Lernstoffs; die gewählte
+  Sprache bleibt für spätere Generierungen gespeichert.
+
+### Behoben
+
+- Leertaste und Enter drehen jede Lernkarte ohne vorherigen Klick um;
+  die Tasten 1–4 bewerten weiterhin die Antwort.
+- Der Study-Zähler zieht heute begonnene Karten nicht mehr doppelt ab und
+  zeigt das tatsächlich verbleibende Tageskontingent.
+
+### Hinweis zum Update
+
+Die neuen Sprachspalten werden beim Start automatisch ergänzt.
+
 ## [v0.5.0] - 2026-11-03
 
 ### Hinzugefügt
