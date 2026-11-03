@@ -3,14 +3,11 @@ import logging
 import re
 import math
 from typing import List, Dict, Any, Optional
-from app.config import get_settings
 from app.models import Document
 from app.services.openrouter_client import chat_completion_json
 from app.services.generation_progress import GenerationCancelled
 
 logger = logging.getLogger(__name__)
-
-settings = get_settings()
 
 
 def build_prompt(documents: List[Document], num_questions: int, num_choices: int, topic: str = "", custom_prompt: str = None, existing_questions: List[str] = None) -> str:
@@ -345,9 +342,6 @@ async def _generate_batch(
 ) -> List[Dict[str, Any]]:
     """Generate a single batch of test questions using OpenRouter API"""
     
-    if not settings.openrouter_api_key:
-        raise ValueError("OpenRouter API key is not configured")
-    
     prompt = build_prompt(documents, num_questions, num_choices, topic, custom_prompt, existing_questions)
     
     content = await chat_completion_json(
@@ -620,9 +614,6 @@ OUTPUT JSON ONLY:
   "analysis": "A brief, 1-2 sentence assessment of the question's validity. If you disagree with the answer, explain why."
 }}
 """
-
-    if not settings.openrouter_api_key:
-        raise ValueError("OpenRouter API key is not configured")
 
     content = await chat_completion_json(
         model_id=verification_model,

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, flashcardsApi, subjectsApi } from '@/services/api'
-import { calculateEstimatedCost, calculateFlashcardGenerationTokens } from '@/lib/utils'
+import { calculateEstimatedCost, calculateFlashcardGenerationTokens, isSubscriptionModel } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 import { QueryState } from '@/components/QueryState'
 import { StepIndicator } from '@/components/StepIndicator'
@@ -149,6 +149,7 @@ function CreateFlashcardsWizard({
       contextUsage,
       contextLimit,
       hasPricing,
+      includedInSubscription: isSubscriptionModel(selectedModel.openrouter_id),
       numBatches,
     }
   }, [formData.document_ids, formData.ai_model_id, formData.num_cards, documents, models])

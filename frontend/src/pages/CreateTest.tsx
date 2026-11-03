@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, subjectsApi, testsApi } from '@/services/api'
 import { useGenerationProgress } from '@/hooks/useGenerationProgress'
-import { calculateEstimatedCost, calculateTestGenerationTokens } from '@/lib/utils'
+import { calculateEstimatedCost, calculateTestGenerationTokens, isSubscriptionModel } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 import { QueryState } from '@/components/QueryState'
 import { StepIndicator } from '@/components/StepIndicator'
@@ -152,7 +152,11 @@ function CreateTestWizard({
     setIsGenerating(true)
 
     // P6.2: token lets the backend report batch progress while we wait
-    const progressToken = crypto.randomUUID()
+    // Not crypto.randomUUID(): it only exists in secure contexts (HTTPS or
+    // localhost) and Scio is also opened via plain http://<LAN/Tailscale IP>
+    const progressToken = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+      b.toString(16).padStart(2, '0')
+    ).join('')
     startProgress(progressToken)
     const abortController = new AbortController()
     generationAbortRef.current = abortController
@@ -268,6 +272,7 @@ function CreateTestWizard({
       contextUsage,
       contextLimit,
       hasPricing,
+      includedInSubscription: isSubscriptionModel(selectedModel.openrouter_id),
       numBatches
     }
   }, [formData.document_ids, formData.ai_model_id, formData.num_questions, formData.custom_prompt, documents, models])

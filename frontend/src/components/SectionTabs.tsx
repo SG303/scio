@@ -5,7 +5,7 @@ type SectionTab = { to: string; label: string }
 
 /**
  * Sub-navigation between sibling pages of one menu section
- * (Subjects | All documents, AI models | Test templates).
+ * (Subjects | All documents, AI models | AI providers | Test templates).
  * Plain links — every tab keeps its own route.
  */
 export function SectionTabs({ tabs, label }: { tabs: SectionTab[]; label: string }) {
@@ -40,5 +40,6 @@ export const subjectTabs: SectionTab[] = [
 
 export const settingsTabs: SectionTab[] = [
   { to: '/settings', label: 'AI models' },
+  { to: '/settings/providers', label: 'AI providers' },
   { to: '/settings/templates', label: 'Test templates' },
 ]

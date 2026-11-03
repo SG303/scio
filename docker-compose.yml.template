@@ -1,6 +1,7 @@
 # Docker Compose Template
 # Copy this file to docker-compose.yml and adjust the values as needed.
-# Make sure to set your OPENROUTER_API_KEY environment variable.
+# The OpenRouter API key can be entered in the app (Settings → AI providers)
+# or set via the OPENROUTER_API_KEY environment variable.
 
 services:
   scio:
@@ -11,7 +12,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
+      - ./claude:/app/claude  # Claude Code CLI + sign-in for the Claude subscription
     environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}  # Set this in your environment or .env file
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}  # Optional: can also be set in the app
     restart: unless-stopped
 

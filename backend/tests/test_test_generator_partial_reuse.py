@@ -71,14 +71,6 @@ class FakeOpenRouter:
         return json.dumps({"questions": [_question(t) for t in texts]})
 
 
-@pytest.fixture(autouse=True)
-def fake_api_key(monkeypatch):
-    """_generate_batch refuses to run without a configured API key."""
-    monkeypatch.setattr(
-        test_generator.settings, "openrouter_api_key", "test-key"
-    )
-
-
 async def test_partial_single_call_is_reused_by_next_strategy(monkeypatch):
     """Strategy 1 delivers 4 of 10 valid questions. The fallback must ask
     for exactly the missing 6 (not 10 again) and receive the 4 paid-for

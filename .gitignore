@@ -18,6 +18,9 @@ backend/data/*.db-shm
 uploads/*
 !uploads/.gitkeep
 
+# Claude Code CLI home (binary and Claude sign-in) of the Docker setup
+claude/
+
 # Python
 __pycache__/
 *.py[cod]

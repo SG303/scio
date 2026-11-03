@@ -27,10 +27,17 @@ ENV PYTHONPATH=/app
 
 WORKDIR /app
 
-# Install system dependencies for document parsing
+# Install system dependencies for document parsing; curl runs Anthropic's
+# official Claude Code installer (triggered from the web UI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Claude subscription: the Claude Code CLI is NOT part of the image. It is
+# installed on demand into this directory (mount it as a volume), together
+# with its sign-in and self-updates.
+ENV CLAUDE_CLI_HOME=/app/claude
 
 # Copy backend requirements and install
 COPY backend/requirements.txt .
@@ -43,7 +50,7 @@ COPY backend/app ./app
 COPY --from=frontend-builder /app/frontend/dist /app/static
 
 # Create directories for data and uploads
-RUN mkdir -p /app/data /app/uploads
+RUN mkdir -p /app/data /app/uploads /app/claude
 
 # Expose port
 EXPOSE 8000
