@@ -177,7 +177,9 @@ async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> di
         review_count = counts_by_state.get("review", 0)
         due_count = due_by_deck.get(deck.id, 0)
         new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
-        new_today = max(0, min(new_count, deck.new_cards_per_day) - new_reviewed_today)
+        # Cards introduced today are no longer "new": they are already out of
+        # new_count, so only the daily quota shrinks, never new_count itself
+        new_today = min(new_count, max(0, deck.new_cards_per_day - new_reviewed_today))
         stats_map[deck.id] = {
             "total_cards": total,
             "new_cards": new_count,
