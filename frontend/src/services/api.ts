@@ -540,6 +540,13 @@ export const lecturesApi = {
   delete: (id: number) =>
     fetchApi<{ message: string }>(`/lectures/${id}`, { method: 'DELETE' }),
 
+  /** Finish: AI fixes spelling and formats; the previous text is kept. */
+  format: (id: number, aiModelId: number) =>
+    fetchApi<Lecture>(`/lectures/${id}/format`, {
+      method: 'POST',
+      body: JSON.stringify({ ai_model_id: aiModelId }),
+    }),
+
   /** Stores a pasted/dropped image and returns the URL the Markdown links to. */
   uploadImage: async (id: number, file: File) => {
     const formData = new FormData()

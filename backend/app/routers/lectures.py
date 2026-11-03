@@ -16,14 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import Lecture
+from app.models import AIModel, Lecture, Subject, utc_now
 from app.schemas.lecture import (
     LectureCreate,
+    LectureFormatRequest,
     LectureImageResponse,
     LectureListItem,
     LectureResponse,
     LectureUpdate,
 )
+from app.services.lecture_formatter import format_lecture
 from app.services.subject_materials import ensure_subject_exists
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,7 @@ async def list_lectures(subject_id: int, db: AsyncSession = Depends(get_db)):
             subject_id=lecture.subject_id,
             title=lecture.title,
             word_count=len(lecture.content.split()),
+            formatted_at=lecture.formatted_at,
             created_at=lecture.created_at,
             updated_at=lecture.updated_at,
         )
@@ -104,6 +107,50 @@ async def update_lecture(
         lecture.title = data.title.strip() or lecture.title
     if data.content is not None:
         lecture.content = data.content
+    await db.commit()
+    await db.refresh(lecture)
+    return lecture
+
+
+@router.post("/lectures/{lecture_id}/format", response_model=LectureResponse)
+async def format_lecture_notes(
+    lecture_id: int, request: LectureFormatRequest, db: AsyncSession = Depends(get_db)
+):
+    """Finish a lecture: AI fixes spelling and structures the Markdown.
+
+    The text before formatting is kept in original_content (compare/restore).
+    Reads → AI call → one write, so a failed call changes nothing.
+    """
+    lecture = await _get_lecture(db, lecture_id)
+    source = lecture.content
+    if not source.strip():
+        raise HTTPException(status_code=400, detail="Write some notes before formatting them.")
+
+    ai_model_id = request.ai_model_id
+    if ai_model_id is None:
+        ai_model_id = (
+            await db.execute(select(Subject.ai_model_id).where(Subject.id == lecture.subject_id))
+        ).scalar_one_or_none()
+    if ai_model_id is None:
+        raise HTTPException(status_code=400, detail="Choose an AI model to format the notes.")
+    ai_model = await db.get(AIModel, ai_model_id)
+    if ai_model is None or not ai_model.is_enabled:
+        raise HTTPException(status_code=400, detail="AI model not available")
+
+    try:
+        formatted = await format_lecture(source, ai_model.openrouter_id)
+    except ValueError as e:
+        logger.error("Failed to format lecture %s: %s", lecture_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to format lecture %s: %s", lecture_id, e, exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Formatting failed. Your notes are unchanged. Please try again."
+        )
+
+    lecture.original_content = source
+    lecture.content = formatted
+    lecture.formatted_at = utc_now()
     await db.commit()
     await db.refresh(lecture)
     return lecture
