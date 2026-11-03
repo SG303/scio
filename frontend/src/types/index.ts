@@ -134,6 +134,7 @@ export interface CreateAndGenerateTestRequest {
   num_choices: number
   ai_model_id: number
   document_ids: number[]
+  lecture_ids?: number[]
   custom_prompt?: string | null
   subject_id?: number | null
   generate_num_questions?: number
@@ -261,6 +262,7 @@ export interface CreateFlashcardDeck {
 export interface CreateAndGenerateDeckRequest extends CreateFlashcardDeck {
   num_cards: number
   topic?: string | null
+  lecture_ids?: number[]
 }
 
 export interface CreateAndGenerateDeckResponse {

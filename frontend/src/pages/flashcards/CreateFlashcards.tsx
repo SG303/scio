@@ -16,6 +16,7 @@ import { StepIndicator } from '@/components/StepIndicator'
 import { CostEstimate } from '@/components/CostEstimate'
 import { GenerationStatus } from '@/components/GenerationStatus'
 import { MaterialsStep, withSubjectDefaults } from '@/components/MaterialsStep'
+import { useLectureContents } from '@/hooks/useLectureContents'
 import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
 import { queryKeys } from '@/lib/constants'
 import type { SubjectListItem } from '@/types'
@@ -36,16 +37,27 @@ export default function CreateFlashcards() {
   }
 
   const initialSubject = subjects.find((s) => String(s.id) === searchParams.get('subject')) ?? null
+  // ?lecture= comes from a lecture's "Create …" action and needs its subject
+  const lectureParam = Number(searchParams.get('lecture'))
+  const initialLectureIds = initialSubject && lectureParam ? [lectureParam] : []
 
-  return <CreateFlashcardsWizard subjects={subjects} initialSubject={initialSubject} />
+  return (
+    <CreateFlashcardsWizard
+      subjects={subjects}
+      initialSubject={initialSubject}
+      initialLectureIds={initialLectureIds}
+    />
+  )
 }
 
 function CreateFlashcardsWizard({
   subjects,
   initialSubject,
+  initialLectureIds,
 }: {
   subjects: SubjectListItem[]
   initialSubject: SubjectListItem | null
+  initialLectureIds: number[]
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -56,6 +68,7 @@ function CreateFlashcardsWizard({
     num_cards: 20,
     ai_model_id: initialSubject?.ai_model_id ?? 0,
     document_ids: withSubjectDefaults([], null, initialSubject),
+    lecture_ids: initialLectureIds,
     custom_prompt: '',
     subject_id: initialSubject?.id ?? null,
   })
@@ -73,6 +86,8 @@ function CreateFlashcardsWizard({
   })
 
   const selectedSubject = subjects.find((s) => s.id === formData.subject_id) ?? null
+  const lectureContents = useLectureContents(formData.lecture_ids)
+  const hasMaterial = formData.document_ids.length > 0 || formData.lecture_ids.length > 0
 
   const handleSubjectChange = (subject: SubjectListItem | null) => {
     setFormData((prev) => ({
@@ -95,6 +110,7 @@ function CreateFlashcardsWizard({
         description: formData.description || undefined,
         ai_model_id: formData.ai_model_id,
         document_ids: formData.document_ids.length > 0 ? formData.document_ids : undefined,
+        lecture_ids: formData.lecture_ids,
         custom_prompt: formData.custom_prompt || undefined,
         num_cards: formData.num_cards,
         subject_id: formData.subject_id,
@@ -126,9 +142,9 @@ function CreateFlashcardsWizard({
     const selectedModel = models.find(m => m.id === formData.ai_model_id)
     if (!selectedModel) return null
 
-    const documentContents = formData.document_ids.map(
-      (id) => documents.find((d) => d.id === id)?.content || ''
-    )
+    const documentContents = formData.document_ids
+      .map((id) => documents.find((d) => d.id === id)?.content || '')
+      .concat(lectureContents)
     const { inputTokens, outputTokens, numBatches } = calculateFlashcardGenerationTokens(
       documentContents,
       formData.num_cards
@@ -152,7 +168,7 @@ function CreateFlashcardsWizard({
       includedInSubscription: isSubscriptionModel(selectedModel.openrouter_id),
       numBatches,
     }
-  }, [formData.document_ids, formData.ai_model_id, formData.num_cards, documents, models])
+  }, [formData.document_ids, formData.ai_model_id, formData.num_cards, documents, models, lectureContents])
 
   const selectedModelName = models.find((m) => m.id === formData.ai_model_id)?.name
 
@@ -174,6 +190,8 @@ function CreateFlashcardsWizard({
           documents={documents}
           documentIds={formData.document_ids}
           onDocumentIdsChange={(ids) => setFormData((prev) => ({ ...prev, document_ids: ids }))}
+          lectureIds={formData.lecture_ids}
+          onLectureIdsChange={(ids) => setFormData((prev) => ({ ...prev, lecture_ids: ids }))}
           generates="flashcards"
           onContinue={() => setStep(2)}
         />
@@ -196,12 +214,12 @@ function CreateFlashcardsWizard({
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder={
-                  formData.document_ids.length === 0
+                  !hasMaterial
                     ? 'e.g., Python Programming, AWS Cloud Fundamentals'
                     : 'e.g., AWS Solutions Architect Study Cards'
                 }
               />
-              {formData.document_ids.length === 0 && (
+              {!hasMaterial && (
                 <p className="text-xs text-muted-foreground">
                   Since no documents are selected, the AI will generate cards based on this topic
                 </p>
@@ -290,7 +308,8 @@ function CreateFlashcardsWizard({
               {([
                 ['Title', formData.title],
                 ['Subject', selectedSubject?.title ?? 'No subject'],
-                ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : 'None (topic-based)'],
+                ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : hasMaterial ? 'None' : 'None (topic-based)'],
+                ...(formData.lecture_ids.length > 0 ? [['Lectures', `${formData.lecture_ids.length} selected`] as const] : []),
                 ['Flashcards', formData.num_cards],
                 ['AI model', selectedModelName],
               ] as const).map(([label, value]) => (

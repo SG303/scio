@@ -295,6 +295,19 @@ export default function SubjectDetail() {
                   </p>
                 </div>
                 <RowActions label={`Actions for ${lecture.title}`}>
+                  <DropdownMenuItem asChild>
+                    <Link to={`${createDeckHref}&lecture=${lecture.id}`}>
+                      <Layers className="h-4 w-4 mr-2" />
+                      Create flashcards
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to={`${createTestHref}&lecture=${lecture.id}`}>
+                      <ClipboardList className="h-4 w-4 mr-2" />
+                      Create test
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
                     onClick={() => setDeletingLecture(lecture)}

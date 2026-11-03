@@ -29,6 +29,7 @@ from app.schemas.flashcard import FlashcardDeckResponse, GenerateFlashcardsRespo
 from app.services.test_generator import generate_test_questions
 from app.services.flashcard_generator import generate_flashcards
 from app.routers.flashcards import get_deck_stats_map
+from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import existing_subject_fronts, existing_subject_questions
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
@@ -652,9 +653,10 @@ async def add_questions_to_test_config(
     existing_questions = [row[0] for row in existing_result.fetchall()]
     
     # Generate new questions
+    lectures = await load_lecture_sources(db, test_config.lecture_ids)
     try:
         questions_data = await generate_test_questions(
-            documents=documents,
+            documents=documents + lectures,
             num_questions=request.num_questions,
             num_choices=test_config.num_choices,
             model_id=ai_model.openrouter_id,
@@ -752,9 +754,10 @@ async def add_cards_to_deck(
     existing_fronts = [row[0] for row in existing_result.fetchall()]
     
     # Generate new cards
+    lectures = await load_lecture_sources(db, deck.lecture_ids)
     try:
         cards_data = await generate_flashcards(
-            documents=documents,
+            documents=documents + lectures,
             num_cards=request.num_cards,
             model_id=ai_model.openrouter_id,
             topic=deck.title,
