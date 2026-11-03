@@ -152,7 +152,11 @@ function CreateTestWizard({
     setIsGenerating(true)
 
     // P6.2: token lets the backend report batch progress while we wait
-    const progressToken = crypto.randomUUID()
+    // Not crypto.randomUUID(): it only exists in secure contexts (HTTPS or
+    // localhost) and Scio is also opened via plain http://<LAN/Tailscale IP>
+    const progressToken = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+      b.toString(16).padStart(2, '0')
+    ).join('')
     startProgress(progressToken)
     const abortController = new AbortController()
     generationAbortRef.current = abortController
