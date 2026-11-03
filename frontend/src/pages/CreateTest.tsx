@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { documentsApi, modelsApi, subjectsApi, testsApi } from '@/services/api'
+import { documentsApi, modelsApi, settingsApi, subjectsApi, testsApi } from '@/services/api'
 import { useGenerationProgress } from '@/hooks/useGenerationProgress'
 import { calculateEstimatedCost, calculateTestGenerationTokens, isSubscriptionModel } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
@@ -42,7 +42,12 @@ export default function CreateTest() {
     queryFn: testsApi.listTemplates,
   })
 
-  if (subjectsLoading || templatesLoading) {
+  const { data: appSettings, isLoading: settingsLoading } = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: settingsApi.get,
+  })
+
+  if (subjectsLoading || templatesLoading || settingsLoading) {
     return <QueryState loading />
   }
 
@@ -59,6 +64,7 @@ export default function CreateTest() {
       initialSubject={initialSubject}
       initialTemplate={initialTemplate}
       initialLectureIds={initialLectureIds}
+      defaultModelId={appSettings?.default_ai_model_id ?? 0}
     />
   )
 }
@@ -81,12 +87,15 @@ function CreateTestWizard({
   initialSubject,
   initialTemplate,
   initialLectureIds,
+  defaultModelId,
 }: {
   subjects: SubjectListItem[]
   templates: TestConfig[]
   initialSubject: SubjectListItem | null
   initialTemplate: TestConfig | null
   initialLectureIds: number[]
+  /** Global default model (Settings); 0 = none */
+  defaultModelId: number
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -104,7 +113,7 @@ function CreateTestWizard({
         }
     return {
       ...base,
-      ai_model_id: base.ai_model_id || initialSubject?.ai_model_id || 0,
+      ai_model_id: base.ai_model_id || initialSubject?.ai_model_id || defaultModelId,
       document_ids: withSubjectDefaults(base.document_ids, null, initialSubject),
       lecture_ids: initialLectureIds,
       subject_id: initialSubject?.id ?? null,
@@ -137,8 +146,11 @@ function CreateTestWizard({
     setFormData((prev) => ({
       ...prev,
       subject_id: subject?.id ?? null,
-      // the subject's default model only fills an empty choice
-      ai_model_id: prev.ai_model_id || subject?.ai_model_id || 0,
+      // the subject's model replaces only an empty choice or the global default
+      ai_model_id:
+        prev.ai_model_id && prev.ai_model_id !== defaultModelId
+          ? prev.ai_model_id
+          : subject?.ai_model_id || defaultModelId,
     }))
   }
 

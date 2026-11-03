@@ -26,6 +26,7 @@ from app.schemas.subject import (
 from app.schemas.test import TestResponse
 from app.routers.tests import build_test_response
 from app.schemas.flashcard import FlashcardDeckResponse, GenerateFlashcardsResponse, FlashcardResponse
+from app.services.default_model import resolve_ai_model_id
 from app.services.test_generator import generate_test_questions
 from app.services.flashcard_generator import generate_flashcards
 from app.routers.flashcards import get_deck_stats_map
@@ -401,10 +402,13 @@ async def generate_test_in_subject(
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
     
-    # Determine AI model (request override > subject default)
-    ai_model_id = request.ai_model_id or subject.ai_model_id
+    # Determine AI model (request override > subject default > global default)
+    ai_model_id = await resolve_ai_model_id(db, request.ai_model_id, subject.ai_model_id)
     if not ai_model_id:
-        raise HTTPException(status_code=400, detail="No AI model specified and subject has no default")
+        raise HTTPException(
+            status_code=400,
+            detail="No AI model specified. Choose one or set a default model in Settings.",
+        )
     
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
@@ -509,10 +513,13 @@ async def generate_flashcards_in_subject(
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
     
-    # Determine AI model (request override > subject default)
-    ai_model_id = request.ai_model_id or subject.ai_model_id
+    # Determine AI model (request override > subject default > global default)
+    ai_model_id = await resolve_ai_model_id(db, request.ai_model_id, subject.ai_model_id)
     if not ai_model_id:
-        raise HTTPException(status_code=400, detail="No AI model specified and subject has no default")
+        raise HTTPException(
+            status_code=400,
+            detail="No AI model specified. Choose one or set a default model in Settings.",
+        )
     
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
@@ -723,9 +730,14 @@ async def add_cards_to_deck(
         raise HTTPException(status_code=404, detail="Deck not found in this subject")
     
     # Determine AI model
-    ai_model_id = request.ai_model_id or deck.ai_model_id
+    ai_model_id = await resolve_ai_model_id(
+        db, request.ai_model_id, deck.ai_model_id, subject.ai_model_id
+    )
     if not ai_model_id:
-        raise HTTPException(status_code=400, detail="No AI model specified and deck has no default")
+        raise HTTPException(
+            status_code=400,
+            detail="No AI model specified. Choose one or set a default model in Settings.",
+        )
     
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()

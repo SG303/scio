@@ -14,6 +14,8 @@ export interface AIModel {
 
 export interface AppSettings {
   verification_model: string
+  /** Global default AI model; null = not set */
+  default_ai_model_id: number | null
 }
 
 export interface OpenRouterKeyStatus {

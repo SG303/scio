@@ -7,6 +7,7 @@ from typing import List, Any, Dict
 from app.database import get_db
 from app.models import AIModel, TestConfig, FlashcardDeck, Subject
 from app.schemas.ai_model import AIModelCreate, AIModelUpdate, AIModelResponse
+from app.services.default_model import get_default_ai_model_id
 from app.services.openrouter import fetch_openrouter_models
 from app.services.claude_cli import (
     MODEL_PREFIX,
@@ -107,6 +108,10 @@ async def seed_default_models(db: AsyncSession):
             )
             for model_id, count in ref_result.all():
                 reference_counts[model_id] = reference_counts.get(model_id, 0) + count
+
+        global_default_id = await get_default_ai_model_id(db)
+        if global_default_id is not None:
+            reference_counts[global_default_id] = reference_counts.get(global_default_id, 0) + 1
 
         result = await db.execute(
             select(AIModel).where(
@@ -340,6 +345,9 @@ async def delete_model(model_id: int, db: AsyncSession = Depends(get_db)):
         count = count_result.scalar() or 0
         if count > 0:
             references.append(f"{count} {label}{'s' if count != 1 else ''}")
+
+    if await get_default_ai_model_id(db) == model_id:
+        references.append("the global default model setting")
 
     if references:
         raise HTTPException(
