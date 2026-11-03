@@ -25,6 +25,7 @@ from app.schemas.lecture import (
     LectureResponse,
     LectureUpdate,
 )
+from app.services.default_model import resolve_ai_model_id
 from app.services.lecture_formatter import format_lecture
 from app.services.subject_materials import ensure_subject_exists
 
@@ -126,13 +127,15 @@ async def format_lecture_notes(
     if not source.strip():
         raise HTTPException(status_code=400, detail="Write some notes before formatting them.")
 
-    ai_model_id = request.ai_model_id
+    subject_model_id = (
+        await db.execute(select(Subject.ai_model_id).where(Subject.id == lecture.subject_id))
+    ).scalar_one_or_none()
+    ai_model_id = await resolve_ai_model_id(db, request.ai_model_id, subject_model_id)
     if ai_model_id is None:
-        ai_model_id = (
-            await db.execute(select(Subject.ai_model_id).where(Subject.id == lecture.subject_id))
-        ).scalar_one_or_none()
-    if ai_model_id is None:
-        raise HTTPException(status_code=400, detail="Choose an AI model to format the notes.")
+        raise HTTPException(
+            status_code=400,
+            detail="Choose an AI model to format the notes, or set a default model in Settings.",
+        )
     ai_model = await db.get(AIModel, ai_model_id)
     if ai_model is None or not ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model not available")

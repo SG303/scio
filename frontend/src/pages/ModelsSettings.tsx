@@ -17,6 +17,7 @@ import { modelsApi, settingsApi } from '@/services/api'
 import { cn, formatContextLength, formatPricePerMillion, isSubscriptionModel } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import { toast } from '@/components/Toaster'
+import type { AppSettings } from '@/types'
 
 /** Token-based on/off switch (no extra dependency). */
 function Switch({
@@ -108,8 +109,7 @@ export default function ModelsSettings() {
   })
 
   const settingsMutation = useMutation({
-    mutationFn: (verificationModel: string) =>
-      settingsApi.update({ verification_model: verificationModel }),
+    mutationFn: (data: Partial<AppSettings>) => settingsApi.update(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings })
       toast.success('Settings saved.')
@@ -314,7 +314,37 @@ export default function ModelsSettings() {
       {/* Generation Settings */}
       <section className="space-y-3">
         <SectionHeader title="Generation settings" />
-        <div className="rounded-xl border bg-card p-5 sm:p-6">
+        <div className="space-y-6 rounded-xl border bg-card p-5 sm:p-6">
+          <div>
+            <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
+              The default model is used wherever no model is chosen: finishing lecture notes
+              and as the starting choice in the creation wizards. A subject can override it.
+            </p>
+            <div className="max-w-md space-y-2">
+              <Label htmlFor="default-model">Default model</Label>
+              <Select
+                value={settings?.default_ai_model_id ? String(settings.default_ai_model_id) : 'none'}
+                onValueChange={(value) =>
+                  settingsMutation.mutate({ default_ai_model_id: value === 'none' ? null : Number(value) })
+                }
+                disabled={settingsMutation.isPending}
+              >
+                <SelectTrigger id="default-model">
+                  <SelectValue placeholder="No default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No default (ask each time)</SelectItem>
+                  {models
+                    .filter((m) => m.is_enabled || m.id === settings?.default_ai_model_id)
+                    .map((model) => (
+                      <SelectItem key={model.id} value={String(model.id)}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
             The verification model double-checks each generated question after you
             finish a test. A cheap, fast model is usually the best choice here.
@@ -324,7 +354,7 @@ export default function ModelsSettings() {
               <Label htmlFor="verification-model">Verification model</Label>
               <Select
                 value={settings?.verification_model ?? ''}
-                onValueChange={(value) => settingsMutation.mutate(value)}
+                onValueChange={(value) => settingsMutation.mutate({ verification_model: value })}
                 disabled={settingsMutation.isPending}
               >
                 <SelectTrigger id="verification-model">

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { documentsApi, modelsApi, flashcardsApi, subjectsApi } from '@/services/api'
+import { documentsApi, modelsApi, flashcardsApi, settingsApi, subjectsApi } from '@/services/api'
 import { calculateEstimatedCost, calculateFlashcardGenerationTokens, isSubscriptionModel } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 import { QueryState } from '@/components/QueryState'
@@ -27,12 +27,17 @@ const CARD_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50]
 export default function CreateFlashcards() {
   const [searchParams] = useSearchParams()
 
-  const { data: subjects = [], isLoading } = useQuery({
+  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
     queryKey: queryKeys.subjects,
     queryFn: subjectsApi.list,
   })
 
-  if (isLoading) {
+  const { data: appSettings, isLoading: settingsLoading } = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: settingsApi.get,
+  })
+
+  if (subjectsLoading || settingsLoading) {
     return <QueryState loading />
   }
 
@@ -46,6 +51,7 @@ export default function CreateFlashcards() {
       subjects={subjects}
       initialSubject={initialSubject}
       initialLectureIds={initialLectureIds}
+      defaultModelId={appSettings?.default_ai_model_id ?? 0}
     />
   )
 }
@@ -54,10 +60,13 @@ function CreateFlashcardsWizard({
   subjects,
   initialSubject,
   initialLectureIds,
+  defaultModelId,
 }: {
   subjects: SubjectListItem[]
   initialSubject: SubjectListItem | null
   initialLectureIds: number[]
+  /** Global default model (Settings); 0 = none */
+  defaultModelId: number
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -66,7 +75,7 @@ function CreateFlashcardsWizard({
     title: '',
     description: '',
     num_cards: 20,
-    ai_model_id: initialSubject?.ai_model_id ?? 0,
+    ai_model_id: initialSubject?.ai_model_id ?? defaultModelId,
     document_ids: withSubjectDefaults([], null, initialSubject),
     lecture_ids: initialLectureIds,
     custom_prompt: '',
@@ -94,7 +103,11 @@ function CreateFlashcardsWizard({
       ...prev,
       subject_id: subject?.id ?? null,
       // the subject's default model only fills an empty choice
-      ai_model_id: prev.ai_model_id || subject?.ai_model_id || 0,
+      // the subject's model replaces only an empty choice or the global default
+      ai_model_id:
+        prev.ai_model_id && prev.ai_model_id !== defaultModelId
+          ? prev.ai_model_id
+          : subject?.ai_model_id || defaultModelId,
     }))
   }
 
