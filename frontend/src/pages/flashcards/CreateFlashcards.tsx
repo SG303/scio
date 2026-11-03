@@ -79,6 +79,8 @@ function CreateFlashcardsWizard({
     ai_model_id: initialSubject?.ai_model_id ?? defaultModelId,
     document_ids: withSubjectDefaults([], null, initialSubject),
     lecture_ids: initialLectureIds,
+    // set = add the cards to this existing deck instead of creating one
+    deck_id: null as number | null,
     custom_prompt: '',
     language: initialSubject?.language ?? '',
     subject_id: initialSubject?.id ?? null,
@@ -91,6 +93,11 @@ function CreateFlashcardsWizard({
     queryFn: documentsApi.list,
   })
 
+  const { data: decks = [] } = useQuery({
+    queryKey: queryKeys.flashcardDecks,
+    queryFn: flashcardsApi.listDecks,
+  })
+
   const { data: models = [] } = useQuery({
     queryKey: queryKeys.modelsAll,
     queryFn: () => modelsApi.list(true),
@@ -100,10 +107,21 @@ function CreateFlashcardsWizard({
   const lectureContents = useLectureContents(formData.lecture_ids)
   const hasMaterial = formData.document_ids.length > 0 || formData.lecture_ids.length > 0
 
+  // With a subject chosen, only its decks can receive cards
+  const selectableDecks = formData.subject_id === null
+    ? decks
+    : decks.filter((deck) => deck.subject_id === formData.subject_id)
+  const targetDeck = decks.find((deck) => deck.id === formData.deck_id) ?? null
+
   const handleSubjectChange = (subject: SubjectListItem | null) => {
     setFormData((prev) => ({
       ...prev,
       subject_id: subject?.id ?? null,
+      ...(prev.deck_id !== null &&
+        subject !== null &&
+        decks.find((deck) => deck.id === prev.deck_id)?.subject_id !== subject.id
+        ? { deck_id: null, title: '' }
+        : {}),
       // the subject's model replaces only an empty choice or the global default
       ai_model_id:
         prev.ai_model_id && prev.ai_model_id !== defaultModelId
@@ -114,6 +132,19 @@ function CreateFlashcardsWizard({
         prev.language === (subjects.find((s) => s.id === prev.subject_id)?.language ?? '')
           ? subject?.language ?? ''
           : prev.language,
+    }))
+  }
+
+  const chooseNewDeck = () => setFormData((prev) => ({ ...prev, deck_id: null, title: '' }))
+
+  const chooseExistingDeck = (deckId: number | null) => {
+    const deck = decks.find((d) => d.id === deckId)
+    setFormData((prev) => ({
+      ...prev,
+      deck_id: deck?.id ?? null,
+      // the deck keeps its title; the language defaults to the deck's own
+      title: deck?.title ?? '',
+      language: deck?.language ?? prev.language,
     }))
   }
 
@@ -134,15 +165,19 @@ function CreateFlashcardsWizard({
         language: formData.language || undefined,
         num_cards: formData.num_cards,
         subject_id: formData.subject_id,
+        deck_id: formData.deck_id,
       })
 
       // Refresh the deck list so it shows the new deck when the user
       // navigates back (staleTime 5 min would otherwise serve stale data)
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDecks })
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardStats })
-      if (formData.subject_id !== null) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(result.deck.id.toString()) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.flashcardCards(result.deck.id.toString()) })
+      const deckSubjectId = result.deck.subject_id
+      if (deckSubjectId !== null) {
         queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
-        queryClient.invalidateQueries({ queryKey: queryKeys.subject(formData.subject_id) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.subject(deckSubjectId) })
       }
 
       // Navigate to the deck
@@ -228,6 +263,45 @@ function CreateFlashcardsWizard({
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
+              <Label>Where should the cards go?</Label>
+              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Target deck">
+                <OptionCard indicator="radio" selected={formData.deck_id === null} onClick={chooseNewDeck}>
+                  <span className="font-medium">New deck</span>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Create a separate deck for these cards</p>
+                </OptionCard>
+                <OptionCard
+                  indicator="radio"
+                  selected={formData.deck_id !== null}
+                  onClick={() => chooseExistingDeck(formData.deck_id ?? selectableDecks[0]?.id ?? null)}
+                  disabled={selectableDecks.length === 0}
+                >
+                  <span className="font-medium">Existing deck</span>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {selectableDecks.length === 0
+                      ? 'No deck available yet'
+                      : 'Add the new cards to a deck you already have'}
+                  </p>
+                </OptionCard>
+              </div>
+              {targetDeck && (
+                <Select value={String(targetDeck.id)} onValueChange={(v) => chooseExistingDeck(Number(v))}>
+                  <SelectTrigger aria-label="Deck">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectableDecks.map((deck) => (
+                      <SelectItem key={deck.id} value={String(deck.id)}>
+                        {deck.title} ({deck.total_cards} cards)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {targetDeck === null && (
+            <>
+            <div className="space-y-2">
               <Label htmlFor="title">Deck Title / Topic</Label>
               <Input
                 id="title"
@@ -256,6 +330,8 @@ function CreateFlashcardsWizard({
                 rows={2}
               />
             </div>
+            </>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="num_cards">Number of Flashcards</Label>
@@ -333,8 +409,8 @@ function CreateFlashcardsWizard({
             {/* Summary */}
             <dl className="divide-y rounded-lg border text-sm">
               {([
-                ['Title', formData.title],
-                ['Subject', selectedSubject?.title ?? 'No subject'],
+                [targetDeck ? 'Adding to deck' : 'Title', formData.title],
+                ['Subject', (targetDeck ? subjects.find((s) => s.id === targetDeck.subject_id) : selectedSubject)?.title ?? 'No subject'],
                 ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : hasMaterial ? 'None' : 'None (topic-based)'],
                 ...(formData.lecture_ids.length > 0 ? [['Lectures', `${formData.lecture_ids.length} selected`] as const] : []),
                 ['Flashcards', formData.num_cards],

@@ -8,21 +8,23 @@ type OptionCardProps = {
   onClick: () => void
   /** checkbox for multi-select (documents), radio for single choice (model) */
   indicator: 'checkbox' | 'radio'
+  disabled?: boolean
   children: ReactNode
 }
 
 /** Selectable row used by the document and model pickers. */
-export function OptionCard({ selected, onClick, indicator, children }: OptionCardProps) {
+export function OptionCard({ selected, onClick, indicator, disabled, children }: OptionCardProps) {
   return (
     <button
       type="button"
       role={indicator}
       aria-checked={selected}
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        'flex w-full items-start gap-3 rounded-lg border p-3 text-left text-sm transition-colors',
+        'flex w-full items-start gap-3 rounded-lg border p-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        selected ? 'border-primary ring-1 ring-primary' : 'hover:bg-accent/60'
+        selected ? 'border-primary ring-1 ring-primary' : !disabled && 'hover:bg-accent/60'
       )}
     >
       <span

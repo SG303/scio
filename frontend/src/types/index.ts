@@ -271,6 +271,8 @@ export interface CreateAndGenerateDeckRequest extends CreateFlashcardDeck {
   num_cards: number
   topic?: string | null
   lecture_ids?: number[]
+  /** Add the cards to this existing deck instead of creating a new one */
+  deck_id?: number | null
 }
 
 export interface CreateAndGenerateDeckResponse {
