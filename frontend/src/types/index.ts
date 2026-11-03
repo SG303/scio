@@ -16,6 +16,23 @@ export interface AppSettings {
   verification_model: string
 }
 
+export interface OpenRouterKeyStatus {
+  configured: boolean
+  /** "app" = saved in Scio, "environment" = OPENROUTER_API_KEY */
+  source: 'app' | 'environment' | null
+  key_hint: string | null
+}
+
+export interface ClaudeStatus {
+  installed: boolean
+  can_install: boolean
+  version: string | null
+  logged_in: boolean
+  email: string | null
+  subscription_type: string | null
+  login_pending: boolean
+}
+
 export interface Document {
   id: number
   title: string

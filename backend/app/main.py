@@ -18,11 +18,11 @@ from contextlib import asynccontextmanager
 import os
 
 from app.database import init_db, async_session
-from app.routers import documents, ai_models, tests, flashcards, subjects, generation
+from app.routers import documents, ai_models, tests, flashcards, subjects, generation, providers
 from app.routers.settings import router as settings_router
 from app.routers.ai_models import seed_default_models
 from app.config import get_settings
-from app.services import db_backup
+from app.services import claude_cli, db_backup
 from app.migrations.add_template_fields import migrate as migrate_template_fields
 from app.migrations.add_flashcard_tables import migrate as migrate_flashcard_tables
 from app.migrations.add_subjects_table import migrate as migrate_subjects_table
@@ -63,6 +63,7 @@ async def lifespan(app: FastAPI):
             await backup_task
         except asyncio.CancelledError:
             pass
+        await claude_cli.shutdown()
 
 
 app = FastAPI(
@@ -98,6 +99,7 @@ app.include_router(tests.router)
 app.include_router(flashcards.router)
 app.include_router(subjects.router)
 app.include_router(settings_router)
+app.include_router(providers.router)
 # P6.2: progress polling for long-running AI generations
 app.include_router(generation.router)
 

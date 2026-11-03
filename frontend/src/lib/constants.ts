@@ -11,6 +11,8 @@ export const queryKeys = {
   models: ['models'] as const,
   modelsAll: ['models', true] as const,
   settings: ['settings'] as const,
+  openRouterStatus: ['providers', 'openrouter'] as const,
+  claudeStatus: ['providers', 'claude'] as const,
   subjects: ['subjects'] as const,
   subject: (id: QueryId) => ['subject', String(id ?? '')] as const,
   templates: ['templates'] as const,
@@ -26,6 +28,10 @@ export const queryKeys = {
   studyQueue: (deckId: QueryId, sessionId: number | null) =>
     ['study-queue', String(deckId ?? ''), sessionId] as const,
 }
+
+// Models served through the Claude subscription (Claude Code CLI) carry
+// this prefix in their model ID — same constant as backend claude_cli.py.
+export const CLAUDE_SUBSCRIPTION_PREFIX = 'claude-subscription/'
 
 // Test configuration options
 export const QUESTION_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50, 60] as const

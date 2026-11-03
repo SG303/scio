@@ -34,7 +34,9 @@ import type {
   CreateAndGenerateDeckResponse,
   ImportCardsResult,
   FlashcardAnalytics,
-  AppSettings
+  AppSettings,
+  OpenRouterKeyStatus,
+  ClaudeStatus
 } from '@/types'
 
 const API_BASE = '/api'
@@ -128,6 +130,39 @@ export const settingsApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+}
+
+export const providersApi = {
+  openRouterStatus: () => fetchApi<OpenRouterKeyStatus>('/providers/openrouter'),
+
+  saveOpenRouterKey: (apiKey: string) =>
+    fetchApi<OpenRouterKeyStatus>('/providers/openrouter', {
+      method: 'PUT',
+      body: JSON.stringify({ api_key: apiKey }),
+    }),
+
+  removeOpenRouterKey: () =>
+    fetchApi<OpenRouterKeyStatus>('/providers/openrouter', { method: 'DELETE' }),
+
+  claudeStatus: () => fetchApi<ClaudeStatus>('/providers/claude'),
+
+  installClaude: () =>
+    fetchApi<ClaudeStatus>('/providers/claude/install', { method: 'POST' }),
+
+  startClaudeLogin: () =>
+    fetchApi<{ url: string }>('/providers/claude/login', { method: 'POST' }),
+
+  completeClaudeLogin: (code: string) =>
+    fetchApi<ClaudeStatus>('/providers/claude/login/complete', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
+  cancelClaudeLogin: () =>
+    fetchApi<ClaudeStatus>('/providers/claude/login/cancel', { method: 'POST' }),
+
+  logoutClaude: () =>
+    fetchApi<ClaudeStatus>('/providers/claude/logout', { method: 'POST' }),
 }
 
 export const modelsApi = {

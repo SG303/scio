@@ -16,7 +16,12 @@ class Settings(BaseSettings):
     # fallback: the active model is stored in the settings table and can be
     # changed in the app's settings UI (GET/PUT /api/settings).
     verification_model: str = "anthropic/claude-haiku-5.5"
-    
+
+    # Claude subscription: HOME directory for the Claude Code CLI (binary,
+    # login and updates live below it). Empty = use the current user's HOME
+    # and the `claude` found on PATH (local development).
+    claude_cli_home: str = ""
+
     # CORS - comma-separated list of allowed origins
     # Use "*" for allow all (development), or specific origins for production
     allowed_origins: str = "http://localhost:3000,http://localhost:5173,http://localhost:8000"

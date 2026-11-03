@@ -1,9 +1,15 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { AIModel } from "@/types"
+import { CLAUDE_SUBSCRIPTION_PREFIX } from "@/lib/constants"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+/** Model runs on the Claude subscription (no per-token price). */
+export function isSubscriptionModel(modelId: string | undefined): boolean {
+  return !!modelId && modelId.startsWith(CLAUDE_SUBSCRIPTION_PREFIX)
 }
 
 // The API emits UTC datetimes without a timezone designator

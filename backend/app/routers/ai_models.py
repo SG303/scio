@@ -8,6 +8,11 @@ from app.database import get_db
 from app.models import AIModel, TestConfig, FlashcardDeck, Subject
 from app.schemas.ai_model import AIModelCreate, AIModelUpdate, AIModelResponse
 from app.services.openrouter import fetch_openrouter_models
+from app.services.claude_cli import (
+    MODEL_PREFIX,
+    SUBSCRIPTION_CONTEXT_LENGTH,
+    is_subscription_model,
+)
 
 router = APIRouter(prefix="/api/models", tags=["ai_models"])
 logger = logging.getLogger(__name__)
@@ -150,6 +155,50 @@ async def seed_default_models(db: AsyncSession):
         # Don't raise - seeding failure shouldn't prevent app startup
 
 
+# Added once, after the first successful Claude sign-in. The CLI aliases
+# always point to the newest model of each family.
+SUBSCRIPTION_MODELS = [
+    {
+        "name": "Claude Opus (subscription)",
+        "openrouter_id": f"{MODEL_PREFIX}opus",
+        "description": "Most capable Claude model via your Claude subscription; uses up your plan limits fastest",
+    },
+    {
+        "name": "Claude Sonnet (subscription)",
+        "openrouter_id": f"{MODEL_PREFIX}sonnet",
+        "description": "Balanced Claude model via your Claude subscription",
+    },
+    {
+        "name": "Claude Haiku (subscription)",
+        "openrouter_id": f"{MODEL_PREFIX}haiku",
+        "description": "Fast Claude model via your Claude subscription; easiest on your plan limits",
+    },
+]
+SUBSCRIPTION_MODELS_SEEDED_KEY = "claude_subscription_models_seeded"
+
+
+async def seed_subscription_models(db: AsyncSession) -> None:
+    """Add the Claude subscription models once.
+
+    Runs only the first time so models the user deleted later are not
+    re-added on every sign-in. They are user models (is_default=False),
+    so the default-model re-seed never removes them.
+    """
+    from app.models import Setting
+
+    result = await db.execute(select(Setting).where(Setting.key == SUBSCRIPTION_MODELS_SEEDED_KEY))
+    if result.scalar_one_or_none() is not None:
+        return
+
+    result = await db.execute(select(AIModel.openrouter_id))
+    existing_ids = set(result.scalars().all())
+    for model_data in SUBSCRIPTION_MODELS:
+        if model_data["openrouter_id"] not in existing_ids:
+            db.add(AIModel(is_default=False, **model_data))
+    db.add(Setting(key=SUBSCRIPTION_MODELS_SEEDED_KEY, value="1"))
+    await db.commit()
+
+
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_models(
     enabled_only: bool = False,
@@ -186,6 +235,8 @@ async def list_models(
             or_model = openrouter_data[model.openrouter_id]
             model_dict["pricing"] = or_model.get("pricing")
             model_dict["context_length"] = or_model.get("context_length")
+        elif is_subscription_model(model.openrouter_id):
+            model_dict["context_length"] = SUBSCRIPTION_CONTEXT_LENGTH
             
         models.append(model_dict)
         
@@ -219,6 +270,8 @@ async def get_model(model_id: int, db: AsyncSession = Depends(get_db)):
         or_model = openrouter_data[model.openrouter_id]
         model_dict["pricing"] = or_model.get("pricing")
         model_dict["context_length"] = or_model.get("context_length")
+    elif is_subscription_model(model.openrouter_id):
+        model_dict["context_length"] = SUBSCRIPTION_CONTEXT_LENGTH
         
     return model_dict
 
