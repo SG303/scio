@@ -84,6 +84,9 @@ class Lecture(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False, default="")
+    # Text right before the last AI formatting, so it can be compared/restored
+    original_content = Column(Text, nullable=True)
+    formatted_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
