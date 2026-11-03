@@ -19,6 +19,7 @@ import { GenerationStatus } from '@/components/GenerationStatus'
 import { MaterialsStep, withSubjectDefaults } from '@/components/MaterialsStep'
 import { useLectureContents } from '@/hooks/useLectureContents'
 import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
+import { LanguageSelect } from '@/components/LanguageSelect'
 import { toast } from '@/components/Toaster'
 import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
 import type { SubjectListItem, TestConfig } from '@/types'
@@ -78,6 +79,7 @@ function templateValues(template: TestConfig) {
     ai_model_id: template.ai_model_id,
     document_ids: template.document_ids,
     custom_prompt: template.custom_prompt ?? '',
+    language: template.language ?? '',
   }
 }
 
@@ -110,10 +112,13 @@ function CreateTestWizard({
           ai_model_id: 0,
           document_ids: [] as number[],
           custom_prompt: '',
+          language: '',
         }
     return {
       ...base,
       ai_model_id: base.ai_model_id || initialSubject?.ai_model_id || defaultModelId,
+      // a subject's language only fills an unset choice (templates keep their own)
+      language: base.language || initialSubject?.language || '',
       document_ids: withSubjectDefaults(base.document_ids, null, initialSubject),
       lecture_ids: initialLectureIds,
       subject_id: initialSubject?.id ?? null,
@@ -151,6 +156,11 @@ function CreateTestWizard({
         prev.ai_model_id && prev.ai_model_id !== defaultModelId
           ? prev.ai_model_id
           : subject?.ai_model_id || defaultModelId,
+      // same for the language: a choice the user made is kept
+      language:
+        prev.language === (subjects.find((s) => s.id === prev.subject_id)?.language ?? '')
+          ? subject?.language ?? ''
+          : prev.language,
     }))
   }
 
@@ -193,6 +203,7 @@ function CreateTestWizard({
         ai_model_id: formData.ai_model_id,
         document_ids: formData.document_ids,
         custom_prompt: formData.custom_prompt || null,
+        language: formData.language || null,
       }
       const test = await testsApi.createAndGenerate(
         // lectures belong to the subject, so templates never get them
@@ -444,6 +455,13 @@ function CreateTestWizard({
               </div>
             </div>
 
+            <LanguageSelect
+              id="language"
+              value={formData.language}
+              onChange={(language) => setFormData({ ...formData, language })}
+              hint="The language of the questions, answers and explanations."
+            />
+
             <div className="space-y-2">
               <Label htmlFor="custom_prompt">Custom Instructions (Optional)</Label>
               <Textarea
@@ -486,6 +504,7 @@ function CreateTestWizard({
                 ['Questions', formData.num_questions],
                 ['Choices per question', formData.num_choices],
                 ['AI model', selectedModelName],
+                ['Language', formData.language || 'Same as the material'],
                 ['Custom instructions', formData.custom_prompt ? 'Yes' : 'None'],
               ] as const).map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4 px-4 py-2.5">

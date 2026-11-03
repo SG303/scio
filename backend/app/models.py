@@ -60,6 +60,8 @@ class Subject(Base):
     # Default configuration for materials created within this subject
     ai_model_id = Column(Integer, ForeignKey("ai_models.id"), nullable=True)
     document_ids = Column(JSON, nullable=True)  # List of assigned document IDs
+    # Output language of generated cards/questions; NULL = language of the material
+    language = Column(String(50), nullable=True)
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -127,6 +129,7 @@ class TestConfig(Base):
     custom_prompt = Column(
         Text, nullable=True
     )  # Optional custom prompt for test generation
+    language = Column(String(50), nullable=True)  # NULL = language of the material
     subject_id = Column(
         Integer, ForeignKey("subjects.id"), nullable=True, index=True
     )  # Optional subject grouping
@@ -200,6 +203,7 @@ class FlashcardDeck(Base):
     document_ids = Column(JSON, nullable=True)  # List of source document IDs
     lecture_ids = Column(JSON, nullable=True)  # Lecture notes used as context
     custom_prompt = Column(Text, nullable=True)
+    language = Column(String(50), nullable=True)  # NULL = language of the material
     subject_id = Column(
         Integer, ForeignKey("subjects.id"), nullable=True, index=True
     )  # Optional subject grouping

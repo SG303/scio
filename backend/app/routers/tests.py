@@ -345,6 +345,7 @@ async def create_and_generate_test(
             model_id=ai_model.openrouter_id,
             topic=request.title,
             custom_prompt=request.custom_prompt,
+            language=request.language,
             existing_questions=existing_questions if existing_questions else None,
             on_progress=_progress_reporter(progress_token),
         )
@@ -375,6 +376,7 @@ async def create_and_generate_test(
         lecture_ids=request.lecture_ids or None,
         is_template=False,
         custom_prompt=request.custom_prompt,
+        language=request.language,
         subject_id=request.subject_id,
     )
     db.add(db_config)
@@ -474,6 +476,7 @@ async def generate_test(
             model_id=config.ai_model.openrouter_id,
             topic=config.title,  # Pass title as topic for document-less generation
             custom_prompt=config.custom_prompt,  # Pass custom prompt if set
+            language=config.language,
             existing_questions=existing_questions if existing_questions else None,
             on_progress=_progress_reporter(progress_token),
         )
