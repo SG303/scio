@@ -37,7 +37,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/components/Toaster'
-import { subjectsApi, testsApi, flashcardsApi, documentsApi, lecturesApi } from '@/services/api'
+import { subjectsApi, testsApi, flashcardsApi, documentsApi, lecturesApi, settingsApi } from '@/services/api'
 import { cn, formatDate, getScoreColor } from '@/lib/utils'
 import { useLectureEditor } from '@/lib/lectureEditor'
 import type { TestConfigInSubject, FlashcardDeckInSubject, LectureListItem } from '@/types'
@@ -63,6 +63,11 @@ export default function SubjectDetail() {
     queryKey: queryKeys.subject(subjectId),
     queryFn: () => subjectsApi.get(parseInt(subjectId!)),
     enabled: !!subjectId,
+  })
+
+  const { data: appSettings } = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: settingsApi.get,
   })
 
   const { data: documents = [] } = useQuery({
@@ -513,7 +518,7 @@ export default function SubjectDetail() {
           subjectId={parseInt(subjectId!)}
           type={addToExisting.type}
           item={addToExisting.item}
-          defaultAiModelId={subject.ai_model_id}
+          defaultAiModelId={subject.ai_model_id ?? appSettings?.default_ai_model_id ?? null}
         />
       )}
 

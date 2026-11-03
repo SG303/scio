@@ -224,11 +224,11 @@ export default function CreateSubjectDialog({
         {step === 3 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Select a default AI model for generating content in this subject (can be overridden per generation).
+              Select a model for this subject. It overrides the global default from Settings and can still be changed per generation.
             </p>
             {formData.ai_model_id === null && (
               <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                No default model selected. You'll need to select a model when generating content.
+                No model selected here. The default model from Settings is used instead.
               </p>
             )}
             <div className="grid max-h-60 gap-2 overflow-y-auto p-0.5" role="radiogroup" aria-label="Default AI Model">
