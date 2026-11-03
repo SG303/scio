@@ -4,6 +4,40 @@ Alle wesentlichen Änderungen an Scio werden in dieser Datei dokumentiert.
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/)
 und verwendet [Semantic Versioning](https://semver.org/lang/de/).
 
+## [v0.5.0] - 2026-11-03
+
+### Hinzugefügt
+
+- Vorlesungsnotizen in Subjects: Bereich „Lectures" mit „New lecture".
+  Der Editor formatiert Markdown live beim Tippen (Überschriften, Listen,
+  Tabellen, `/`-Menü), Bilder lassen sich per Einfügen (Ctrl+V) oder
+  Drag & Drop hinzufügen. Notizen speichern automatisch, bleiben bei
+  Verbindungsabbruch im Browser erhalten und werden nachgespeichert;
+  Ctrl+S speichert sofort.
+- Der Editor lässt sich zu einer Leiste herunterklappen und bleibt offen,
+  während man durch Scio navigiert.
+- „Finish lecture": Die KI korrigiert Rechtschreibung und strukturiert die
+  Notizen, ohne Inhalt hinzuzufügen oder zu entfernen. Eine Vergleichsansicht
+  zeigt jede Änderung („Keep formatted" / „Restore original"); der Text vor
+  der Aufbereitung bleibt gespeichert. Verändert die KI Bilder, wird das
+  Ergebnis verworfen.
+- Karteikarten und Tests aus Vorlesungen: Vorlesungen erscheinen in den
+  Wizards als wählbare Quellen, im Menü einer Vorlesung gibt es „Create
+  flashcards" und „Create test". Spätere Ergänzungen (Add cards/questions)
+  nutzen die Notizen erneut.
+
+### Geändert
+
+- Ausgewählte Exam-Objectives-Dokumente stehen im Prompt jetzt in einem
+  eigenen Abschnitt: Die KI behandelt sie als Lernziele der Prüfung, richtet
+  Fragen und Karten darauf aus und stellt keine Fragen über die Liste selbst.
+
+### Hinweis zum Update
+
+Die neuen Tabellen und Spalten werden beim Start automatisch angelegt.
+Bilder aus Notizen liegen im Volume `./uploads` und sind im automatischen
+Datenbank-Backup nicht enthalten.
+
 ## [v0.4.0] - 2026-11-03
 
 ### Hinzugefügt
