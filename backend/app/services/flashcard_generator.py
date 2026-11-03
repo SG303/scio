@@ -10,6 +10,11 @@ import logging
 import math
 from typing import List, Dict, Any, Optional
 from app.models import Document, Question
+from app.services.exam_objectives import (
+    exam_objectives_section,
+    format_documents,
+    split_exam_objectives,
+)
 from app.services.openrouter_client import chat_completion_json
 
 logger = logging.getLogger(__name__)
@@ -48,20 +53,23 @@ CRITICAL RULES:
     
     # Build prompt based on whether we have documents
     if documents:
-        # Combine document contents
-        context_parts = []
-        for doc in documents:
-            if doc.content:
-                content = doc.content
-                context_parts.append(f"### {doc.title} ({doc.doc_type})\n{content}")
-        
-        context = "\n\n---\n\n".join(context_parts)
-        
-        if custom_prompt:
-            prompt = f"""You are an expert educator creating flashcards for effective learning. Based on the following study materials, create {num_cards} flashcards.
+        # Exam objectives get their own focus section instead of being mixed
+        # into the study materials
+        study_docs, objective_docs = split_exam_objectives(documents)
+        objectives = exam_objectives_section(objective_docs, has_study_materials=bool(study_docs))
+        if study_docs:
+            source = "the following study materials"
+            materials = f"STUDY MATERIALS:\n{format_documents(study_docs)}"
+            if objectives:
+                materials += f"\n\n{objectives}"
+        else:
+            source = "the following exam objectives"
+            materials = objectives
 
-STUDY MATERIALS:
-{context}
+        if custom_prompt:
+            prompt = f"""You are an expert educator creating flashcards for effective learning. Based on {source}, create {num_cards} flashcards.
+
+{materials}
 
 CUSTOM INSTRUCTIONS:
 {custom_prompt}
@@ -75,10 +83,9 @@ REQUIREMENTS:
 
 {output_format}"""
         else:
-            prompt = f"""You are an expert educator creating flashcards for effective learning. Based on the following study materials, create {num_cards} flashcards to help someone learn and retain the key concepts.
+            prompt = f"""You are an expert educator creating flashcards for effective learning. Based on {source}, create {num_cards} flashcards to help someone learn and retain the key concepts.
 
-STUDY MATERIALS:
-{context}
+{materials}
 
 REQUIREMENTS:
 1. Create exactly {num_cards} flashcards
