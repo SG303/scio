@@ -28,6 +28,7 @@ from app.migrations.add_flashcard_tables import migrate as migrate_flashcard_tab
 from app.migrations.add_subjects_table import migrate as migrate_subjects_table
 from app.migrations.add_lecture_formatting import migrate as migrate_lecture_formatting
 from app.migrations.add_lecture_sources import migrate as migrate_lecture_sources
+from app.migrations.add_language_columns import migrate as migrate_language_columns
 
 settings = get_settings()
 
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     migrate_subjects_table()
     migrate_lecture_formatting()
     migrate_lecture_sources()
+    migrate_language_columns()
     
     # Seed default AI models
     async with async_session() as db:

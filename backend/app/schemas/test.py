@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 
+from app.services.language import Language
+
 
 class Choice(BaseModel):
     index: int
@@ -30,6 +32,7 @@ class TestConfigCreate(BaseModel):
     document_ids: List[int]
     is_template: bool = False
     custom_prompt: Optional[str] = None
+    language: Language = None  # None = language of the material
     # Optional subject grouping; templates never belong to a subject
     subject_id: Optional[int] = None
 
@@ -48,6 +51,7 @@ class TestConfigResponse(BaseModel):
     document_ids: List[int]
     is_template: bool
     custom_prompt: Optional[str] = None
+    language: Language = None  # None = language of the material
     subject_id: Optional[int] = None
     # Templates: number of tests attached to this config (deleted with it)
     test_count: int = 0
@@ -75,6 +79,7 @@ class CreateAndGenerateRequest(BaseModel):
     document_ids: List[int]
     lecture_ids: List[int] = []  # lecture notes as additional study material
     custom_prompt: Optional[str] = None
+    language: Language = None  # None = language of the material
     subject_id: Optional[int] = None
     # optional override of num_questions for the generated test
     generate_num_questions: Optional[int] = None
