@@ -4,6 +4,11 @@ import re
 import math
 from typing import List, Dict, Any, Optional
 from app.models import Document
+from app.services.exam_objectives import (
+    exam_objectives_section,
+    format_documents,
+    split_exam_objectives,
+)
 from app.services.openrouter_client import chat_completion_json
 from app.services.generation_progress import GenerationCancelled
 
@@ -45,26 +50,24 @@ CRITICAL RULES:
     
     # Check if we have documents or just a topic
     if documents:
-        # Combine document contents
-        context_parts = []
-        for doc in documents:
-            if doc.content:
-                # Removed truncation as user requested no limits on token usage
-                # Frontend will handle warnings and cost estimation
-                content = doc.content
-                context_parts.append(f"### {doc.title} ({doc.doc_type})\n{content}")
-        
-        context = "\n\n---\n\n".join(context_parts)
-        
-        # Removed safety truncation for the entire context
-        # Frontend will warn user if context exceeds model limits
-        
+        # Exam objectives get their own focus section instead of being mixed
+        # into the study materials
+        study_docs, objective_docs = split_exam_objectives(documents)
+        objectives = exam_objectives_section(objective_docs, has_study_materials=bool(study_docs))
+        if study_docs:
+            source = "the following study materials"
+            materials = f"STUDY MATERIALS:\n{format_documents(study_docs)}"
+            if objectives:
+                materials += f"\n\n{objectives}"
+        else:
+            source = "the following exam objectives"
+            materials = objectives
+
         # Use custom prompt if provided, otherwise use default
         if custom_prompt:
-            prompt = f"""You are an expert test creator. Based on the following study materials, create {num_questions} multiple-choice questions.
+            prompt = f"""You are an expert test creator. Based on {source}, create {num_questions} multiple-choice questions.
 
-STUDY MATERIALS:
-{context}
+{materials}
 
 CUSTOM INSTRUCTIONS:
 {custom_prompt}
@@ -77,10 +80,9 @@ REQUIREMENTS:
 
 {output_format}"""
         else:
-            prompt = f"""You are an expert test creator. Based on the following study materials, create {num_questions} multiple-choice questions to help someone prepare for an exam.
+            prompt = f"""You are an expert test creator. Based on {source}, create {num_questions} multiple-choice questions to help someone prepare for an exam.
 
-STUDY MATERIALS:
-{context}
+{materials}
 
 REQUIREMENTS:
 1. Create exactly {num_questions} questions
