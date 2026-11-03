@@ -9,13 +9,10 @@ import re
 import logging
 import math
 from typing import List, Dict, Any, Optional
-from app.config import get_settings
 from app.models import Document, Question
 from app.services.openrouter_client import chat_completion_json
 
 logger = logging.getLogger(__name__)
-
-settings = get_settings()
 
 
 def build_flashcard_prompt(
@@ -209,9 +206,6 @@ async def _generate_batch(
     existing_fronts: Optional[List[str]] = None
 ) -> List[Dict[str, str]]:
     """Generate a single batch of flashcards."""
-    
-    if not settings.openrouter_api_key:
-        raise ValueError("OpenRouter API key is not configured")
     
     prompt = build_flashcard_prompt(documents, num_cards, topic, custom_prompt, existing_fronts)
     

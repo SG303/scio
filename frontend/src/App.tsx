@@ -11,6 +11,7 @@ import CreateTest from '@/pages/CreateTest'
 import TakeTest from '@/pages/TakeTest'
 import Results from '@/pages/Results'
 import ModelsSettings from '@/pages/ModelsSettings'
+import ProvidersSettings from '@/pages/ProvidersSettings'
 import TestTemplates from '@/pages/TestTemplates'
 import TestHistory from '@/pages/TestHistory'
 import Stats from '@/pages/Stats'
@@ -63,6 +64,7 @@ function App() {
             <Route path="/test/:testId" element={<TakeTest />} />
             <Route path="/results/:testId" element={<Results />} />
             <Route path="/settings" element={<ModelsSettings />} />
+            <Route path="/settings/providers" element={<ProvidersSettings />} />
             <Route path="/settings/templates" element={<TestTemplates />} />
             {/* Subject Routes */}
             <Route path="/subjects" element={<SubjectsPage />} />

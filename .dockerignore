@@ -50,3 +50,5 @@ Thumbs.db
 dist
 build
 
+# Claude Code CLI home with the Claude sign-in — never part of the image
+claude/

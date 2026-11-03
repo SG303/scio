@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { Bot, Plus, Trash2, Loader2, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +14,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { SectionTabs, settingsTabs } from '@/components/SectionTabs'
 import { List, ListRow, RowActions } from '@/components/List'
 import { modelsApi, settingsApi } from '@/services/api'
-import { cn, formatContextLength, formatPricePerMillion } from '@/lib/utils'
+import { cn, formatContextLength, formatPricePerMillion, isSubscriptionModel } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import { toast } from '@/components/Toaster'
 
@@ -154,7 +155,7 @@ export default function ModelsSettings() {
                 <DialogHeader>
                   <DialogTitle>Add AI Model</DialogTitle>
                   <DialogDescription>
-                    Add a new AI model from OpenRouter
+                    Add a model from OpenRouter or your Claude subscription
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -169,7 +170,7 @@ export default function ModelsSettings() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="openrouter_id">OpenRouter Model ID</Label>
+                    <Label htmlFor="openrouter_id">Model ID</Label>
                     <Input
                       id="openrouter_id"
                       value={formData.openrouter_id}
@@ -187,6 +188,8 @@ export default function ModelsSettings() {
                       >
                         openrouter.ai/models
                       </a>
+                      . For your Claude subscription use claude-subscription/opus,
+                      claude-subscription/sonnet or claude-subscription/haiku.
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -220,10 +223,11 @@ export default function ModelsSettings() {
       <div className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">OpenRouter integration.</span> This app
-          uses OpenRouter to access various AI models. Make sure you have set up your OpenRouter
-          API key in the environment variables. Models marked as disabled won't appear in the
-          test creation form.
+          Models run through OpenRouter or your Claude subscription. Connect them under{' '}
+          <Link to="/settings/providers" className="font-medium text-primary hover:underline">
+            AI providers
+          </Link>
+          . Models marked as disabled won't appear in the test creation form.
         </p>
       </div>
 
@@ -276,10 +280,16 @@ export default function ModelsSettings() {
                       </span>
                     </p>
                   )}
-                  {!model.pricing && !model.context_length && (
-                    <p className="mt-1.5 text-xs italic text-muted-foreground">
-                      Pricing info unavailable from OpenRouter
+                  {isSubscriptionModel(model.openrouter_id) ? (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Included in your Claude plan, counts toward its usage limits
                     </p>
+                  ) : (
+                    !model.pricing && !model.context_length && (
+                      <p className="mt-1.5 text-xs italic text-muted-foreground">
+                        Pricing info unavailable from OpenRouter
+                      </p>
+                    )
                   )}
                 </div>
                 <RowActions label={`Actions for ${model.name}`} disabled={deleteMutation.isPending}>

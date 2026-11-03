@@ -21,14 +21,6 @@ import app.services.flashcard_generator as flashcard_generator
 from app.services.flashcard_generator import generate_flashcards
 
 
-@pytest.fixture(autouse=True)
-def fake_api_key(monkeypatch):
-    """_generate_batch refuses to run without a configured API key."""
-    monkeypatch.setattr(
-        flashcard_generator.settings, "openrouter_api_key", "test-key"
-    )
-
-
 def _install_fake(monkeypatch, counts):
     """Fake chat_completion_json that returns as many cards as the prompt
     asks for, with globally unique fronts across calls."""
