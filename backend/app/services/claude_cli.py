@@ -5,7 +5,9 @@ Scio never reads, stores or forwards Claude credentials. The unmodified
 - installs the CLI with Anthropic's official installer,
 - relays the sign-in URL and the one-time code of `claude auth login`
   between the web UI and the CLI process,
-- runs `claude -p` with all tools disabled for JSON generation calls.
+- runs `claude -p` with all tools disabled for JSON generation calls,
+- remembers the plan usage (5-hour and weekly window) that the CLI reports
+  with every call in its stream output.
 
 Models served this way carry the MODEL_PREFIX in their model ID
 (e.g. "claude-subscription/sonnet"); the part after the prefix is passed
@@ -20,9 +22,11 @@ import re
 import shutil
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from app.config import get_settings
+from app.models import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +48,9 @@ NOT_CONNECTED_MESSAGE = (
     "Claude subscription is not connected. "
     "Connect it under Settings → AI providers."
 )
+
+# Smallest possible request, only sent when the user asks for fresh usage
+USAGE_CHECK_MODEL = f"{MODEL_PREFIX}haiku"
 
 # The sign-in URL is complete once whitespace follows it
 _LOGIN_URL_RE = re.compile(r"https://\S+(?=\s)")
@@ -116,6 +123,7 @@ async def get_status() -> Dict[str, Any]:
         "email": None,
         "subscription_type": None,
         "login_pending": login_pending(),
+        "usage": _last_usage,
     }
     path = cli_path()
     if not path:
@@ -256,12 +264,61 @@ async def cancel_login() -> None:
 
 
 async def logout() -> None:
+    global _last_usage
+    _last_usage = None
     path = cli_path()
     if path is None:
         return
     code, out, err = await _run([path, "auth", "logout"], STATUS_TIMEOUT_SECONDS)
     if code != 0:
         raise ValueError(f"Sign-out failed: {(err or out).strip()[-300:]}")
+
+
+# Plan usage from the most recent CLI call (in memory; gone after restart)
+_last_usage: Optional[Dict[str, Any]] = None
+
+
+def _usage_window(windows: Dict[str, Any], key: str) -> Optional[Dict[str, Any]]:
+    window = windows.get(key)
+    if not isinstance(window, dict) or window.get("utilization") is None:
+        return None
+    resets_at = window.get("resetsAt")
+    return {
+        # 0..1 share of the window that is used up
+        "utilization": float(window["utilization"]),
+        "resets_at": datetime.fromtimestamp(resets_at, timezone.utc) if resets_at else None,
+    }
+
+
+def _remember_usage(windows: Optional[Dict[str, Any]]) -> None:
+    global _last_usage
+    if not isinstance(windows, dict):
+        return
+    _last_usage = {
+        "five_hour": _usage_window(windows, "five_hour"),
+        "seven_day": _usage_window(windows, "seven_day"),
+        "checked_at": utc_now(),
+    }
+
+
+def _parse_stream(output: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """Return (result event, usage windows) from stream-json output."""
+    result = None
+    windows = None
+    for line in output.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "rate_limit_event":
+            info = event.get("rate_limit_info") or {}
+            windows = info.get("unifiedWindows") or windows
+        elif event.get("type") == "result":
+            result = event
+    return result, windows
 
 
 async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -> str:
@@ -271,6 +328,7 @@ async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -
     must never be able to trigger commands or file access. The prompt goes
     in via stdin (documents can exceed the argv size limit), the working
     directory is an empty temp dir and no settings files are loaded.
+    stream-json is used because only it carries the plan usage.
     """
     path = cli_path()
     if path is None:
@@ -278,7 +336,8 @@ async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -
 
     args = [
         path, "-p",
-        "--output-format", "json",
+        "--output-format", "stream-json",
+        "--verbose",
         "--tools", "",
         "--strict-mcp-config",
         "--setting-sources", "",
@@ -295,10 +354,10 @@ async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -
         except asyncio.TimeoutError:
             raise ValueError("Claude did not answer in time. Please try again.")
 
-    try:
-        data = json.loads(out)
-    except json.JSONDecodeError:
-        logger.error("Claude CLI returned no JSON (exit %s): %s %s", code, out, err)
+    data, windows = _parse_stream(out)
+    _remember_usage(windows)
+    if data is None:
+        logger.error("Claude CLI returned no result (exit %s): %s %s", code, out, err)
         raise ValueError(f"Claude CLI failed: {(err or out).strip()[-300:]}")
 
     if data.get("is_error") or code != 0:
@@ -309,6 +368,14 @@ async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -
         raise ValueError(f"Claude subscription error: {message}")
 
     return data.get("result") or ""
+
+
+async def refresh_usage() -> Optional[Dict[str, Any]]:
+    """Send a minimal request so the CLI reports the current plan usage."""
+    await chat_completion(USAGE_CHECK_MODEL, "Reply with OK.", "OK")
+    if _last_usage is None:
+        raise ValueError("Claude did not report usage data.")
+    return _last_usage
 
 
 async def shutdown() -> None:

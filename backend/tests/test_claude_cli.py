@@ -8,6 +8,7 @@ arguments, stdin and environment of `-p` calls and emulates the
 import json
 import os
 import stat
+from datetime import datetime, timezone
 
 import pytest
 
@@ -53,6 +54,8 @@ if [ "$1" = "-p" ]; then
     echo '{"type":"result","subtype":"success","is_error":true,"result":"Claude AI usage limit reached"}'
     exit 1
   fi
+  echo '{"type":"system","subtype":"init"}'
+  echo '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.52,"resetsAt":1793725200,"status":"allowed"},"seven_day":{"utilization":0.2,"resetsAt":1793779200,"status":"allowed"}}}}'
   echo '{"type":"result","subtype":"success","is_error":false,"result":"{\"ok\": true}"}'
   exit 0
 fi
@@ -155,6 +158,7 @@ async def test_generation_runs_cli_without_tools(cli_home, monkeypatch):
     assert json.loads(content) == {"ok": True}
     args = _state(cli_home, "args").splitlines()
     assert args[args.index("--model") + 1] == "sonnet"
+    assert args[args.index("--output-format") + 1] == "stream-json"
     assert args[args.index("--tools") + 1] == ""
     assert args[args.index("--system-prompt") + 1] == "Return JSON."
     assert "--no-session-persistence" in args
@@ -205,3 +209,41 @@ async def test_install_needs_cli_home(monkeypatch):
     assert claude_cli.can_install() is False
     with pytest.raises(ValueError, match="only available in the Docker image"):
         await claude_cli.install()
+
+
+async def test_generation_remembers_plan_usage(cli_home, monkeypatch):
+    monkeypatch.setattr(claude_cli, "_last_usage", None)
+    _log_in(cli_home)
+
+    await chat_completion_json(
+        model_id="claude-subscription/haiku", system_prompt="s", user_prompt="u", temperature=0.7
+    )
+
+    usage = (await claude_cli.get_status())["usage"]
+    assert usage["five_hour"] == {
+        "utilization": 0.52,
+        "resets_at": datetime.fromtimestamp(1793725200, timezone.utc),
+    }
+    assert usage["seven_day"]["utilization"] == 0.2
+    assert usage["checked_at"].tzinfo is not None
+
+
+async def test_refresh_usage_sends_minimal_haiku_request(cli_home, monkeypatch):
+    monkeypatch.setattr(claude_cli, "_last_usage", None)
+    _log_in(cli_home)
+
+    usage = await claude_cli.refresh_usage()
+
+    args = _state(cli_home, "args").splitlines()
+    assert args[args.index("--model") + 1] == "haiku"
+    assert usage["five_hour"]["utilization"] == 0.52
+
+
+async def test_logout_forgets_usage(cli_home, monkeypatch):
+    monkeypatch.setattr(claude_cli, "_last_usage", None)
+    _log_in(cli_home)
+    await claude_cli.refresh_usage()
+
+    await claude_cli.logout()
+
+    assert (await claude_cli.get_status())["usage"] is None

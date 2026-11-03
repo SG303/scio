@@ -161,6 +161,9 @@ export const providersApi = {
   cancelClaudeLogin: () =>
     fetchApi<ClaudeStatus>('/providers/claude/login/cancel', { method: 'POST' }),
 
+  refreshClaudeUsage: () =>
+    fetchApi<ClaudeStatus>('/providers/claude/usage/refresh', { method: 'POST' }),
+
   logoutClaude: () =>
     fetchApi<ClaudeStatus>('/providers/claude/logout', { method: 'POST' }),
 }

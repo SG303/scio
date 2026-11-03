@@ -8,10 +8,10 @@ import { QueryState } from '@/components/QueryState'
 import { PageHeader } from '@/components/PageHeader'
 import { SectionTabs, settingsTabs } from '@/components/SectionTabs'
 import { providersApi } from '@/services/api'
-import { cn } from '@/lib/utils'
+import { cn, parseApiDate } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import { toast } from '@/components/Toaster'
-import type { ClaudeStatus } from '@/types'
+import type { ClaudeStatus, ClaudeUsage, ClaudeUsageWindow } from '@/types'
 
 const errorMessage = (err: unknown, fallback: string) =>
   err instanceof Error && err.message ? err.message : fallback
@@ -216,6 +216,83 @@ function Step({
   )
 }
 
+const timeOfDay = (date: Date) => date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+
+/** "today at 18:00" or "Wed 09:00" in the browser's time zone. */
+function formatReset(value: string): string {
+  const date = parseApiDate(value)
+  if (date.toDateString() === new Date().toDateString()) return `today at ${timeOfDay(date)}`
+  return `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${timeOfDay(date)}`
+}
+
+function UsageMeter({ label, usageWindow }: { label: string; usageWindow: ClaudeUsageWindow | null }) {
+  if (!usageWindow) return null
+  const percent = Math.round(usageWindow.utilization * 100)
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-4 text-sm">
+        <span>{label}</span>
+        <span className="font-medium tabular-nums">{percent}% used</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={`${label} used`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className={cn(
+            'h-full rounded-full transition-[width]',
+            percent >= 90 ? 'bg-destructive' : percent >= 75 ? 'bg-warning' : 'bg-primary'
+          )}
+          style={{ width: `${Math.min(percent, 100)}%` }}
+        />
+      </div>
+      {usageWindow.resets_at && (
+        <p className="mt-1 text-xs text-muted-foreground">Resets {formatReset(usageWindow.resets_at)}</p>
+      )}
+    </div>
+  )
+}
+
+function PlanUsage({
+  usage,
+  onRefresh,
+  isRefreshing,
+}: {
+  usage: ClaudeUsage | null
+  onRefresh: () => void
+  isRefreshing: boolean
+}) {
+  return (
+    <div className="mt-6 max-w-lg space-y-4 border-t pt-5">
+      <h3 className="text-sm font-semibold">Plan usage</h3>
+      {usage ? (
+        <>
+          <UsageMeter label="Current 5-hour window" usageWindow={usage.five_hour} />
+          <UsageMeter label="This week" usageWindow={usage.seven_day} />
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No usage data yet. It updates with every generation.
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button variant="outline" size="sm" disabled={isRefreshing} onClick={onRefresh}>
+          {isRefreshing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Check now
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          {usage && <>Updated at {timeOfDay(parseApiDate(usage.checked_at))}. </>}
+          Checking sends a tiny request that counts toward your limits.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 const PLAN_NAMES: Record<string, string> = { pro: 'Claude Pro', max: 'Claude Max', team: 'Claude Team', enterprise: 'Claude Enterprise' }
 
 function ClaudePanel() {
@@ -226,6 +303,8 @@ function ClaudePanel() {
   const { data: status, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.claudeStatus,
     queryFn: providersApi.claudeStatus,
+    // Usage changes with every generation: always show the latest numbers
+    staleTime: 0,
   })
 
   const setStatus = (next: ClaudeStatus) => queryClient.setQueryData(queryKeys.claudeStatus, next)
@@ -273,6 +352,12 @@ function ClaudePanel() {
     onError: (err) => toast.error(errorMessage(err, 'Could not cancel the sign-in.')),
   })
 
+  const usageMutation = useMutation({
+    mutationFn: providersApi.refreshClaudeUsage,
+    onSuccess: setStatus,
+    onError: (err) => toast.error(errorMessage(err, 'Could not check the usage.')),
+  })
+
   const logoutMutation = useMutation({
     mutationFn: providersApi.logoutClaude,
     onSuccess: (next) => {
@@ -318,6 +403,11 @@ function ClaudePanel() {
           {logoutMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign out
         </Button>
+        <PlanUsage
+          usage={status.usage}
+          onRefresh={() => usageMutation.mutate()}
+          isRefreshing={usageMutation.isPending}
+        />
       </ProviderPanel>
     )
   }

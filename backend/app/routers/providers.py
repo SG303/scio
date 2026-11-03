@@ -90,6 +90,16 @@ async def cancel_claude_login():
     return await claude_cli.get_status()
 
 
+@router.post("/claude/usage/refresh", response_model=ClaudeStatus)
+async def refresh_claude_usage():
+    """Fetch fresh plan usage with a minimal request (uses a tiny bit of it)."""
+    try:
+        await claude_cli.refresh_usage()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return await claude_cli.get_status()
+
+
 @router.post("/claude/logout", response_model=ClaudeStatus)
 async def logout_claude():
     try:

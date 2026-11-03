@@ -23,6 +23,18 @@ export interface OpenRouterKeyStatus {
   key_hint: string | null
 }
 
+export interface ClaudeUsageWindow {
+  /** 0..1 share of the window that is used up */
+  utilization: number
+  resets_at: string | null
+}
+
+export interface ClaudeUsage {
+  five_hour: ClaudeUsageWindow | null
+  seven_day: ClaudeUsageWindow | null
+  checked_at: string
+}
+
 export interface ClaudeStatus {
   installed: boolean
   can_install: boolean
@@ -31,6 +43,7 @@ export interface ClaudeStatus {
   email: string | null
   subscription_type: string | null
   login_pending: boolean
+  usage: ClaudeUsage | null
 }
 
 export interface Document {
