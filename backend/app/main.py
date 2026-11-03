@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -75,7 +76,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="Your AI Learning Hub - Generate practice tests, create flashcards, and organize your learning journey",
-    version="1.0.0",
+    version=Path(__file__).with_name("VERSION").read_text().strip(),
     lifespan=lifespan
 )
 

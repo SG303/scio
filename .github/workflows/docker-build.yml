@@ -9,12 +9,40 @@ on:
     tags:
       - 'v*.*.*'
 
+# Serialize publications so two runs cannot update latest at the same time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require a version tag on main
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$REF_TYPE" = tag
+          git merge-base --is-ancestor HEAD origin/main
+          python3 scripts/release.py check --tag "$RELEASE_TAG"
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
   tests:
+    needs: [validate-release]
     name: Backend & Frontend tests
     runs-on: ubuntu-latest
     steps:
@@ -84,7 +112,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -97,3 +125,24 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  publish-release:
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Publish changelog as GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/release.py notes --output /tmp/release-notes.md
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --notes-file /tmp/release-notes.md
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --title "Scio $RELEASE_TAG" --notes-file /tmp/release-notes.md --latest
+          fi
