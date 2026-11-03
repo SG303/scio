@@ -120,6 +120,7 @@ class TestConfig(Base):
     document_ids = Column(
         JSON, nullable=False
     )  # List of document IDs to use as context
+    lecture_ids = Column(JSON, nullable=True)  # Lecture notes used as context
     is_template = Column(
         Boolean, default=False
     )  # Whether this config is a reusable template
@@ -197,6 +198,7 @@ class FlashcardDeck(Base):
     # Generation configuration (mirrors TestConfig pattern)
     ai_model_id = Column(Integer, ForeignKey("ai_models.id"), nullable=True)
     document_ids = Column(JSON, nullable=True)  # List of source document IDs
+    lecture_ids = Column(JSON, nullable=True)  # Lecture notes used as context
     custom_prompt = Column(Text, nullable=True)
     subject_id = Column(
         Integer, ForeignKey("subjects.id"), nullable=True, index=True

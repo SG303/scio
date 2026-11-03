@@ -18,6 +18,7 @@ from app.services.test_generator import generate_test_questions, verify_question
 from app.routers.settings import get_verification_model
 from app.services import generation_progress
 from app.services.generation_progress import GenerationCancelled
+from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import ensure_subject_exists, existing_subject_questions
 
 
@@ -331,13 +332,14 @@ async def create_and_generate_test(
     )
 
     # AI call first — nothing is persisted if it fails
+    lectures = await load_lecture_sources(db, request.lecture_ids)
     if progress_token:
         generation_progress.update(
             progress_token, status="running", stage="Starting generation"
         )
     try:
         questions_data = await generate_test_questions(
-            documents=documents,
+            documents=documents + lectures,
             num_questions=num_questions,
             num_choices=request.num_choices,
             model_id=ai_model.openrouter_id,
@@ -370,6 +372,7 @@ async def create_and_generate_test(
         num_choices=request.num_choices,
         ai_model_id=request.ai_model_id,
         document_ids=request.document_ids,
+        lecture_ids=request.lecture_ids or None,
         is_template=False,
         custom_prompt=request.custom_prompt,
         subject_id=request.subject_id,
@@ -458,13 +461,14 @@ async def generate_test(
     existing_questions = [row[0] for row in existing_result.fetchall()]
     
     # Generate questions using AI
+    lectures = await load_lecture_sources(db, config.lecture_ids)
     if progress_token:
         generation_progress.update(
             progress_token, status="running", stage="Starting generation"
         )
     try:
         questions_data = await generate_test_questions(
-            documents=documents,
+            documents=documents + lectures,
             num_questions=num_questions,
             num_choices=config.num_choices,
             model_id=config.ai_model.openrouter_id,

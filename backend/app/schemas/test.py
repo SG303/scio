@@ -73,6 +73,7 @@ class CreateAndGenerateRequest(BaseModel):
     num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: int
     document_ids: List[int]
+    lecture_ids: List[int] = []  # lecture notes as additional study material
     custom_prompt: Optional[str] = None
     subject_id: Optional[int] = None
     # optional override of num_questions for the generated test

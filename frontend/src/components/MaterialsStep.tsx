@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Upload } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -6,6 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { OptionCard, DocumentOptionLabel } from '@/components/OptionCard'
 import { AddDocumentDialog } from '@/components/AddDocumentDialog'
+import { lecturesApi } from '@/services/api'
+import { queryKeys } from '@/lib/constants'
 import type { Document, SubjectListItem } from '@/types'
 
 const NO_SUBJECT = 'none'
@@ -18,6 +21,9 @@ type MaterialsStepProps = {
   documents: Document[]
   documentIds: number[]
   onDocumentIdsChange: (ids: number[]) => void
+  /** Lecture notes of the chosen subject used as study material. */
+  lectureIds: number[]
+  onLectureIdsChange: (ids: number[]) => void
   /** "questions" or "flashcards" — used in the topic-only hint. */
   generates: string
   /** Optional extra field shown below the subject (e.g. template picker). */
@@ -48,16 +54,26 @@ export function MaterialsStep({
   documents,
   documentIds,
   onDocumentIdsChange,
+  lectureIds,
+  onLectureIdsChange,
   generates,
   children,
   onContinue,
 }: MaterialsStepProps) {
   const [isAddOpen, setIsAddOpen] = useState(false)
 
+  const { data: lectures = [] } = useQuery({
+    queryKey: queryKeys.lectures(subjectId ?? undefined),
+    queryFn: () => lecturesApi.list(subjectId!),
+    enabled: subjectId !== null,
+  })
+
   const handleSubjectChange = (value: string) => {
     const previous = subjects.find((s) => s.id === subjectId)
     const next = value === NO_SUBJECT ? null : subjects.find((s) => String(s.id) === value) ?? null
     onDocumentIdsChange(withSubjectDefaults(documentIds, previous, next))
+    // lectures belong to one subject
+    onLectureIdsChange([])
     onSubjectChange(next)
   }
 
@@ -74,7 +90,7 @@ export function MaterialsStep({
       <CardHeader>
         <CardTitle className="text-base">Subject & Materials</CardTitle>
         <CardDescription>
-          Optionally file it under a subject and choose documents as context
+          Optionally file it under a subject and choose documents or lectures as context
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -105,6 +121,33 @@ export function MaterialsStep({
 
         {children}
 
+        {subjectId !== null && lectures.length > 0 && (
+          <div className="space-y-2">
+            <Label>Lectures (optional)</Label>
+            <div className="grid gap-2">
+              {lectures.map((lecture) => (
+                <OptionCard
+                  key={lecture.id}
+                  indicator="checkbox"
+                  selected={lectureIds.includes(lecture.id)}
+                  onClick={() =>
+                    onLectureIdsChange(
+                      lectureIds.includes(lecture.id)
+                        ? lectureIds.filter((id) => id !== lecture.id)
+                        : [...lectureIds, lecture.id]
+                    )
+                  }
+                >
+                  <span className="block font-medium">{lecture.title}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Lecture notes · {lecture.word_count} {lecture.word_count === 1 ? 'word' : 'words'}
+                  </span>
+                </OptionCard>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
             <Label>Documents (optional)</Label>
@@ -113,7 +156,7 @@ export function MaterialsStep({
               Add Document
             </Button>
           </div>
-          {documentIds.length === 0 && (
+          {documentIds.length === 0 && lectureIds.length === 0 && (
             <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
               No documents selected. The AI will generate {generates} based on your title/topic.
             </p>

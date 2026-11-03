@@ -17,6 +17,7 @@ import { StepIndicator } from '@/components/StepIndicator'
 import { CostEstimate } from '@/components/CostEstimate'
 import { GenerationStatus } from '@/components/GenerationStatus'
 import { MaterialsStep, withSubjectDefaults } from '@/components/MaterialsStep'
+import { useLectureContents } from '@/hooks/useLectureContents'
 import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
 import { toast } from '@/components/Toaster'
 import { QUESTION_COUNT_OPTIONS, CHOICES_COUNT_OPTIONS, DEFAULT_NUM_QUESTIONS, DEFAULT_NUM_CHOICES, queryKeys } from '@/lib/constants'
@@ -46,6 +47,9 @@ export default function CreateTest() {
   }
 
   const initialSubject = subjects.find((s) => String(s.id) === searchParams.get('subject')) ?? null
+  // ?lecture= comes from a lecture's "Create …" action and needs its subject
+  const lectureParam = Number(searchParams.get('lecture'))
+  const initialLectureIds = initialSubject && lectureParam ? [lectureParam] : []
   const initialTemplate = templates.find((t) => String(t.id) === searchParams.get('template')) ?? null
 
   return (
@@ -54,6 +58,7 @@ export default function CreateTest() {
       templates={templates}
       initialSubject={initialSubject}
       initialTemplate={initialTemplate}
+      initialLectureIds={initialLectureIds}
     />
   )
 }
@@ -75,11 +80,13 @@ function CreateTestWizard({
   templates,
   initialSubject,
   initialTemplate,
+  initialLectureIds,
 }: {
   subjects: SubjectListItem[]
   templates: TestConfig[]
   initialSubject: SubjectListItem | null
   initialTemplate: TestConfig | null
+  initialLectureIds: number[]
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -99,6 +106,7 @@ function CreateTestWizard({
       ...base,
       ai_model_id: base.ai_model_id || initialSubject?.ai_model_id || 0,
       document_ids: withSubjectDefaults(base.document_ids, null, initialSubject),
+      lecture_ids: initialLectureIds,
       subject_id: initialSubject?.id ?? null,
     }
   })
@@ -122,6 +130,8 @@ function CreateTestWizard({
   })
 
   const selectedSubject = subjects.find((s) => s.id === formData.subject_id) ?? null
+  const lectureContents = useLectureContents(formData.lecture_ids)
+  const hasMaterial = formData.document_ids.length > 0 || formData.lecture_ids.length > 0
 
   const handleSubjectChange = (subject: SubjectListItem | null) => {
     setFormData((prev) => ({
@@ -173,7 +183,8 @@ function CreateTestWizard({
         custom_prompt: formData.custom_prompt || null,
       }
       const test = await testsApi.createAndGenerate(
-        { ...settings, subject_id: formData.subject_id },
+        // lectures belong to the subject, so templates never get them
+        { ...settings, subject_id: formData.subject_id, lecture_ids: formData.lecture_ids },
         progressToken,
         abortController.signal,
       )
@@ -240,7 +251,7 @@ function CreateTestWizard({
     const documentContents = formData.document_ids.map(id => {
       const doc = documents.find(d => d.id === id)
       return doc?.content || ''
-    })
+    }).concat(lectureContents)
 
     // Calculate tokens using improved estimation
     const { inputTokens, outputTokens, numBatches } = calculateTestGenerationTokens(
@@ -275,7 +286,7 @@ function CreateTestWizard({
       includedInSubscription: isSubscriptionModel(selectedModel.openrouter_id),
       numBatches
     }
-  }, [formData.document_ids, formData.ai_model_id, formData.num_questions, formData.custom_prompt, documents, models])
+  }, [formData.document_ids, formData.ai_model_id, formData.num_questions, formData.custom_prompt, documents, models, lectureContents])
 
   const selectedModelName = models.find((m) => m.id === formData.ai_model_id)?.name
   const selectedTemplateName = templates.find((t) => t.id === templateId)?.title
@@ -298,6 +309,8 @@ function CreateTestWizard({
           documents={documents}
           documentIds={formData.document_ids}
           onDocumentIdsChange={(ids) => setFormData((prev) => ({ ...prev, document_ids: ids }))}
+          lectureIds={formData.lecture_ids}
+          onLectureIdsChange={(ids) => setFormData((prev) => ({ ...prev, lecture_ids: ids }))}
           generates="questions"
           onContinue={() => setStep(2)}
         >
@@ -352,11 +365,11 @@ function CreateTestWizard({
                 id="title"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={formData.document_ids.length === 0 
+                placeholder={!hasMaterial 
                   ? "e.g., Python Programming Basics, AWS Cloud Fundamentals" 
                   : "e.g., AWS Solutions Architect Practice Test"}
               />
-              {formData.document_ids.length === 0 && (
+              {!hasMaterial && (
                 <p className="text-xs text-muted-foreground">
                   Since no documents are selected, the AI will generate questions based on this topic
                 </p>
@@ -456,7 +469,8 @@ function CreateTestWizard({
                 ['Title', formData.title],
                 ['Subject', selectedSubject?.title ?? 'No subject'],
                 ...(selectedTemplateName ? [['Template', selectedTemplateName] as const] : []),
-                ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : 'None (topic-based)'],
+                ['Documents', formData.document_ids.length > 0 ? `${formData.document_ids.length} selected` : hasMaterial ? 'None' : 'None (topic-based)'],
+                ...(formData.lecture_ids.length > 0 ? [['Lectures', `${formData.lecture_ids.length} selected`] as const] : []),
                 ['Questions', formData.num_questions],
                 ['Choices per question', formData.num_choices],
                 ['AI model', selectedModelName],
