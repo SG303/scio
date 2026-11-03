@@ -159,6 +159,14 @@ curl http://localhost:8001/api/health                 # Health-Check
 
 **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). Ein Commit = eine logische Änderung. Keine Mixing von Refactoring und Feature.
 
+**GitHub language:** All content published to GitHub must be in English,
+including commit messages, PR titles and descriptions, issues, review comments,
+release notes, and repository documentation such as `CHANGELOG.md` and
+`RELEASING.md`. New or updated documentation and changelog headings must also
+be in English. Translating historical entries must preserve their meaning,
+versions, and dates; never rewrite tags or published release artifacts.
+Conversation with the owner may remain in German.
+
 **Backend:**
 - Zeitstempel **immer** timezone-aware (`datetime.now(timezone.utc)`) — zentral via `utc_now()`.
 - Kein `print()` — `logging` verwenden.
@@ -171,6 +179,23 @@ curl http://localhost:8001/api/health                 # Health-Check
 - Server-State ausschliesslich über TanStack Query (`useQuery`/`useMutation`). Nach Mutationen **alle betroffenen Query-Keys invalidieren** (Query-Keys als Konstanten in `lib/constants.ts`).
 - Jede Mutation braucht sichtbares Fehler-Handling (kein stiller `catch`).
 - UI-Sprache der App ist **Englisch**; neue UI-Texte entsprechend halten.
+
+## Release Management (mandatory)
+
+- Read **[RELEASING.md](RELEASING.md) in full** before release work.
+- Document relevant changes under `## [Unreleased]` in `CHANGELOG.md`.
+  Do not bump versions for every change.
+- The authoritative app version is `backend/app/VERSION`; synchronize frontend
+  versions using `python3 scripts/release.py prepare X.Y.Z`.
+- Before completing work, run `python3 scripts/release.py check` and
+  `python3 -m unittest discover -s scripts -p 'test_*.py'` in addition to
+  existing checks; also run frontend and Docker builds before releases.
+- Prepare releases as `chore: release vX.Y.Z` and merge into `main` through a PR.
+  Explicitly pushing a tag triggers tests → GHCR image → GitHub Release.
+- Tag and push releases only when publication has been requested. Never change
+  existing tags. Setting up the process alone does not publish anything.
+  See `RELEASING.md` for updates, backups, and rollback; never reset user data
+  automatically.
 
 ## Verification — Definition of Done (Pflicht vor jedem Commit)
 
