@@ -100,8 +100,9 @@ async def test_deck_stats_map_matches_get_deck_stats(stats_db):
     assert stats["learning_cards"] == 2  # learning + relearning
     assert stats["review_cards"] == 2
     assert stats["due_reviews"] == 3  # learning + relearning + review due
-    assert stats["new_available"] == 1  # 2 new, 1 already introduced today
-    assert stats["due_today"] == 4  # 3 due reviews + 1 new available
+    # The introduced card is no longer new, so it does not eat into the 2 left
+    assert stats["new_available"] == 2
+    assert stats["due_today"] == 5  # 3 due reviews + 2 new available
     assert stats["mastered_cards"] == 1
     assert all(stats_map[d.id]["total_cards"] == 0 for d in decks if d.title == "Empty")
 
@@ -282,3 +283,44 @@ async def test_subject_generation_with_missing_document_404_without_ai_call(
     assert (await db.execute(
         select(func.count()).select_from(models.Flashcard)
     )).scalar_one() == 0
+
+
+@pytest.mark.parametrize("limit, introduced_today, expected", [
+    (20, 6, 8),   # plenty of quota left: all 8 remaining new cards are offered
+    (10, 6, 4),   # quota is the limit: 10 - 6
+    (5, 5, 0),    # quota used up
+])
+async def test_new_cards_available_shrinks_only_by_the_daily_quota(
+    stats_db, limit, introduced_today, expected
+):
+    """Introduced cards already left the 'new' state: they must not be
+    subtracted from the remaining new cards a second time."""
+    from app.services.spaced_repetition import get_global_stats
+
+    db = stats_db
+    deck = models.FlashcardDeck(title="Deck", new_cards_per_day=limit)
+    db.add(deck)
+    await db.flush()
+    db.add_all(
+        [models.Flashcard(deck_id=deck.id, front=f"N{i}", back="B", state="new") for i in range(8)]
+        # introduced today: learning, due in the future so they are not due reviews
+        + [
+            models.Flashcard(
+                deck_id=deck.id, front=f"L{i}", back="B", state="learning",
+                next_review_at=utc_now() + timedelta(days=1),
+            )
+            for i in range(introduced_today)
+        ]
+        + [models.StudySession(
+            deck_id=deck.id, new_cards_reviewed_today=introduced_today,
+            study_date=utc_now().date(),
+        )]
+    )
+    await db.commit()
+
+    per_deck = await get_deck_stats(db, deck.id)
+    batched = (await flashcards_router.get_deck_stats_map(db, [deck]))[deck.id]
+    global_stats = await get_global_stats(db)
+
+    assert per_deck["new_available"] == batched["new_available"] == expected
+    assert global_stats["new_available"] == expected

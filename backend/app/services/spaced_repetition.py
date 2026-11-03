@@ -453,7 +453,8 @@ async def get_deck_stats(db: AsyncSession, deck_id: int) -> dict:
     # P4.3: subtract the new cards already introduced today (deck-wide), so
     # the number matches what a fresh study queue would actually deliver
     new_reviewed_today = await get_deck_new_cards_today(db, deck_id, today)
-    new_today = max(0, min(new_count, deck.new_cards_per_day) - new_reviewed_today)
+    # Cards introduced today are already out of new_count: only the daily quota shrinks
+    new_today = min(new_count, max(0, deck.new_cards_per_day - new_reviewed_today))
     due_today = due_count + new_today
 
     # Count mastered cards (review state with high EF and good interval)
@@ -533,8 +534,8 @@ async def get_global_stats(db: AsyncSession) -> dict:
         # P4.3: remaining quota subtracts the new cards already introduced
         # today across this deck's sessions
         new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
-        total_new_available += max(
-            0, min(new_in_deck, deck.new_cards_per_day) - new_reviewed_today
+        total_new_available += min(
+            new_in_deck, max(0, deck.new_cards_per_day - new_reviewed_today)
         )
 
     total_due = due_reviews + total_new_available
