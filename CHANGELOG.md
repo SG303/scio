@@ -6,6 +6,13 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Behind a TLS-terminating reverse proxy (Traefik, nginx, Caddy), API writes
+  such as creating a subject failed with "Cross-origin writes are not allowed".
+  The Docker image now trusts the proxy's `X-Forwarded-Proto` header by default
+  (`FORWARDED_ALLOW_IPS`), so the public `https` origin matches.
+
 ## [v0.7.0] - 2026-11-04
 
 ### Fixed
