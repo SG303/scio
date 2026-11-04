@@ -6,6 +6,8 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.7.1] - 2026-11-04
+
 ### Fixed
 
 - Behind a TLS-terminating reverse proxy (Traefik, nginx, Caddy), API writes
