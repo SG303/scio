@@ -37,7 +37,8 @@ import { EmptyState } from '@/components/EmptyState'
 import { List, ListIcon, ListRow, RowActions } from '@/components/List'
 import { StepIndicator } from '@/components/StepIndicator'
 import { SectionTabs, settingsTabs } from '@/components/SectionTabs'
-import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
+import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
+import { DocumentPicker } from '@/components/DocumentPicker'
 import type { TestConfig } from '@/types'
 
 export default function TestTemplates() {
@@ -368,18 +369,12 @@ export default function TestTemplates() {
                       No documents selected. Template will generate questions based on the title/topic.
                     </p>
                   )}
-                  <div className="grid max-h-60 gap-2 overflow-y-auto p-0.5">
-                    {documents.map((doc) => (
-                      <OptionCard
-                        key={doc.id}
-                        indicator="checkbox"
-                        selected={formData.document_ids.includes(doc.id)}
-                        onClick={() => handleDocumentToggle(doc.id)}
-                      >
-                        <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
-                      </OptionCard>
-                    ))}
-                  </div>
+                  <DocumentPicker
+                    documents={documents}
+                    selectedIds={formData.document_ids}
+                    onToggle={handleDocumentToggle}
+                    className="max-h-60 overflow-y-auto p-0.5"
+                  />
                 </>
               )}
             </div>

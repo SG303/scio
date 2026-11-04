@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from '@/components/Toaster'
 import { documentsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
+import { SplitChaptersDialog } from '@/components/documents/SplitChaptersDialog'
 import { queryKeys } from '@/lib/constants'
 import type { Document } from '@/types'
 
@@ -37,10 +38,13 @@ export function AddDocumentDialog({ open, onOpenChange, onCreated }: AddDocument
   const [addMode, setAddMode] = useState<'text' | 'file'>('text')
   const [formData, setFormData] = useState(emptyForm)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [splitAfterUpload, setSplitAfterUpload] = useState(false)
+  const [splitting, setSplitting] = useState<Document | null>(null)
 
   const resetForm = () => {
     setFormData(emptyForm)
     setSelectedFile(null)
+    setSplitAfterUpload(false)
     setAddMode('text')
   }
 
@@ -64,7 +68,10 @@ export function AddDocumentDialog({ open, onOpenChange, onCreated }: AddDocument
   const uploadMutation = useMutation({
     mutationFn: ({ title, docType, file }: { title: string; docType: string; file: File }) =>
       documentsApi.upload(title, docType, file),
-    onSuccess: handleCreated,
+    onSuccess: (document) => {
+      if (splitAfterUpload) setSplitting(document)
+      handleCreated(document)
+    },
     onError: () => {
       toast.error('Upload failed. Please try again.')
     },
@@ -89,113 +96,131 @@ export function AddDocumentDialog({ open, onOpenChange, onCreated }: AddDocument
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Add Document</DialogTitle>
-            <DialogDescription>
-              Add study material to use as context for generating tests and flashcards
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Mode Toggle */}
-            <div className="inline-flex rounded-lg bg-muted p-1" role="group" aria-label="Input mode">
-              {([
-                ['text', FileText, 'Paste Text'],
-                ['file', Upload, 'Upload File'],
-              ] as const).map(([mode, Icon, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-pressed={addMode === mode}
-                  onClick={() => setAddMode(mode)}
-                  className={cn(
-                    'inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    addMode === mode
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-4 w-4 mr-2" />
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="document-title">Title</Label>
-              <Input
-                id="document-title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="e.g., AWS Solutions Architect Study Guide"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="document-type">Document Type</Label>
-              <Select
-                value={formData.doc_type}
-                onValueChange={(value) => setFormData({ ...formData, doc_type: value })}
-              >
-                <SelectTrigger id="document-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(docTypeConfig).map(([key, config]) => (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <config.icon className="h-4 w-4 text-muted-foreground" />
-                        {config.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {addMode === 'text' ? (
-              <div className="space-y-2">
-                <Label htmlFor="document-content">Content</Label>
-                <Textarea
-                  id="document-content"
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="Paste your study material here..."
-                  className="min-h-[200px] font-mono text-sm"
-                  required
-                />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>Add Document</DialogTitle>
+              <DialogDescription>
+                Add study material to use as context for generating tests and flashcards
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {/* Mode Toggle */}
+              <div className="inline-flex rounded-lg bg-muted p-1" role="group" aria-label="Input mode">
+                {([
+                  ['text', FileText, 'Paste Text'],
+                  ['file', Upload, 'Upload File'],
+                ] as const).map(([mode, Icon, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={addMode === mode}
+                    onClick={() => setAddMode(mode)}
+                    className={cn(
+                      'inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      addMode === mode
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Icon className="h-4 w-4 mr-2" />
+                    {label}
+                  </button>
+                ))}
               </div>
-            ) : (
+  
               <div className="space-y-2">
-                <Label htmlFor="document-file">File</Label>
+                <Label htmlFor="document-title">Title</Label>
                 <Input
-                  id="document-file"
-                  type="file"
-                  accept=".pdf,.docx,.doc,.txt,.md"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  id="document-title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g., AWS Solutions Architect Study Guide"
                   required
                 />
-                <p className="text-xs text-muted-foreground">
-                  Supported formats: PDF, DOCX, TXT, Markdown
-                </p>
               </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {addMode === 'file' ? 'Upload' : 'Add Document'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+  
+              <div className="space-y-2">
+                <Label htmlFor="document-type">Document Type</Label>
+                <Select
+                  value={formData.doc_type}
+                  onValueChange={(value) => setFormData({ ...formData, doc_type: value })}
+                >
+                  <SelectTrigger id="document-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(docTypeConfig).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <config.icon className="h-4 w-4 text-muted-foreground" />
+                          {config.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+  
+              {addMode === 'text' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="document-content">Content</Label>
+                  <Textarea
+                    id="document-content"
+                    value={formData.content}
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                    placeholder="Paste your study material here..."
+                    className="min-h-[200px] font-mono text-sm"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="document-file">File</Label>
+                  <Input
+                    id="document-file"
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt,.md"
+                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Supported formats: PDF, DOCX, TXT, Markdown
+                  </p>
+                  <label className="mt-3 flex items-start gap-3 rounded-lg border p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                      checked={splitAfterUpload}
+                      onChange={(e) => setSplitAfterUpload(e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium">Split into chapters after upload</span>
+                      <span className="block text-xs text-muted-foreground">
+                        For large books: each main chapter becomes its own document, so you can
+                        generate from just the chapters you need. The book is kept.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {addMode === 'file' ? 'Upload' : 'Add Document'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <SplitChaptersDialog document={splitting} onClose={() => setSplitting(null)} />
+    </>
   )
 }
