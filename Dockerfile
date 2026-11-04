@@ -52,6 +52,11 @@ COPY --from=frontend-builder /app/frontend/dist /app/static
 # Create directories for data and uploads
 RUN mkdir -p /app/data /app/uploads /app/claude
 
+# Trust X-Forwarded-Proto/-For from any peer so the same-origin check on API
+# writes sees the public https scheme behind a reverse proxy (Traefik, nginx,
+# Caddy). Restrict to the proxy's IP/CIDR if port 8000 is reachable directly.
+ENV FORWARDED_ALLOW_IPS=*
+
 # Expose port
 EXPOSE 8000
 
