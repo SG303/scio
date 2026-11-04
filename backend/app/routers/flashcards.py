@@ -16,6 +16,7 @@ import json
 import csv
 import io
 import re
+from urllib.parse import quote
 
 import genanki
 
@@ -503,6 +504,8 @@ async def export_deck(
     cards = result.scalars().all()
 
     filename = _safe_filename(deck.title)
+    ascii_filename = filename.encode("ascii", "replace").decode().replace("?", "_")
+    disposition = f"attachment; filename=\"{ascii_filename}.{{ext}}\"; filename*=UTF-8''{quote(filename, safe='')}.{{ext}}"
 
     if format == "apkg":
         anki_deck = genanki.Deck(2059400110 + deck_id, deck.title)
@@ -516,7 +519,7 @@ async def export_deck(
         return Response(
             content=data,
             media_type="application/octet-stream",
-            headers={"Content-Disposition": f'attachment; filename="{filename}.apkg"'},
+            headers={"Content-Disposition": disposition.format(ext="apkg")},
         )
 
     # CSV export: same columns the import expects
@@ -528,7 +531,7 @@ async def export_deck(
     return Response(
         content=buf.getvalue().encode("utf-8"),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
+        headers={"Content-Disposition": disposition.format(ext="csv")},
     )
 
 
@@ -1055,7 +1058,10 @@ async def submit_review(
         # Always stamp the study date so the daily new-card quota resets
         # correctly the next day — even when this session only touched
         # review/relearning cards and no new ones
-        session.study_date = utc_now().date()
+        today = utc_now().date()
+        if session.study_date != today:
+            session.new_cards_reviewed_today = 0
+        session.study_date = today
 
         if old_state == "new" and review.rating >= 2:  # Rating >= Hard counts as reviewed
             session.new_cards_reviewed_today = (
