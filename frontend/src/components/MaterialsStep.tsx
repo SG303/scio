@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { OptionCard, DocumentOptionLabel } from '@/components/OptionCard'
+import { OptionCard } from '@/components/OptionCard'
+import { DocumentPicker } from '@/components/DocumentPicker'
 import { AddDocumentDialog } from '@/components/AddDocumentDialog'
 import { lecturesApi } from '@/services/api'
 import { queryKeys } from '@/lib/constants'
@@ -162,18 +163,7 @@ export function MaterialsStep({
             </p>
           )}
           {documents.length > 0 && (
-            <div className="grid gap-2">
-              {documents.map((doc) => (
-                <OptionCard
-                  key={doc.id}
-                  indicator="checkbox"
-                  selected={documentIds.includes(doc.id)}
-                  onClick={() => toggleDocument(doc.id)}
-                >
-                  <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
-                </OptionCard>
-              ))}
-            </div>
+            <DocumentPicker documents={documents} selectedIds={documentIds} onToggle={toggleDocument} />
           )}
         </div>
 

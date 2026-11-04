@@ -105,6 +105,11 @@ class Document(Base):
     content = Column(Text, nullable=True)  # Extracted text content
     file_path = Column(String(500), nullable=True)  # Original file path
     file_name = Column(String(255), nullable=True)
+    # Chapter documents split from a book: the book they come from and their
+    # PDF page range (pages only for PDFs). The book itself is kept.
+    parent_document_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)
+    page_start = Column(Integer, nullable=True)
+    page_end = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

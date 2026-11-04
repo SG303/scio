@@ -1,5 +1,7 @@
 import type {
   AIModel,
+  ChapterProposal,
+  ChapterRange,
   Document,
   Test,
   TestDetail,
@@ -234,6 +236,19 @@ export const documentsApi = {
   
   delete: (id: number) =>
     fetchApi<void>(`/documents/${id}`, { method: 'DELETE' }),
+
+  /** Propose chapters; without a model only the free detection runs. */
+  detectChapters: (id: number, aiModelId: number | null = null) =>
+    fetchApi<ChapterProposal>(`/documents/${id}/chapters/detect`, {
+      method: 'POST',
+      body: JSON.stringify({ ai_model_id: aiModelId }),
+    }),
+
+  splitIntoChapters: (id: number, chapters: ChapterRange[]) =>
+    fetchApi<Document[]>(`/documents/${id}/chapters`, {
+      method: 'POST',
+      body: JSON.stringify({ chapters }),
+    }),
 }
 
 // Tests

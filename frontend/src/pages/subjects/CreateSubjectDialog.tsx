@@ -17,7 +17,8 @@ import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
 import { toast } from '@/components/Toaster'
 import { EmptyState } from '@/components/EmptyState'
 import { StepIndicator } from '@/components/StepIndicator'
-import { OptionCard, ModelOptionLabel, DocumentOptionLabel } from '@/components/OptionCard'
+import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
+import { DocumentPicker } from '@/components/DocumentPicker'
 import type { SubjectListItem } from '@/types'
 import { queryKeys } from '@/lib/constants'
 
@@ -203,18 +204,12 @@ export default function CreateSubjectDialog({
                     No documents selected. Materials will be generated based on titles/topics.
                   </p>
                 )}
-                <div className="grid max-h-60 gap-2 overflow-y-auto p-0.5">
-                  {documents.map((doc) => (
-                    <OptionCard
-                      key={doc.id}
-                      indicator="checkbox"
-                      selected={formData.document_ids.includes(doc.id)}
-                      onClick={() => handleDocumentToggle(doc.id)}
-                    >
-                      <DocumentOptionLabel title={doc.title} docType={doc.doc_type} />
-                    </OptionCard>
-                  ))}
-                </div>
+                <DocumentPicker
+                  documents={documents}
+                  selectedIds={formData.document_ids}
+                  onToggle={handleDocumentToggle}
+                  className="max-h-60 overflow-y-auto p-0.5"
+                />
               </>
             )}
           </div>

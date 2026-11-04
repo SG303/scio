@@ -8,6 +8,7 @@
 type QueryId = string | number | undefined
 export const queryKeys = {
   documents: ['documents'] as const,
+  chapterProposal: (documentId: QueryId) => ['chapter-proposal', String(documentId ?? '')] as const,
   models: ['models'] as const,
   modelsAll: ['models', true] as const,
   settings: ['settings'] as const,
