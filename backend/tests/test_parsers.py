@@ -253,8 +253,7 @@ class TestParseQuestionsResponse:
 class TestExtractQuestionsFallback:
     def test_fallback_parses_malformed_blocks(self):
         # Trailing comma makes the array JSON-invalid; the fallback splits
-        # on '}, {' and recovers both blocks. Multi-character choice values
-        # (single letters get filtered out).
+        # on '}, {' and recovers both blocks without changing choice order.
         content = (
             '[{"question": "Q1", "choices": ["Alpha", "Beta"], "correct_answer": 0, '
             '"explanation": "E1"}, {"question": "Q2", "choices": ["Gamma", "Delta"], '

@@ -11,10 +11,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 import os
 
@@ -100,6 +100,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def protect_mutations(request: Request, call_next):
+    """CORS alone does not block cross-origin form submissions."""
+    if request.url.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("origin")
+        same_origin = str(request.base_url).rstrip("/")
+        if (
+            origin is not None
+            and origin != same_origin
+            and origin not in [o for o in cors_origins if o != "*"]
+        ) or (origin is None and request.headers.get("sec-fetch-site") == "cross-site"):
+            return JSONResponse(status_code=403, content={"detail": "Cross-origin writes are not allowed"})
+    return await call_next(request)
+
 
 # Include API routers
 app.include_router(documents.router)

@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from functools import lru_cache
 import os
 
@@ -27,8 +28,8 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000,http://localhost:5173,http://localhost:8000"
     
     # Paths
-    database_path: str = "/app/data/scio.db"
-    uploads_path: str = "/app/uploads"
+    database_path: str = Field(default_factory=lambda: "/app/data/scio.db" if os.path.exists("/app/data") else "./data/scio.db")
+    uploads_path: str = Field(default_factory=lambda: "/app/uploads" if os.path.exists("/app/data") else "./uploads")
     
     class Config:
         env_file = ".env"
@@ -37,13 +38,4 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    # Check if running in Docker or locally
-    if os.path.exists("/app/data"):
-        return Settings()
-    else:
-        # Local development paths
-        return Settings(
-            database_path="./data/scio.db",
-            uploads_path="./uploads"
-        )
-
+    return Settings()

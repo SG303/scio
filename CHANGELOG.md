@@ -6,6 +6,25 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep active flashcard queues stable across tab focus and reconnection, and
+  reset daily new-card counters when a session crosses midnight UTC.
+- Reject invalid answer keys before padding options; preserve single-letter
+  choices and answer mappings when recovering malformed AI responses.
+- Keep paid partial question results if later generation strategies fail.
+- Preserve newer lecture edits when an earlier AI formatting request finishes.
+- Clear external flashcard source references when deleting a subject's tests.
+- Support Unicode deck titles in CSV and Anki download headers.
+- Respect database and upload paths configured through environment or `.env`
+  outside Docker.
+
+### Security
+
+- Reject API writes from untrusted browser origins, including form submissions.
+  Same-origin LAN/Tailscale access, explicit allowed origins, and CLI requests
+  remain supported. The Vite proxy preserves the browser-facing Host header.
+
 ### Added
 
 - A consistent release process with synchronized app versions, release tag

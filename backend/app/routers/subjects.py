@@ -6,7 +6,7 @@ with shared configuration and centralized management.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, update
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -352,6 +352,18 @@ async def delete_subject(
         )
     
     if cascade:
+        # Cards outside this subject survive; clear their question references
+        # in one update before the test/question cascades run.
+        await db.execute(
+            update(Flashcard)
+            .where(Flashcard.source_question_id.in_(
+                select(Question.id)
+                .join(Test, Question.test_id == Test.id)
+                .join(TestConfig, Test.config_id == TestConfig.id)
+                .where(TestConfig.subject_id == subject_id)
+            ))
+            .values(source_question_id=None)
+        )
         # Delete all test configs (tests and questions will cascade)
         test_result = await db.execute(
             select(TestConfig).where(TestConfig.subject_id == subject_id)
