@@ -57,6 +57,13 @@ docker compose logs -f
 
 Open [http://localhost:8001](http://localhost:8001) in your browser.
 
+#### Behind a reverse proxy (Traefik, nginx, Caddy)
+
+The proxy must preserve the public `Host` header (Traefik does by default) and send
+`X-Forwarded-Proto`. The image trusts that header (`FORWARDED_ALLOW_IPS=*`), so writes from
+`https://your.domain` are accepted. If port 8001 is also reachable directly, set
+`FORWARDED_ALLOW_IPS` to your proxy's IP or CIDR in `docker-compose.yml`.
+
 ## Usage
 
 ### 1. Add Study Materials
