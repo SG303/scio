@@ -244,12 +244,19 @@ async def generate_test_questions(
     # Strategy 3: Small batches (10 questions each) - most reliable fallback
     remaining = num_questions - len(collected)
     SMALL_BATCH_SIZE = 10
-    strategy_questions = await _generate_with_batch_size(
-        documents, remaining, num_choices, model_id,
-        topic, custom_prompt, current_existing, SMALL_BATCH_SIZE, report,
-        progress_done=len(collected), progress_total=num_questions, language=language
-    )
-    _merge(strategy_questions)
+    try:
+        strategy_questions = await _generate_with_batch_size(
+            documents, remaining, num_choices, model_id,
+            topic, custom_prompt, current_existing, SMALL_BATCH_SIZE, report,
+            progress_done=len(collected), progress_total=num_questions, language=language
+        )
+        _merge(strategy_questions)
+    except GenerationCancelled:
+        raise
+    except Exception:
+        if not collected:
+            raise
+        logger.warning("Final generation strategy failed; keeping %d questions", len(collected), exc_info=True)
     
     return collected[:num_questions]
 
@@ -473,6 +480,7 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
                     cleaned_choices.append(str(c))
             choices = cleaned_choices
         
+        original_choice_count = len(choices)
         # Ensure we have enough choices
         while len(choices) < num_choices:
             choices.append(f"Choice {len(choices) + 1}")
@@ -495,8 +503,8 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
         if isinstance(correct, bool):
             correct = None
         elif isinstance(correct, float):
-            correct = int(correct)
-        if not isinstance(correct, int) or not (0 <= correct < len(choices)):
+            correct = int(correct) if math.isfinite(correct) and correct.is_integer() else None
+        if not isinstance(correct, int) or not (0 <= correct < min(original_choice_count, len(choices))):
             logger.warning(
                 "Discarding question with invalid correct_answer (raw=%r, "
                 "resolved=%r, num_choices=%d): %s",
@@ -524,7 +532,7 @@ def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str,
     # Try to find question patterns
     question_pattern = r'"question"\s*:\s*"([^"]+)"'
     choices_pattern = r'"choices"\s*:\s*\[(.*?)\]'
-    correct_pattern = r'"correct_answer"\s*:\s*(\d+|"[A-Z]")'
+    correct_pattern = r'"correct_answer"\s*:\s*("[^"\\]*(?:\\.[^"\\]*)*"|[^,}\s]+)'
     explanation_pattern = r'"explanation"\s*:\s*"([^"]*)"'
     
     # Split by question blocks (roughly)
@@ -542,21 +550,38 @@ def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str,
         c_match = re.search(choices_pattern, block, re.DOTALL)
         if c_match:
             choices_raw = c_match.group(1)
-            # Find all quoted strings
-            choice_strings = re.findall(r'"([^"]+)"', choices_raw)
-            # Filter out letter keys like "A", "B", etc.
-            choices = [c for c in choice_strings if len(c) > 1 or c not in "ABCDEFGH"]
-        
-        # Extract correct answer
-        correct = 0
+            try:
+                choices = json.loads("[" + choices_raw + "]")
+            except json.JSONDecodeError:
+                # Recover labelled arrays only through the scoped repair.
+                try:
+                    repaired = _repair_choices_arrays('{"choices": [' + choices_raw + ']}')
+                    choices = json.loads(repaired)["choices"]
+                except (json.JSONDecodeError, KeyError):
+                    continue
+
+        # Missing or unrecognised keys must never silently mean answer A.
+        correct = None
         correct_match = re.search(correct_pattern, block)
         if correct_match:
-            val = correct_match.group(1).strip('"')
-            if val.isdigit():
+            raw = correct_match.group(1)
+            try:
+                val = json.loads(raw)
+            except json.JSONDecodeError:
+                val = None
+            if isinstance(val, str):
+                if len(val) == 1 and val.upper() in "ABCDEFGH":
+                    correct = ord(val.upper()) - 65
+                else:
+                    try:
+                        correct = int(val)
+                    except ValueError:
+                        pass
+            elif isinstance(val, int) and not isinstance(val, bool):
+                correct = val
+            elif isinstance(val, float) and math.isfinite(val) and val.is_integer():
                 correct = int(val)
-            elif len(val) == 1 and val.upper() in "ABCDEFGH":
-                correct = ord(val.upper()) - 65
-        
+
         # Extract explanation
         explanation = ""
         exp_match = re.search(explanation_pattern, block, re.DOTALL)
@@ -568,7 +593,7 @@ def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str,
             # An invalid key discards the block instead of clamping it —
             # and the key must be valid for the STORED (truncated)
             # choice list (roadmap P1.1)
-            if 0 <= correct < len(stored_choices):
+            if isinstance(correct, int) and 0 <= correct < len(stored_choices):
                 questions.append({
                     "question": question_text,
                     "choices": stored_choices,
