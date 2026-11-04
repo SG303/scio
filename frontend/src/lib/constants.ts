@@ -48,3 +48,10 @@ export const DEFAULT_NUM_CHOICES = 4
 // Output language of generated cards and questions ("" = language of the material)
 export const LANGUAGE_PRESETS = ['German', 'English', 'French', 'Italian', 'Spanish'] as const
 export const LANGUAGE_MAX_LENGTH = 50
+
+// A session's index refers to its initial queue, not a newly filtered queue.
+export const studyQueueQueryOptions = {
+  staleTime: Infinity,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+} as const

@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
 import { cn, parseApiDate } from '@/lib/utils'
-import { queryKeys } from '@/lib/constants'
+import { queryKeys, studyQueueQueryOptions } from '@/lib/constants'
 import { ratingStyles } from '@/lib/studyColors'
 import {
   cacheStudyQueue,
@@ -223,6 +223,7 @@ export default function StudySession() {
     isLoading,
     error,
   } = useQuery({
+    ...studyQueueQueryOptions,
     queryKey: queryKeys.studyQueue(deckId, sessionId),
     queryFn: () => flashcardsApi.getStudyQueue(parseInt(deckId!), sessionId || undefined),
     enabled: !!deckId && !!sessionId,

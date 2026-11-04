@@ -154,3 +154,20 @@ async def test_duplicates_from_db_and_model_do_not_consume_budget(monkeypatch):
     ]
     # The DB question was instructed not to repeat
     assert "Question 1" in fake.prompts[1]
+
+
+async def test_paid_partial_result_survives_failure_of_all_later_strategies(monkeypatch):
+    fake = FakeOpenRouter(outcomes=[4, ValueError('Provider down'), ValueError('Provider down')])
+    monkeypatch.setattr(test_generator, 'chat_completion_json', fake)
+    questions = await generate_test_questions([], 10, 4, 'test-model', 'Topic')
+    assert fake.requested == [10, 6, 6]
+    assert [q['question'] for q in questions] == [f'Question {i}' for i in range(1, 5)]
+
+
+async def test_cancellation_still_discards_partial_results_in_final_strategy(monkeypatch):
+    from app.services.generation_progress import GenerationCancelled
+    fake = FakeOpenRouter(outcomes=[4, ValueError('Provider down'), GenerationCancelled('Cancelled')])
+    monkeypatch.setattr(test_generator, 'chat_completion_json', fake)
+    with pytest.raises(GenerationCancelled):
+        await generate_test_questions([], 10, 4, 'test-model', 'Topic')
+    assert fake.requested == [10, 6, 6]

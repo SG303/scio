@@ -124,6 +124,7 @@ async def format_lecture_notes(
     """
     lecture = await _get_lecture(db, lecture_id)
     source = lecture.content
+    source_updated_at = lecture.updated_at
     if not source.strip():
         raise HTTPException(status_code=400, detail="Write some notes before formatting them.")
 
@@ -151,9 +152,22 @@ async def format_lecture_notes(
             status_code=500, detail="Formatting failed. Your notes are unchanged. Please try again."
         )
 
-    lecture.original_content = source
-    lecture.content = formatted
-    lecture.formatted_at = utc_now()
+    result = await db.execute(
+        update(Lecture)
+        .where(
+            Lecture.id == lecture_id,
+            Lecture.content == source,
+            Lecture.updated_at == source_updated_at,
+        )
+        .values(original_content=source, content=formatted, formatted_at=utc_now())
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Your notes changed during formatting. The newer notes were kept; formatting was not applied.",
+        )
     await db.commit()
     await db.refresh(lecture)
     return lecture
