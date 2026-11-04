@@ -14,6 +14,8 @@ export interface AIModel {
 
 export interface AppSettings {
   verification_model: string
+  /** Global default AI model; null = not set */
+  default_ai_model_id: number | null
 }
 
 export interface OpenRouterKeyStatus {
@@ -106,6 +108,8 @@ export interface TestConfig {
   document_ids: number[]
   is_template: boolean
   custom_prompt: string | null
+  /** null = language of the material */
+  language: string | null
   subject_id: number | null
   /** Templates: tests still attached to this config (deleted with it) */
   test_count: number
@@ -149,6 +153,7 @@ export interface CreateTestConfig {
   document_ids: number[]
   is_template?: boolean
   custom_prompt?: string | null
+  language?: string | null
 }
 
 // P5.2: config + generated test in one call (never a template)
@@ -160,6 +165,7 @@ export interface CreateAndGenerateTestRequest {
   document_ids: number[]
   lecture_ids?: number[]
   custom_prompt?: string | null
+  language?: string | null
   subject_id?: number | null
   generate_num_questions?: number
 }
@@ -179,6 +185,7 @@ export interface FlashcardDeck {
   ai_model_id: number | null
   document_ids: number[] | null
   custom_prompt: string | null
+  language: string | null
   new_cards_per_day: number
   subject_id: number | null
   created_at: string
@@ -278,6 +285,7 @@ export interface CreateFlashcardDeck {
   ai_model_id?: number | null
   document_ids?: number[] | null
   custom_prompt?: string | null
+  language?: string | null
   new_cards_per_day?: number
   subject_id?: number | null
 }
@@ -287,6 +295,8 @@ export interface CreateAndGenerateDeckRequest extends CreateFlashcardDeck {
   num_cards: number
   topic?: string | null
   lecture_ids?: number[]
+  /** Add the cards to this existing deck instead of creating a new one */
+  deck_id?: number | null
 }
 
 export interface CreateAndGenerateDeckResponse {
@@ -370,6 +380,8 @@ export interface Subject {
   title: string
   description: string | null
   ai_model_id: number | null
+  /** Output language of generated material; null = language of the material */
+  language: string | null
   document_ids: number[] | null
   created_at: string
   updated_at: string
@@ -427,6 +439,7 @@ export interface CreateSubject {
   title: string
   description?: string | null
   ai_model_id?: number | null
+  language?: string | null
   document_ids?: number[] | null
 }
 
@@ -434,6 +447,7 @@ export interface UpdateSubject {
   title?: string
   description?: string | null
   ai_model_id?: number | null
+  language?: string | null
   document_ids?: number[] | null
 }
 

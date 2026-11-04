@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 
+from app.services.language import Language
+
 
 class SubjectCreate(BaseModel):
     """Schema for creating a new subject"""
@@ -9,6 +11,7 @@ class SubjectCreate(BaseModel):
     description: Optional[str] = None
     ai_model_id: Optional[int] = None
     document_ids: Optional[List[int]] = None
+    language: Language = None
 
 
 class SubjectUpdate(BaseModel):
@@ -17,6 +20,7 @@ class SubjectUpdate(BaseModel):
     description: Optional[str] = None
     ai_model_id: Optional[int] = None
     document_ids: Optional[List[int]] = None
+    language: Language = None
 
 
 class SubjectResponse(BaseModel):
@@ -26,6 +30,7 @@ class SubjectResponse(BaseModel):
     description: Optional[str] = None
     ai_model_id: Optional[int] = None
     document_ids: Optional[List[int]] = None
+    language: Language = None
     created_at: datetime
     updated_at: datetime
     
@@ -41,6 +46,7 @@ class SubjectListResponse(BaseModel):
     ai_model_id: Optional[int] = None
     ai_model_name: Optional[str] = None
     document_ids: Optional[List[int]] = None
+    language: Language = None
     document_count: int = 0
     test_count: int = 0
     deck_count: int = 0
@@ -98,6 +104,7 @@ class SubjectDetailResponse(BaseModel):
     ai_model_id: Optional[int] = None
     ai_model_name: Optional[str] = None
     document_ids: Optional[List[int]] = None
+    language: Language = None
     document_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -121,6 +128,7 @@ class GenerateTestInSubjectRequest(BaseModel):
     num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: Optional[int] = None  # Override subject default
     document_ids: Optional[List[int]] = None  # Override subject default
+    language: Language = None
     custom_prompt: Optional[str] = None
 
 
@@ -131,6 +139,7 @@ class GenerateFlashcardsInSubjectRequest(BaseModel):
     num_cards: int = Field(default=20, ge=1, le=100)
     ai_model_id: Optional[int] = None  # Override subject default
     document_ids: Optional[List[int]] = None  # Override subject default
+    language: Language = None
     custom_prompt: Optional[str] = None
 
 

@@ -7,7 +7,7 @@ import { GenerationStatus } from '@/components/GenerationStatus'
 import { FinishLectureDialog } from './FinishLectureDialog'
 import { LectureCompare } from './LectureCompare'
 import { toast } from '@/components/Toaster'
-import { lecturesApi, subjectsApi } from '@/services/api'
+import { lecturesApi, modelsApi, settingsApi, subjectsApi } from '@/services/api'
 import { queryKeys } from '@/lib/constants'
 import type { Lecture } from '@/types'
 import {
@@ -215,7 +215,7 @@ function EditorSession({
   }
 
   const formatMutation = useMutation({
-    mutationFn: (modelId: number) => lecturesApi.format(lecture.id, modelId),
+    mutationFn: (modelId?: number) => lecturesApi.format(lecture.id, modelId),
     onSuccess: (result) => {
       applyServer(result)
       setMode('compare')
@@ -237,7 +237,7 @@ function EditorSession({
     },
   })
 
-  const startFormatting = async (modelId: number) => {
+  const startFormatting = async (modelId?: number) => {
     setFinishOpen(false)
     setEditorContent(latest.current.content)
     setMode('formatting')
@@ -248,6 +248,21 @@ function EditorSession({
       return
     }
     formatMutation.mutate(modelId)
+  }
+
+  // Subject model first, then the global default (Settings). Only without
+  // either does the user have to pick a model.
+  const { data: appSettings } = useQuery({ queryKey: queryKeys.settings, queryFn: settingsApi.get })
+  const defaultModelId = subject?.ai_model_id ?? appSettings?.default_ai_model_id ?? null
+  const { data: models = [] } = useQuery({
+    queryKey: queryKeys.modelsAll,
+    queryFn: () => modelsApi.list(true),
+  })
+  const defaultModelName = models.find((m) => m.id === defaultModelId)?.name
+  const finishTitle = defaultModelName ? `Format with ${defaultModelName}` : 'Fix spelling and structure'
+  const onFinishClick = () => {
+    if (defaultModelId === null) setFinishOpen(true)
+    else void startFormatting()
   }
 
   const openCompare = () => {
@@ -317,7 +332,7 @@ function EditorSession({
             </Button>
           )}
           {mode === 'edit' && (
-            <Button variant="outline" size="sm" className="h-9" onClick={() => setFinishOpen(true)}>
+            <Button variant="outline" size="sm" className="h-9" onClick={onFinishClick} title={finishTitle}>
               <Sparkles className="h-4 w-4 sm:mr-1.5" />
               <span className="sr-only sm:not-sr-only">Finish lecture</span>
             </Button>
@@ -375,7 +390,7 @@ function EditorSession({
       <FinishLectureDialog
         open={finishOpen}
         onOpenChange={setFinishOpen}
-        defaultModelId={subject?.ai_model_id ?? null}
+        defaultModelId={defaultModelId}
         onConfirm={(modelId) => void startFormatting(modelId)}
       />
 

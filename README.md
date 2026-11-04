@@ -136,6 +136,15 @@ cp -r data/ backup/data/
 cp -r uploads/ backup/uploads/
 ```
 
+## Releases and updates
+
+Published versions are listed in [GitHub Releases](https://github.com/SG303/scio/releases)
+and [CHANGELOG.md](CHANGELOG.md). Tagged releases publish Docker images as
+`ghcr.io/sg303/scio:vX.Y.Z` and `latest` after all release checks pass.
+The Compose template builds locally; it does not automatically follow releases.
+See [RELEASING.md](RELEASING.md) for versioning, release preparation, publication,
+backups, updates and rollback instructions for maintainers and AI agents.
+
 ## Development
 
 ### Local Development Setup

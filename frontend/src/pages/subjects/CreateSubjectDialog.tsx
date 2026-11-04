@@ -17,6 +17,7 @@ import { documentsApi, modelsApi, subjectsApi } from '@/services/api'
 import { toast } from '@/components/Toaster'
 import { EmptyState } from '@/components/EmptyState'
 import { StepIndicator } from '@/components/StepIndicator'
+import { LanguageSelect } from '@/components/LanguageSelect'
 import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
 import { DocumentPicker } from '@/components/DocumentPicker'
 import type { SubjectListItem } from '@/types'
@@ -39,6 +40,7 @@ export default function CreateSubjectDialog({
     title: '',
     description: '',
     ai_model_id: null as number | null,
+    language: '',
     document_ids: [] as number[],
   })
 
@@ -64,7 +66,7 @@ export default function CreateSubjectDialog({
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { title: string; description: string | null; ai_model_id: number | null; document_ids: number[] | null } }) =>
+    mutationFn: ({ id, data }: { id: number; data: { title: string; description: string | null; ai_model_id: number | null; language: string | null; document_ids: number[] | null } }) =>
       subjectsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.subjects })
@@ -92,6 +94,7 @@ export default function CreateSubjectDialog({
         title: editingSubject.title,
         description: editingSubject.description || '',
         ai_model_id: editingSubject.ai_model_id,
+        language: editingSubject.language ?? '',
         document_ids: editingSubject.document_ids || [],
       })
     } else {
@@ -99,6 +102,7 @@ export default function CreateSubjectDialog({
         title: '',
         description: '',
         ai_model_id: null,
+        language: '',
         document_ids: [],
       })
     }
@@ -110,6 +114,7 @@ export default function CreateSubjectDialog({
       title: '',
       description: '',
       ai_model_id: null,
+      language: '',
       document_ids: [],
     })
     setStep(1)
@@ -130,6 +135,7 @@ export default function CreateSubjectDialog({
       title: formData.title,
       description: formData.description || null,
       ai_model_id: formData.ai_model_id,
+      language: formData.language || null,
       document_ids: formData.document_ids.length > 0 ? formData.document_ids : null,
     }
 
@@ -157,7 +163,7 @@ export default function CreateSubjectDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <StepIndicator steps={['Details', 'Documents', 'AI Model']} current={step} className="py-2" />
+        <StepIndicator steps={['Details', 'Documents', 'Model & language']} current={step} className="py-2" />
 
         {/* Step 1: Details */}
         {step === 1 && (
@@ -219,11 +225,11 @@ export default function CreateSubjectDialog({
         {step === 3 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Select a default AI model for generating content in this subject (can be overridden per generation).
+              Select a model for this subject. It overrides the global default from Settings and can still be changed per generation.
             </p>
             {formData.ai_model_id === null && (
               <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                No default model selected. You'll need to select a model when generating content.
+                No model selected here. The default model from Settings is used instead.
               </p>
             )}
             <div className="grid max-h-60 gap-2 overflow-y-auto p-0.5" role="radiogroup" aria-label="Default AI Model">
@@ -244,6 +250,13 @@ export default function CreateSubjectDialog({
               ))}
             </div>
 
+            <LanguageSelect
+              id="subject-language"
+              value={formData.language}
+              onChange={(language) => setFormData({ ...formData, language })}
+              hint="Questions and cards generated in this subject use this language unless you choose another one."
+            />
+
             {/* Summary */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium">Summary</h4>
@@ -254,6 +267,7 @@ export default function CreateSubjectDialog({
                   ['Default model', formData.ai_model_id
                     ? models.find((m) => m.id === formData.ai_model_id)?.name
                     : 'None'],
+                  ['Language', formData.language || 'Same as the material'],
                 ] as const).map(([label, value]) => (
                   <div key={label} className="flex justify-between gap-4 px-3 py-2">
                     <dt className="text-muted-foreground">{label}</dt>

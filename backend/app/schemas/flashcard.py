@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 
+from app.services.language import Language
+
 
 # ============== Flashcard Deck Schemas ==============
 
@@ -15,6 +17,7 @@ class FlashcardDeckCreate(BaseModel):
     ai_model_id: Optional[int] = None
     document_ids: Optional[List[int]] = None
     custom_prompt: Optional[str] = None
+    language: Language = None  # None = language of the material
     new_cards_per_day: int = Field(default=20, ge=1, le=100)
     subject_id: Optional[int] = None  # Optional subject grouping
 
@@ -35,6 +38,7 @@ class FlashcardDeckResponse(BaseModel):
     ai_model_id: Optional[int] = None
     document_ids: Optional[List[int]] = None
     custom_prompt: Optional[str] = None
+    language: Language = None  # None = language of the material
     new_cards_per_day: int
     subject_id: Optional[int] = None
     created_at: datetime
@@ -162,10 +166,15 @@ class GenerateFlashcardsResponse(BaseModel):
 
 class CreateAndGenerateDeckRequest(FlashcardDeckCreate):
     """P5.2: create a deck and generate its first cards in one transaction —
-    a failed generation leaves no empty deck behind."""
+    a failed generation leaves no empty deck behind. With ``deck_id`` the
+    cards are added to that existing deck instead."""
     num_cards: int = Field(ge=1, le=100)  # required, no default
     topic: Optional[str] = None
     lecture_ids: List[int] = []  # lecture notes as additional study material
+    # Add the cards to this deck instead of creating a new one. The deck keeps
+    # its title/subject/language; the sources of this request are added to the
+    # deck's sources so later generations know them.
+    deck_id: Optional[int] = None
 
 
 class CreateAndGenerateDeckResponse(BaseModel):

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -23,7 +25,14 @@ class BackupCreateResponse(BaseModel):
 class AppSettingsResponse(BaseModel):
     """Effective app settings (stored values with config fallbacks applied)."""
     verification_model: str
+    # Global default AI model (None = not set)
+    default_ai_model_id: Optional[int] = None
 
 
 class AppSettingsUpdate(BaseModel):
-    verification_model: str = Field(min_length=1, max_length=255)
+    """Partial update: only the fields that are sent are changed.
+
+    ``default_ai_model_id: null`` clears the default.
+    """
+    verification_model: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    default_ai_model_id: Optional[int] = None

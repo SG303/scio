@@ -177,7 +177,9 @@ async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> di
         review_count = counts_by_state.get("review", 0)
         due_count = due_by_deck.get(deck.id, 0)
         new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
-        new_today = max(0, min(new_count, deck.new_cards_per_day) - new_reviewed_today)
+        # Cards introduced today are no longer "new": they are already out of
+        # new_count, so only the daily quota shrinks, never new_count itself
+        new_today = min(new_count, max(0, deck.new_cards_per_day - new_reviewed_today))
         stats_map[deck.id] = {
             "total_cards": total,
             "new_cards": new_count,
@@ -216,6 +218,7 @@ async def list_decks(db: AsyncSession = Depends(get_db)):
                 ai_model_id=deck.ai_model_id,
                 document_ids=deck.document_ids,
                 custom_prompt=deck.custom_prompt,
+                language=deck.language,
                 new_cards_per_day=deck.new_cards_per_day,
                 subject_id=deck.subject_id,
                 created_at=deck.created_at,
@@ -289,6 +292,7 @@ async def get_deck(deck_id: int, db: AsyncSession = Depends(get_db)):
         ai_model_id=deck.ai_model_id,
         document_ids=deck.document_ids,
         custom_prompt=deck.custom_prompt,
+        language=deck.language,
         new_cards_per_day=deck.new_cards_per_day,
         subject_id=deck.subject_id,
         created_at=deck.created_at,
@@ -591,7 +595,8 @@ async def create_and_generate_deck(
     """P5.2: create a deck and generate its first cards in one commit.
 
     The AI generation runs before anything is written, so a failed
-    generation leaves no empty deck behind.
+    generation leaves no empty deck behind. With ``deck_id`` the cards are
+    added to that deck instead (same order: read, AI call, one commit).
     """
     if not request.ai_model_id:
         raise HTTPException(status_code=400, detail="An AI model is required to generate cards")
@@ -616,18 +621,33 @@ async def create_and_generate_deck(
                 status_code=404, detail=f"Document(s) not found: {missing_ids}"
             )
 
-    await ensure_subject_exists(db, request.subject_id)
+    target_deck = None
+    if request.deck_id is not None:
+        target_deck = await db.get(FlashcardDeck, request.deck_id)
+        if target_deck is None:
+            raise HTTPException(status_code=404, detail="Deck not found")
+        # An existing deck keeps its own subject
+        subject_id = target_deck.subject_id
+    else:
+        subject_id = request.subject_id
+    await ensure_subject_exists(db, subject_id)
 
-    # Inside a subject, avoid regenerating cards the subject already has
-    # (same dedupe as POST /subjects/{id}/generate-flashcards)
-    existing_fronts = (
-        await existing_subject_fronts(db, request.subject_id)
-        if request.subject_id is not None
-        else []
-    )
+    # Avoid regenerating cards that already exist: the subject's cards inside
+    # a subject (same dedupe as POST /subjects/{id}/generate-flashcards), the
+    # deck's own cards otherwise
+    if subject_id is not None:
+        existing_fronts = await existing_subject_fronts(db, subject_id)
+    elif target_deck is not None:
+        result = await db.execute(
+            select(Flashcard.front).where(Flashcard.deck_id == target_deck.id)
+        )
+        existing_fronts = [row[0] for row in result.fetchall()]
+    else:
+        existing_fronts = []
 
     # AI call first — nothing is persisted if it fails
-    topic = request.topic or request.title
+    topic = request.topic or (target_deck.title if target_deck else request.title)
+    language = request.language or (target_deck.language if target_deck else None)
     lectures = await load_lecture_sources(db, request.lecture_ids)
     try:
         cards_data = await generate_flashcards(
@@ -636,6 +656,7 @@ async def create_and_generate_deck(
             model_id=ai_model.openrouter_id,
             topic=topic,
             custom_prompt=request.custom_prompt,
+            language=language,
             existing_fronts=existing_fronts if existing_fronts else None,
         )
     except ValueError as e:
@@ -650,9 +671,19 @@ async def create_and_generate_deck(
         )
 
     # Persist deck + cards in a single commit
-    deck_fields = request.model_dump(exclude={"num_cards", "topic"})
-    deck = FlashcardDeck(**deck_fields)
-    db.add(deck)
+    if target_deck is not None:
+        deck = target_deck
+        # The new sources join the deck's, so "generate more" knows them too
+        deck.document_ids = list(
+            dict.fromkeys([*(deck.document_ids or []), *(request.document_ids or [])])
+        ) or None
+        deck.lecture_ids = list(
+            dict.fromkeys([*(deck.lecture_ids or []), *request.lecture_ids])
+        ) or None
+    else:
+        deck_fields = request.model_dump(exclude={"num_cards", "topic", "deck_id"})
+        deck = FlashcardDeck(**deck_fields)
+        db.add(deck)
     await db.flush()
 
     for card_data in cards_data:
@@ -728,6 +759,7 @@ async def generate_cards_for_deck(
             model_id=ai_model.openrouter_id,
             topic=topic,
             custom_prompt=deck.custom_prompt,
+            language=deck.language,
             existing_fronts=existing_fronts if existing_fronts else None,
         )
     except ValueError as e:

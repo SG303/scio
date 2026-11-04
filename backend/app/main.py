@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -28,6 +29,7 @@ from app.migrations.add_flashcard_tables import migrate as migrate_flashcard_tab
 from app.migrations.add_subjects_table import migrate as migrate_subjects_table
 from app.migrations.add_lecture_formatting import migrate as migrate_lecture_formatting
 from app.migrations.add_lecture_sources import migrate as migrate_lecture_sources
+from app.migrations.add_language_columns import migrate as migrate_language_columns
 from app.migrations.add_document_chapters import migrate as migrate_document_chapters
 
 settings = get_settings()
@@ -53,6 +55,7 @@ async def lifespan(app: FastAPI):
     migrate_subjects_table()
     migrate_lecture_formatting()
     migrate_lecture_sources()
+    migrate_language_columns()
     migrate_document_chapters()
     
     # Seed default AI models
@@ -75,7 +78,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     description="Your AI Learning Hub - Generate practice tests, create flashcards, and organize your learning journey",
-    version="1.0.0",
+    version=Path(__file__).with_name("VERSION").read_text().strip(),
     lifespan=lifespan
 )
 

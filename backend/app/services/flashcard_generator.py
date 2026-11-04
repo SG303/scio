@@ -15,6 +15,7 @@ from app.services.exam_objectives import (
     format_documents,
     split_exam_objectives,
 )
+from app.services.language import language_section
 from app.services.openrouter_client import chat_completion_json
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,8 @@ def build_flashcard_prompt(
     num_cards: int,
     topic: str = "",
     custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None
+    existing_fronts: Optional[List[str]] = None,
+    language: Optional[str] = None,
 ) -> str:
     """Build the prompt for generating flashcards."""
     
@@ -140,6 +142,8 @@ EXISTING FLASHCARDS (DO NOT REPEAT):
 
 IMPORTANT: Create NEW flashcards that are different from the ones listed above. Do not rephrase or create variations of these existing cards."""
     
+    prompt += f"\n\n{language_section(language)}"
+
     return prompt
 
 
@@ -149,7 +153,8 @@ async def generate_flashcards(
     model_id: str,
     topic: str = "",
     custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None
+    existing_fronts: Optional[List[str]] = None,
+    language: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """
     Generate flashcards using OpenRouter API.
@@ -161,6 +166,7 @@ async def generate_flashcards(
         topic: Topic for generation (used if no documents)
         custom_prompt: Optional custom instructions
         existing_fronts: List of existing card fronts to avoid duplicates
+        language: Output language (None = language of the material)
     
     Returns:
         List of flashcard dictionaries with 'front' and 'back' keys
@@ -168,7 +174,7 @@ async def generate_flashcards(
     # For large numbers of cards, batch the generation
     if num_cards <= 30:
         return await _generate_batch(
-            documents, num_cards, model_id, topic, custom_prompt, existing_fronts
+            documents, num_cards, model_id, topic, custom_prompt, existing_fronts, language
         )
     
     # Batch generation for larger requests
@@ -186,7 +192,7 @@ async def generate_flashcards(
         
         try:
             batch_cards = await _generate_batch(
-                documents, cards_in_batch, model_id, topic, custom_prompt, current_existing
+                documents, cards_in_batch, model_id, topic, custom_prompt, current_existing, language
             )
             
             all_cards.extend(batch_cards)
@@ -210,11 +216,14 @@ async def _generate_batch(
     model_id: str,
     topic: str = "",
     custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None
+    existing_fronts: Optional[List[str]] = None,
+    language: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """Generate a single batch of flashcards."""
     
-    prompt = build_flashcard_prompt(documents, num_cards, topic, custom_prompt, existing_fronts)
+    prompt = build_flashcard_prompt(
+        documents, num_cards, topic, custom_prompt, existing_fronts, language
+    )
     
     content = await chat_completion_json(
         model_id=model_id,
