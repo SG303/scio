@@ -11,6 +11,17 @@ and uses [Semantic Versioning](https://semver.org/).
 - A consistent release process with synchronized app versions, release tag
   validation, versioned Docker images, and GitHub Releases. Maintainer and
   AI agent instructions are documented in `RELEASING.md`.
+- Large books can be split into one document per main chapter, right after
+  upload or later from the document's menu, so tests and decks can use just
+  the chapters you need. Chapters are found for free from PDF bookmarks or
+  Word/Markdown headings; for PDFs without bookmarks an AI model of your
+  choice finds them from the table of contents, without reading the whole
+  book. You review and adjust the chapters before they are created. The book
+  is kept, and its chapters are grouped under it in every document list.
+
+### Upgrade notes
+
+The new chapter columns on documents are added automatically on startup.
 
 ## [v0.6.0] - 2026-11-03
 

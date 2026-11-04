@@ -55,8 +55,32 @@ export interface Document {
   content: string | null
   file_path: string | null
   file_name: string | null
+  /** Set on chapters split from a book: the book's document ID. */
+  parent_document_id: number | null
+  /** PDF page range of a chapter (null for non-PDF chapters and books). */
+  page_start: number | null
+  page_end: number | null
   created_at: string
   updated_at: string
+}
+
+export interface ChapterProposal {
+  /** outline = PDF bookmarks, headings = DOCX/Markdown, none = nothing found for free */
+  method: 'outline' | 'headings' | 'ai' | 'none'
+  /** "page" for PDFs (start = PDF page), otherwise opaque section numbers */
+  unit: 'page' | 'section'
+  unit_count: number
+  /** AI detection works for PDFs only. */
+  ai_available: boolean
+  /** Rough prompt size of the AI detection. */
+  ai_input_tokens: number | null
+  chapters: { title: string; start: number }[]
+}
+
+export interface ChapterRange {
+  title: string
+  start: number
+  end: number
 }
 
 export interface Choice {
