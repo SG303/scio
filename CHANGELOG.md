@@ -6,6 +6,8 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.7.0] - 2026-11-04
+
 ### Fixed
 
 - Keep active flashcard queues stable across tab focus and reconnection, and
@@ -41,6 +43,13 @@ and uses [Semantic Versioning](https://semver.org/).
 ### Upgrade notes
 
 The new chapter columns on documents are added automatically on startup.
+
+### Manual verification
+
+Study several cards, switch to another tab for over five minutes, then return:
+the next card should remain correct. Export a deck named “数学 Łódź” as CSV
+and Anki. Upload a Markdown book with several top-level headings and use
+“Split into chapters” to review and create its chapter documents without AI.
 
 ## [v0.6.0] - 2026-11-03
 
