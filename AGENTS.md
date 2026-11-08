@@ -67,6 +67,7 @@ frontend/
     lib/constants.ts     # Shared constants (put query keys here)
     lib/utils.ts         # Helpers (including cost estimation)
   package.json           # Scripts: dev / build / preview / typecheck / lint
+backend/pyproject.toml   # Backend dependencies (uv), locked in backend/uv.lock
 Dockerfile               # Multi-stage: frontend build → Python image with static files
 docker-compose.yml.template
 frontend/eslint.config.js  # ESLint rules; shadcn code in src/components/ui/ is exempt from some rules
@@ -77,14 +78,15 @@ uploads/                 # Uploaded documents (runtime)
 
 ## Local development
 
-**Backend** (from `backend/`, virtual environment with `requirements.txt`):
+**Backend** (from `backend/`; dependencies in `pyproject.toml`, locked in
+`uv.lock`; add or update them with `uv add` / `uv lock`, never with pip):
 
 ```bash
 cd backend
-pip install -r requirements.txt
+uv sync                       # creates backend/.venv with the locked dependencies
 cp ../env.example .env        # set OPENROUTER_API_KEY (only needed for AI generation;
                               # all other endpoints work without a key)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Note: without the Docker `/app/data` directory, the local DB ends up relative
@@ -180,7 +182,7 @@ the owner may stay in German.
 
 | Check | Command | Status |
 |-------|---------|--------|
-| Backend tests | `cd backend && pytest` | Available since P0.2 (`backend/tests/`, dependencies: `pip install -r requirements-dev.txt`). Also runs as a GitHub Actions job on every push/PR |
+| Backend tests | `cd backend && uv run pytest` | Available since P0.2 (`backend/tests/`; the dev dependencies come with `uv sync`). Also runs as a GitHub Actions job on every push/PR |
 | Frontend type check | `cd frontend && npm run typecheck` | Available since P0.3 |
 | Lint | `cd frontend && npm run lint` | Available since P0.3. Existing warnings are known, planned bugs (see `eslint.config.js`) and do not block |
 | Docker build | `docker build .` (only for Dockerfile/Compose changes) | Available |
@@ -361,6 +363,5 @@ prompt appears").
 
 ## Deviations from baseline
 
-- `tool-canon`: the backend uses `requirements.txt` with pip instead of uv;
-  `scripts/` are plain Python scripts tested with `unittest`. Moving the
-  backend to uv is planned as a separate change.
+- `tool-canon`: the backend has no ruff yet; `scripts/` are plain Python
+  scripts tested with `unittest` (no third-party dependencies).

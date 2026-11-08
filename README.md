@@ -157,14 +157,13 @@ backups, updates and rollback instructions for maintainers and AI agents.
 ### Local Development Setup
 
 ```bash
-# Backend (dependencies installed directly into your environment)
+# Backend (uv installs the locked dependencies into backend/.venv)
 cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
 
-# Backend tests (extra dev dependencies)
-pip install -r requirements-dev.txt
-pytest
+# Backend tests
+uv run pytest
 
 # Frontend (in another terminal)
 cd frontend
@@ -182,7 +181,8 @@ scio/
 ├── Dockerfile              # Multi-stage Docker build
 ├── docker-compose.yml.template  # Docker Compose template
 ├── backend/
-│   ├── requirements.txt
+│   ├── pyproject.toml      # Backend dependencies (uv)
+│   ├── uv.lock
 │   └── app/
 │       ├── main.py         # FastAPI application
 │       ├── models.py       # Database models
