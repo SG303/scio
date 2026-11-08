@@ -45,8 +45,7 @@ LOGIN_CODE_TIMEOUT_SECONDS = 60
 GENERATION_TIMEOUT_SECONDS = 600
 
 NOT_CONNECTED_MESSAGE = (
-    "Claude subscription is not connected. "
-    "Connect it under Settings → AI providers."
+    "Claude subscription is not connected. Connect it under Settings → AI providers."
 )
 
 # Smallest possible request, only sent when the user asks for fresh usage
@@ -203,7 +202,10 @@ async def start_login() -> str:
             raise ValueError("Claude Code is not installed yet.")
 
         proc = await asyncio.create_subprocess_exec(
-            path, "auth", "login", "--claudeai",
+            path,
+            "auth",
+            "login",
+            "--claudeai",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -227,9 +229,7 @@ async def start_login() -> str:
                 proc.kill()
             await proc.wait()
             logger.error("Claude sign-in did not print a URL: %s", output)
-            raise ValueError(
-                f"Could not start the Claude sign-in. {output.strip()[-300:]}".strip()
-            )
+            raise ValueError(f"Could not start the Claude sign-in. {output.strip()[-300:]}".strip())
 
         _login = _LoginSession(proc=proc, url=match.group())
         return _login.url
@@ -335,16 +335,22 @@ async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -
         raise ValueError(NOT_CONNECTED_MESSAGE)
 
     args = [
-        path, "-p",
-        "--output-format", "stream-json",
+        path,
+        "-p",
+        "--output-format",
+        "stream-json",
         "--verbose",
-        "--tools", "",
+        "--tools",
+        "",
         "--strict-mcp-config",
-        "--setting-sources", "",
+        "--setting-sources",
+        "",
         "--disable-slash-commands",
         "--no-session-persistence",
-        "--model", model_id[len(MODEL_PREFIX):],
-        "--system-prompt", system_prompt,
+        "--model",
+        model_id[len(MODEL_PREFIX) :],
+        "--system-prompt",
+        system_prompt,
     ]
     with tempfile.TemporaryDirectory(prefix="scio-claude-") as workdir:
         try:

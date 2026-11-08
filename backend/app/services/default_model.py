@@ -3,6 +3,7 @@
 Fallback of last resort: an explicit choice wins, then the subject's model,
 then this one. The id lives in the settings table, so no migration is needed.
 """
+
 from typing import Optional
 
 from sqlalchemy import select
@@ -33,9 +34,7 @@ async def set_default_ai_model_id(db: AsyncSession, model_id: Optional[int]) -> 
         db.add(Setting(key=DEFAULT_AI_MODEL_KEY, value=value))
 
 
-async def resolve_ai_model_id(
-    db: AsyncSession, *preferred: Optional[int]
-) -> Optional[int]:
+async def resolve_ai_model_id(db: AsyncSession, *preferred: Optional[int]) -> Optional[int]:
     """First truthy id of ``preferred`` (explicit, then subject, ...), else the global default."""
     for model_id in preferred:
         if model_id:

@@ -5,6 +5,7 @@ The num_* fields feed directly into OpenRouter calls — unbounded values
 are a cost and degeneration risk. Bounds mirror the existing
 GenerateFlashcardsRequest (ge/le); defaults stay untouched.
 """
+
 import pytest
 from pydantic import ValidationError
 
@@ -15,6 +16,7 @@ from app.schemas.subject import (
     GenerateFlashcardsInSubjectRequest,
     GenerateTestInSubjectRequest,
 )
+
 # imported as a module: its Test* schema classes would otherwise trip
 # pytest's collection (PytestCollectionWarning)
 from app.schemas import test as test_schemas
@@ -95,8 +97,11 @@ class TestAddCardsRequest:
 class TestTestConfigCreate:
     def test_valid(self):
         req = test_schemas.TestConfigCreate(
-            title="Test", ai_model_id=1, document_ids=[1],
-            num_questions=100, num_choices=10,
+            title="Test",
+            ai_model_id=1,
+            document_ids=[1],
+            num_questions=100,
+            num_choices=10,
         )
         assert req.num_questions == 100
         assert req.num_choices == 10
@@ -105,7 +110,9 @@ class TestTestConfigCreate:
     def test_num_questions_out_of_bounds(self, num_questions):
         with pytest.raises(ValidationError):
             test_schemas.TestConfigCreate(
-                title="Test", ai_model_id=1, document_ids=[1],
+                title="Test",
+                ai_model_id=1,
+                document_ids=[1],
                 num_questions=num_questions,
             )
 
@@ -113,7 +120,9 @@ class TestTestConfigCreate:
     def test_num_choices_out_of_bounds(self, num_choices):
         with pytest.raises(ValidationError):
             test_schemas.TestConfigCreate(
-                title="Test", ai_model_id=1, document_ids=[1],
+                title="Test",
+                ai_model_id=1,
+                document_ids=[1],
                 num_choices=num_choices,
             )
 
@@ -143,7 +152,9 @@ class TestCreateAndGenerateRequest:
     def test_num_questions_out_of_bounds(self, num_questions):
         with pytest.raises(ValidationError):
             test_schemas.CreateAndGenerateRequest(
-                title="Test", ai_model_id=1, document_ids=[1],
+                title="Test",
+                ai_model_id=1,
+                document_ids=[1],
                 num_questions=num_questions,
             )
 
@@ -151,6 +162,8 @@ class TestCreateAndGenerateRequest:
     def test_num_choices_out_of_bounds(self, num_choices):
         with pytest.raises(ValidationError):
             test_schemas.CreateAndGenerateRequest(
-                title="Test", ai_model_id=1, document_ids=[1],
+                title="Test",
+                ai_model_id=1,
+                document_ids=[1],
                 num_choices=num_choices,
             )

@@ -1,6 +1,7 @@
 """Add chapter columns (parent_document_id, page_start, page_end) to
 documents. Fresh databases get them from create_all(); this upgrades
 existing ones. Idempotent (PRAGMA check)."""
+
 import logging
 import os
 import sqlite3

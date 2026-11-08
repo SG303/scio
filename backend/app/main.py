@@ -6,8 +6,8 @@ from pathlib import Path
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,16 @@ from contextlib import asynccontextmanager
 import os
 
 from app.database import init_db, async_session
-from app.routers import documents, ai_models, tests, flashcards, subjects, generation, providers, lectures
+from app.routers import (
+    documents,
+    ai_models,
+    tests,
+    flashcards,
+    subjects,
+    generation,
+    providers,
+    lectures,
+)
 from app.routers.settings import router as settings_router
 from app.routers.ai_models import seed_default_models
 from app.config import get_settings
@@ -48,7 +57,7 @@ async def _backup_loop():
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
-    
+
     # Run migrations to add any missing columns/tables
     migrate_template_fields()
     migrate_flashcard_tables()
@@ -57,11 +66,11 @@ async def lifespan(app: FastAPI):
     migrate_lecture_sources()
     migrate_language_columns()
     migrate_document_chapters()
-    
+
     # Seed default AI models
     async with async_session() as db:
         await seed_default_models(db)
-    
+
     backup_task = asyncio.create_task(_backup_loop())
     try:
         yield
@@ -79,16 +88,12 @@ app = FastAPI(
     title=settings.app_name,
     description="Your AI Learning Hub - Generate practice tests, create flashcards, and organize your learning journey",
     version=Path(__file__).with_name("VERSION").read_text().strip(),
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS middleware - configurable via ALLOWED_ORIGINS env var
 # Parse comma-separated origins, or allow all if "*" is specified
-cors_origins = [
-    origin.strip() 
-    for origin in settings.allowed_origins.split(",") 
-    if origin.strip()
-]
+cors_origins = [origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()]
 # If "*" is in the list or list is empty, allow all origins (development mode)
 if "*" in cors_origins or not cors_origins:
     cors_origins = ["*"]
@@ -96,10 +101,13 @@ if "*" in cors_origins or not cors_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True if cors_origins != ["*"] else False,  # credentials require specific origins
+    allow_credentials=True
+    if cors_origins != ["*"]
+    else False,  # credentials require specific origins
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.middleware("http")
 async def protect_mutations(request: Request, call_next):
@@ -112,7 +120,9 @@ async def protect_mutations(request: Request, call_next):
             and origin != same_origin
             and origin not in [o for o in cors_origins if o != "*"]
         ) or (origin is None and request.headers.get("sec-fetch-site") == "cross-site"):
-            return JSONResponse(status_code=403, content={"detail": "Cross-origin writes are not allowed"})
+            return JSONResponse(
+                status_code=403, content={"detail": "Cross-origin writes are not allowed"}
+            )
     return await call_next(request)
 
 
@@ -148,7 +158,7 @@ async def api_fallback(rest_path: str) -> None:
 static_dir = "/app/static"
 if os.path.exists(static_dir):
     app.mount("/assets", StaticFiles(directory=f"{static_dir}/assets"), name="assets")
-    
+
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         # P5.3b: path-traversal guard — only serve files that really live
@@ -160,7 +170,7 @@ if os.path.exists(static_dir):
 
         if os.path.isfile(file_path):
             return FileResponse(file_path)
-        
+
         # Serve index.html for all other routes (SPA routing)
         index_path = f"{static_dir}/index.html"
         if os.path.exists(index_path):
@@ -170,5 +180,5 @@ if os.path.exists(static_dir):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
+    uvicorn.run(app, host="0.0.0.0", port=8000)

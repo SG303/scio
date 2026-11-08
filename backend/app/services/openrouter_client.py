@@ -44,8 +44,7 @@ async def chat_completion_json(
     api_key = await load_effective_key()
     if not api_key:
         raise ValueError(
-            "OpenRouter API key is not configured. "
-            "Add it under Settings → AI providers."
+            "OpenRouter API key is not configured. Add it under Settings → AI providers."
         )
 
     payload: Dict[str, Any] = {
@@ -75,9 +74,7 @@ async def chat_completion_json(
 
         if response.status_code != 200:
             logger.error("OpenRouter API error response: %s", response.text)
-            raise ValueError(
-                f"OpenRouter API error ({response.status_code}): {response.text}"
-            )
+            raise ValueError(f"OpenRouter API error ({response.status_code}): {response.text}")
 
         data = response.json()
 
@@ -88,9 +85,7 @@ async def chat_completion_json(
         return data["choices"][0]["message"]["content"]
 
 
-async def _post(
-    client: httpx.AsyncClient, payload: Dict[str, Any], api_key: str
-) -> httpx.Response:
+async def _post(client: httpx.AsyncClient, payload: Dict[str, Any], api_key: str) -> httpx.Response:
     return await client.post(
         f"{settings.openrouter_base_url}/chat/completions",
         headers={

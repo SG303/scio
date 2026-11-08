@@ -1,6 +1,7 @@
 """Add language (output language of generated material) to subjects,
 test_configs and flashcard_decks. Fresh databases get the column from
 create_all(); this upgrades existing ones. Idempotent (PRAGMA check)."""
+
 import logging
 import os
 import sqlite3

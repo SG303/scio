@@ -3,6 +3,7 @@
 Same contract as creating a deck: reads, then the AI call, then one commit —
 a failed generation leaves the deck untouched.
 """
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -28,23 +29,35 @@ async def setup():
             subject = models.Subject(title="Marketing")
             db.add_all([model, subject])
             await db.flush()
-            db.add_all([
-                models.Lecture(id=lecture_id, subject_id=subject.id, title=f"L{lecture_id}", content="notes")
-                for lecture_id in (5, 6)
-            ])
+            db.add_all(
+                [
+                    models.Lecture(
+                        id=lecture_id,
+                        subject_id=subject.id,
+                        title=f"L{lecture_id}",
+                        content="notes",
+                    )
+                    for lecture_id in (5, 6)
+                ]
+            )
             in_subject = models.FlashcardDeck(
-                title="Terms", subject_id=subject.id, language="German",
-                document_ids=[1], lecture_ids=[5],
+                title="Terms",
+                subject_id=subject.id,
+                language="German",
+                document_ids=[1],
+                lecture_ids=[5],
             )
             loose = models.FlashcardDeck(title="Loose deck")
             other = models.FlashcardDeck(title="Other deck of the subject", subject_id=subject.id)
             db.add_all([in_subject, loose, other])
             await db.flush()
-            db.add_all([
-                models.Flashcard(deck_id=in_subject.id, front="Old front", back="b"),
-                models.Flashcard(deck_id=other.id, front="Sibling front", back="b"),
-                models.Flashcard(deck_id=loose.id, front="Loose front", back="b"),
-            ])
+            db.add_all(
+                [
+                    models.Flashcard(deck_id=in_subject.id, front="Old front", back="b"),
+                    models.Flashcard(deck_id=other.id, front="Sibling front", back="b"),
+                    models.Flashcard(deck_id=loose.id, front="Loose front", back="b"),
+                ]
+            )
             await db.commit()
             yield db, model, in_subject, loose
     finally:
@@ -80,9 +93,15 @@ async def test_cards_are_added_to_the_deck_and_sources_merge(setup, monkeypatch)
     assert response.deck.id == deck.id
     assert response.cards_generated == 1
     assert await _count(db, models.FlashcardDeck) == 3  # no new deck
-    fronts = (await db.execute(
-        select(models.Flashcard.front).where(models.Flashcard.deck_id == deck.id)
-    )).scalars().all()
+    fronts = (
+        (
+            await db.execute(
+                select(models.Flashcard.front).where(models.Flashcard.deck_id == deck.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert sorted(fronts) == ["New front", "Old front"]
     refreshed = await db.get(models.FlashcardDeck, deck.id)
     assert (refreshed.document_ids, refreshed.lecture_ids) == ([1], [5, 6])

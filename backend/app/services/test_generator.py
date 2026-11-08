@@ -16,13 +16,21 @@ from app.services.generation_progress import GenerationCancelled
 logger = logging.getLogger(__name__)
 
 
-def build_prompt(documents: List[Document], num_questions: int, num_choices: int, topic: str = "", custom_prompt: str = None, existing_questions: List[str] = None, language: Optional[str] = None) -> str:
+def build_prompt(
+    documents: List[Document],
+    num_questions: int,
+    num_choices: int,
+    topic: str = "",
+    custom_prompt: str = None,
+    existing_questions: List[str] = None,
+    language: Optional[str] = None,
+) -> str:
     """Build the prompt for generating test questions"""
-    
+
     # Normalize empty strings to None for consistency
     if custom_prompt is not None and not custom_prompt.strip():
         custom_prompt = None
-    
+
     # Base output format instructions (always included)
     output_format = f"""OUTPUT FORMAT - Return ONLY a valid JSON object like this example:
 {{
@@ -48,7 +56,7 @@ CRITICAL RULES:
 - Do NOT use letter prefixes like "A:" or "B:" in choices
 - "correct_answer" is the 0-based index (0 for first choice, 1 for second, etc.)
 - Return ONLY the JSON object, no markdown, no extra text"""
-    
+
     # Check if we have documents or just a topic
     if documents:
         # Exam objectives get their own focus section instead of being mixed
@@ -125,7 +133,7 @@ REQUIREMENTS:
 6. Provide a brief explanation for why the correct answer is correct
 
 {output_format}"""
-    
+
     # Add existing questions to avoid duplicates
     if existing_questions:
         questions_list = "\n".join(f"- {q}" for q in existing_questions)
@@ -135,7 +143,7 @@ PREVIOUSLY GENERATED QUESTIONS (DO NOT REPEAT):
 {questions_list}
 
 IMPORTANT: Create NEW questions that are different from the ones listed above. Do not rephrase or create variations of these existing questions."""
-    
+
     prompt += f"\n\n{language_section(language)}"
 
     return prompt
@@ -154,12 +162,12 @@ async def generate_test_questions(
 ) -> List[Dict[str, Any]]:
     """
     Generate test questions using OpenRouter API.
-    
+
     Uses a tiered approach for token efficiency:
     1. Try to generate all questions in a single call (most efficient)
     2. Fall back to medium batches (25) if single call fails
     3. Final fallback to small batches (10) for reliability
-    
+
     This avoids resending documents multiple times, which was causing 5x+ token overhead.
 
     Questions already paid for are reused across strategy fallbacks: the
@@ -169,7 +177,7 @@ async def generate_test_questions(
     questions already in the DB, passed via existing_questions — are
     filtered out.
     """
-    
+
     # Start with any previously existing questions passed to the function
     current_existing = list(existing_questions) if existing_questions else []
     collected: List[Dict[str, Any]] = []
@@ -188,7 +196,7 @@ async def generate_test_questions(
     async def report(**kw):
         if on_progress is not None:
             await on_progress(**kw)
-    
+
     # Strategy 1: Try single call for all questions (most token-efficient)
     # This works well for most models - 60 questions = ~7,200 output tokens
     if num_questions <= 60:
@@ -200,12 +208,12 @@ async def generate_test_questions(
                 message="Generating all questions in a single call",
             )
             questions = await _generate_batch(
-                documents, 
-                num_questions, 
-                num_choices, 
-                model_id, 
-                topic, 
-                custom_prompt, 
+                documents,
+                num_questions,
+                num_choices,
+                model_id,
+                topic,
+                custom_prompt,
                 current_existing,
                 language,
             )
@@ -226,12 +234,21 @@ async def generate_test_questions(
     # Strategy 2: Medium batches (25 questions each)
     # More reliable than single call, still much more efficient than small batches
     MEDIUM_BATCH_SIZE = 25
-    
+
     try:
         strategy_questions = await _generate_with_batch_size(
-            documents, remaining, num_choices, model_id,
-            topic, custom_prompt, current_existing, MEDIUM_BATCH_SIZE, report,
-            progress_done=len(collected), progress_total=num_questions, language=language
+            documents,
+            remaining,
+            num_choices,
+            model_id,
+            topic,
+            custom_prompt,
+            current_existing,
+            MEDIUM_BATCH_SIZE,
+            report,
+            progress_done=len(collected),
+            progress_total=num_questions,
+            language=language,
         )
         _merge(strategy_questions)
         if len(collected) >= num_questions * 0.8:
@@ -240,15 +257,24 @@ async def generate_test_questions(
         raise
     except Exception as e:
         logger.warning("Medium batch generation failed, falling back to small batches: %s", e)
-    
+
     # Strategy 3: Small batches (10 questions each) - most reliable fallback
     remaining = num_questions - len(collected)
     SMALL_BATCH_SIZE = 10
     try:
         strategy_questions = await _generate_with_batch_size(
-            documents, remaining, num_choices, model_id,
-            topic, custom_prompt, current_existing, SMALL_BATCH_SIZE, report,
-            progress_done=len(collected), progress_total=num_questions, language=language
+            documents,
+            remaining,
+            num_choices,
+            model_id,
+            topic,
+            custom_prompt,
+            current_existing,
+            SMALL_BATCH_SIZE,
+            report,
+            progress_done=len(collected),
+            progress_total=num_questions,
+            language=language,
         )
         _merge(strategy_questions)
     except GenerationCancelled:
@@ -256,8 +282,10 @@ async def generate_test_questions(
     except Exception:
         if not collected:
             raise
-        logger.warning("Final generation strategy failed; keeping %d questions", len(collected), exc_info=True)
-    
+        logger.warning(
+            "Final generation strategy failed; keeping %d questions", len(collected), exc_info=True
+        )
+
     return collected[:num_questions]
 
 
@@ -276,23 +304,23 @@ async def _generate_with_batch_size(
     language: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Generate questions using the specified batch size.
-    
+
     num_questions is the remaining deficit for THIS call. progress_done /
     progress_total position the cumulative progress inside a fallback
     chain (the orchestrator has already collected progress_done
     questions out of progress_total).
-    
+
     Questions whose text is already known (from existing_questions, which
     carries preceding strategies and DB questions, or from earlier
     batches of this call) are not repeated: they leave the remaining
     batch budget intact for genuinely new questions."""
-    
+
     all_questions = []
     num_batches = math.ceil(num_questions / batch_size)
     current_existing = list(existing_questions) if existing_questions else []
     seen_texts = {str(q).strip().casefold() for q in current_existing}
     progress_total_num = progress_total if progress_total is not None else num_questions
-    
+
     for i in range(num_batches):
         # P6.2: report batch progress between AI calls (also the point
         # where a user cancellation is noticed and raises)
@@ -306,22 +334,22 @@ async def _generate_with_batch_size(
                 message=f"Batch {i + 1} of {num_batches}",
             )
         questions_in_batch = min(batch_size, num_questions - len(all_questions))
-        
+
         if questions_in_batch <= 0:
             break
-            
+
         try:
             batch_questions = await _generate_batch(
-                documents, 
-                questions_in_batch, 
-                num_choices, 
-                model_id, 
-                topic, 
-                custom_prompt, 
+                documents,
+                questions_in_batch,
+                num_choices,
+                model_id,
+                topic,
+                custom_prompt,
                 current_existing,
                 language,
             )
-            
+
             # A repeated question must not eat into the remaining budget
             new_questions = []
             for q in batch_questions:
@@ -333,7 +361,7 @@ async def _generate_with_batch_size(
                 # Add new questions to existing list for the next batch to avoid duplicates
                 current_existing.append(q["question"])
             all_questions.extend(new_questions)
-                
+
         except GenerationCancelled:
             # P6.2: a cancellation must not be turned into a partial result
             # (break) — it has to escape the whole fallback chain.
@@ -343,7 +371,7 @@ async def _generate_with_batch_size(
                 raise e
             # Return what we have so far
             break
-            
+
     return all_questions
 
 
@@ -358,11 +386,11 @@ async def _generate_batch(
     language: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Generate a single batch of test questions using OpenRouter API"""
-    
+
     prompt = build_prompt(
         documents, num_questions, num_choices, topic, custom_prompt, existing_questions, language
     )
-    
+
     content = await chat_completion_json(
         model_id=model_id,
         system_prompt="You are an expert educational test creator. Always respond with valid JSON only, no markdown formatting.",
@@ -388,6 +416,7 @@ def _repair_choices_arrays(content: str) -> str:
     they normalise choices written as ["A": "text"], [A: "text"] or
     ["A. text"] into plain string lists.
     """
+
     def _repair_span(match: Any) -> str:
         repaired = match.group(0)
         # Fix: ["A": "text", "B": "text"] -> ["text", "text"]
@@ -408,10 +437,10 @@ def _repair_choices_arrays(content: str) -> str:
 
 def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, Any]]:
     """Parse the AI response and extract questions"""
-    
+
     # Try to extract JSON from the response
     content = content.strip()
-    
+
     # Remove markdown code blocks if present
     if content.startswith("```"):
         # Find the end of the code block
@@ -421,12 +450,12 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
         if lines[-1].strip() == "```":
             lines = lines[:-1]  # Remove closing ```
         content = "\n".join(lines)
-    
+
     # Try to find JSON array in the content
-    json_match = re.search(r'\[[\s\S]*\]', content)
+    json_match = re.search(r"\[[\s\S]*\]", content)
     if json_match:
         content = json_match.group()
-    
+
     try:
         questions = json.loads(content)
     except json.JSONDecodeError as e:
@@ -439,24 +468,26 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
             try:
                 questions = extract_questions_fallback(content, num_choices)
             except Exception:
-                raise ValueError(f"Failed to parse AI response as JSON: {str(e)}\nResponse: {content[:500]}")
-    
+                raise ValueError(
+                    f"Failed to parse AI response as JSON: {str(e)}\nResponse: {content[:500]}"
+                )
+
     if isinstance(questions, dict):
         # Structured output format: {"questions": [...]}
         questions = questions.get("questions")
     if not isinstance(questions, list):
         raise ValueError("AI response is not a list of questions")
-    
+
     # Validate and normalize questions
     validated_questions = []
     for i, q in enumerate(questions):
         if not isinstance(q, dict):
             continue
-        
+
         # Validate required fields
         if "question" not in q:
             continue
-        
+
         # Handle choices - can be list or dict
         choices = q.get("choices", [])
         if isinstance(choices, dict):
@@ -469,7 +500,7 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
             for c in choices:
                 if isinstance(c, str):
                     # Remove patterns like "A. ", "A) ", "A: " at the start
-                    cleaned = re.sub(r'^[A-Z][.\):\s]+\s*', '', c)
+                    cleaned = re.sub(r"^[A-Z][.\):\s]+\s*", "", c)
                     cleaned_choices.append(cleaned)
                 elif isinstance(c, dict):
                     # Handle {"A": "text"} format in list
@@ -479,13 +510,13 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
                 else:
                     cleaned_choices.append(str(c))
             choices = cleaned_choices
-        
+
         original_choice_count = len(choices)
         # Ensure we have enough choices
         while len(choices) < num_choices:
             choices.append(f"Choice {len(choices) + 1}")
         choices = choices[:num_choices]
-        
+
         # Get correct answer. An invalid key discards the question
         # instead of silently clamping it to a valid index — a clamped
         # index marks a WRONG answer as correct (roadmap P1.1).
@@ -504,47 +535,54 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
             correct = None
         elif isinstance(correct, float):
             correct = int(correct) if math.isfinite(correct) and correct.is_integer() else None
-        if not isinstance(correct, int) or not (0 <= correct < min(original_choice_count, len(choices))):
+        if not isinstance(correct, int) or not (
+            0 <= correct < min(original_choice_count, len(choices))
+        ):
             logger.warning(
                 "Discarding question with invalid correct_answer (raw=%r, "
                 "resolved=%r, num_choices=%d): %s",
-                raw_correct, correct, len(choices), str(q["question"])[:80],
+                raw_correct,
+                correct,
+                len(choices),
+                str(q["question"])[:80],
             )
             continue
-        
-        validated_questions.append({
-            "question": str(q["question"]),
-            "choices": [str(c) for c in choices],
-            "correct_answer": correct,
-            "explanation": str(q.get("explanation", ""))
-        })
-    
+
+        validated_questions.append(
+            {
+                "question": str(q["question"]),
+                "choices": [str(c) for c in choices],
+                "correct_answer": correct,
+                "explanation": str(q.get("explanation", "")),
+            }
+        )
+
     if not validated_questions:
         raise ValueError("No valid questions found in AI response")
-    
+
     return validated_questions
 
 
 def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str, Any]]:
     """Fallback parser for malformed JSON responses"""
     questions = []
-    
+
     # Try to find question patterns
     question_pattern = r'"question"\s*:\s*"([^"]+)"'
     choices_pattern = r'"choices"\s*:\s*\[(.*?)\]'
     correct_pattern = r'"correct_answer"\s*:\s*("[^"\\]*(?:\\.[^"\\]*)*"|[^,}\s]+)'
     explanation_pattern = r'"explanation"\s*:\s*"([^"]*)"'
-    
+
     # Split by question blocks (roughly)
-    blocks = re.split(r'\},\s*\{', content)
-    
+    blocks = re.split(r"\},\s*\{", content)
+
     for block in blocks:
         q_match = re.search(question_pattern, block, re.DOTALL)
         if not q_match:
             continue
-            
+
         question_text = q_match.group(1)
-        
+
         # Extract choices
         choices = []
         c_match = re.search(choices_pattern, block, re.DOTALL)
@@ -555,7 +593,7 @@ def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str,
             except json.JSONDecodeError:
                 # Recover labelled arrays only through the scoped repair.
                 try:
-                    repaired = _repair_choices_arrays('{"choices": [' + choices_raw + ']}')
+                    repaired = _repair_choices_arrays('{"choices": [' + choices_raw + "]}")
                     choices = json.loads(repaired)["choices"]
                 except (json.JSONDecodeError, KeyError):
                     continue
@@ -587,29 +625,33 @@ def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str,
         exp_match = re.search(explanation_pattern, block, re.DOTALL)
         if exp_match:
             explanation = exp_match.group(1)
-        
+
         stored_choices = choices[:num_choices] if choices else []
         if question_text and stored_choices:
             # An invalid key discards the block instead of clamping it —
             # and the key must be valid for the STORED (truncated)
             # choice list (roadmap P1.1)
             if isinstance(correct, int) and 0 <= correct < len(stored_choices):
-                questions.append({
-                    "question": question_text,
-                    "choices": stored_choices,
-                    "correct_answer": correct,
-                    "explanation": explanation
-                })
+                questions.append(
+                    {
+                        "question": question_text,
+                        "choices": stored_choices,
+                        "correct_answer": correct,
+                        "explanation": explanation,
+                    }
+                )
             else:
                 logger.warning(
                     "Fallback parser: discarding question with invalid "
                     "correct_answer (raw=%r, stored_choices=%d): %s",
-                    correct, len(stored_choices), question_text[:80],
+                    correct,
+                    len(stored_choices),
+                    question_text[:80],
                 )
-    
+
     if not questions:
         raise ValueError("Could not extract questions from response")
-    
+
     return questions
 
 
@@ -618,14 +660,14 @@ async def verify_question_integrity(
     choices: List[str],
     correct_answer_index: int,
     explanation: str,
-    verification_model: str
+    verification_model: str,
 ) -> Dict[str, Any]:
     """Verify if a question and its answer key are logically sound.
-    
+
     verification_model is resolved by the caller (settings table with
     config fallback) so this stays free of DB access.
     """
-    
+
     prompt = f"""You are a quality assurance assistant for an exam system. 
 Please review this multiple-choice question to verify if the "Marked Correct Answer" is actually correct and if the question makes sense.
 

@@ -8,6 +8,7 @@ regexes stay inside choices arrays, structured-output objects are
 unwrapped, unanswered questions are excluded from wrong-only conversion,
 duplicates are filtered per deck).
 """
+
 import json
 
 import pytest
@@ -59,8 +60,13 @@ class TestParseQuestionsResponse:
         # Multi-character keys survive the regex fix pass and hit the
         # dict->list conversion (sorted by key)
         content = json.dumps(
-            [{"question": "Q1", "choices": {"opt2": "Berlin", "opt1": "Paris"},
-              "correct_answer": 0}]
+            [
+                {
+                    "question": "Q1",
+                    "choices": {"opt2": "Berlin", "opt1": "Paris"},
+                    "correct_answer": 0,
+                }
+            ]
         )
         questions = parse_questions_response(content, num_choices=2)
         assert questions[0]["choices"] == ["Paris", "Berlin"]
@@ -71,8 +77,7 @@ class TestParseQuestionsResponse:
         With repairs scoped to broken choices arrays, valid dict choices
         parse and convert by sorted key."""
         content = json.dumps(
-            [{"question": "Q1", "choices": {"A": "Paris", "B": "Berlin"},
-              "correct_answer": 0}]
+            [{"question": "Q1", "choices": {"A": "Paris", "B": "Berlin"}, "correct_answer": 0}]
         )
         questions = parse_questions_response(content, num_choices=2)
         assert questions[0]["choices"] == ["Paris", "Berlin"]
@@ -80,48 +85,40 @@ class TestParseQuestionsResponse:
 
     def test_letter_choice_prefixes_removed(self):
         content = json.dumps(
-            [{"question": "Q1", "choices": ["A. One", "B. Two"],
-              "correct_answer": 0}]
+            [{"question": "Q1", "choices": ["A. One", "B. Two"], "correct_answer": 0}]
         )
         questions = parse_questions_response(content, num_choices=2)
         assert questions[0]["choices"] == ["One", "Two"]
 
     def test_too_few_choices_padded(self):
-        content = json.dumps(
-            [{"question": "Q1", "choices": ["Only one"], "correct_answer": 0}]
-        )
+        content = json.dumps([{"question": "Q1", "choices": ["Only one"], "correct_answer": 0}])
         questions = parse_questions_response(content, num_choices=4)
         assert len(questions[0]["choices"]) == 4
         assert questions[0]["choices"][1:] == ["Choice 2", "Choice 3", "Choice 4"]
 
     def test_too_many_choices_truncated(self):
         content = json.dumps(
-            [{"question": "Q1", "choices": ["A", "B", "C", "D", "E", "F"],
-              "correct_answer": 0}]
+            [{"question": "Q1", "choices": ["A", "B", "C", "D", "E", "F"], "correct_answer": 0}]
         )
         questions = parse_questions_response(content, num_choices=4)
         assert len(questions[0]["choices"]) == 4
 
     def test_string_letter_correct_answer_converted(self):
         content = json.dumps(
-            [{"question": "Q1", "choices": ["A", "B", "C", "D"],
-              "correct_answer": "C"}]
+            [{"question": "Q1", "choices": ["A", "B", "C", "D"], "correct_answer": "C"}]
         )
         questions = parse_questions_response(content, num_choices=4)
         assert questions[0]["correct_answer"] == 2
 
     def test_string_number_correct_answer_converted(self):
         content = json.dumps(
-            [{"question": "Q1", "choices": ["A", "B", "C", "D"],
-              "correct_answer": "3"}]
+            [{"question": "Q1", "choices": ["A", "B", "C", "D"], "correct_answer": "3"}]
         )
         questions = parse_questions_response(content, num_choices=4)
         assert questions[0]["correct_answer"] == 3
 
     def test_question_without_question_key_dropped(self):
-        content = json.dumps(
-            [{"choices": ["A", "B"], "correct_answer": 0}, q("Q2")]
-        )
+        content = json.dumps([{"choices": ["A", "B"], "correct_answer": 0}, q("Q2")])
         questions = parse_questions_response(content, num_choices=2)
         assert len(questions) == 1
         assert questions[0]["question"] == "Q2"
@@ -141,8 +138,7 @@ class TestParseQuestionsResponse:
         instead of silently clamping it to the last choice (which marked
         a wrong answer as correct)."""
         content = json.dumps(
-            [{"question": "Q1", "choices": ["A", "B", "C", "D"],
-              "correct_answer": 7}]
+            [{"question": "Q1", "choices": ["A", "B", "C", "D"], "correct_answer": 7}]
         )
         with pytest.raises(ValueError):
             parse_questions_response(content, num_choices=4)
@@ -150,12 +146,13 @@ class TestParseQuestionsResponse:
     def test_invalid_index_dropped_but_valid_ones_kept(self):
         """P1.1: among several questions only the invalid ones are
         dropped; count and order of the valid ones stay consistent."""
-        content = json.dumps([
-            q("Q1", correct=0),
-            {"question": "Q2", "choices": ["A", "B", "C", "D"],
-             "correct_answer": 9},
-            q("Q3", correct=2),
-        ])
+        content = json.dumps(
+            [
+                q("Q1", correct=0),
+                {"question": "Q2", "choices": ["A", "B", "C", "D"], "correct_answer": 9},
+                q("Q3", correct=2),
+            ]
+        )
         questions = parse_questions_response(content, num_choices=4)
         assert len(questions) == 2
         assert [x["question"] for x in questions] == ["Q1", "Q3"]
@@ -163,8 +160,7 @@ class TestParseQuestionsResponse:
 
     def test_non_numeric_correct_discards_question(self):
         content = json.dumps(
-            [{"question": "Q1", "choices": ["A", "B", "C", "D"],
-              "correct_answer": "unknown"}]
+            [{"question": "Q1", "choices": ["A", "B", "C", "D"], "correct_answer": "unknown"}]
         )
         with pytest.raises(ValueError):
             parse_questions_response(content, num_choices=4)
@@ -172,25 +168,24 @@ class TestParseQuestionsResponse:
     def test_missing_correct_answer_discards_question(self):
         """A question without any answer key is unusable for a learning
         app — it must not silently become index 0."""
-        content = json.dumps(
-            [{"question": "Q1", "choices": ["A", "B", "C", "D"]}]
-        )
+        content = json.dumps([{"question": "Q1", "choices": ["A", "B", "C", "D"]}])
         with pytest.raises(ValueError):
             parse_questions_response(content, num_choices=4)
 
     def test_negative_index_discards_question(self):
         content = json.dumps(
-            [{"question": "Q1", "choices": ["A", "B", "C", "D"],
-              "correct_answer": -1}]
+            [{"question": "Q1", "choices": ["A", "B", "C", "D"], "correct_answer": -1}]
         )
         with pytest.raises(ValueError):
             parse_questions_response(content, num_choices=4)
 
     def test_valid_index_at_boundaries_is_kept(self):
-        content = json.dumps([
-            q("First", correct=0),
-            q("Last", correct=3),
-        ])
+        content = json.dumps(
+            [
+                q("First", correct=0),
+                q("Last", correct=3),
+            ]
+        )
         questions = parse_questions_response(content, num_choices=4)
         assert [x["correct_answer"] for x in questions] == [0, 3]
 
@@ -325,8 +320,12 @@ class TestParseFlashcardsResponse:
 
     def test_cards_missing_fields_dropped(self):
         content = json.dumps(
-            [{"front": "F1", "back": "B1"}, {"front": "no back"},
-             {"back": "no front"}, "not a dict"]
+            [
+                {"front": "F1", "back": "B1"},
+                {"front": "no back"},
+                {"back": "no front"},
+                "not a dict",
+            ]
         )
         cards = parse_flashcards_response(content)
         assert cards == [{"front": "F1", "back": "B1"}]
@@ -353,9 +352,7 @@ class TestExtractFlashcardsFallback:
     def test_fallback_extracts_cards_from_malformed_json(self):
         # Trailing comma makes the array JSON-invalid; the fallback splits
         # on '}, {' and recovers both cards
-        content = (
-            '[{"front": "F1", "back": "B1"}, {"front": "F2", "back": "B2"},]'
-        )
+        content = '[{"front": "F1", "back": "B1"}, {"front": "F2", "back": "B2"},]'
         cards = extract_flashcards_fallback(content)
         assert len(cards) == 2
         assert cards[0]["front"] == "F1"
@@ -371,6 +368,7 @@ class TestExtractFlashcardsFallback:
 class TestCreateFlashcardsFromQuestions:
     def _question(self, *, is_correct, user_answer=0):
         from app.models import Question
+
         return Question(
             test_id=1,
             question_number=1,
@@ -384,15 +382,17 @@ class TestCreateFlashcardsFromQuestions:
 
     def test_wrong_only_takes_incorrect_answers(self):
         from app.services.flashcard_generator import create_flashcards_from_questions
+
         questions = [self._question(is_correct=False), self._question(is_correct=True)]
         cards = create_flashcards_from_questions(questions, wrong_only=True)
         assert len(cards) == 1
         assert cards[0]["source_type"] == "from_test"
         assert "Correct" in cards[0]["back"]  # correct text, not user's wrong text
-        assert "Because" in cards[0]["back"]   # explanation appended
+        assert "Because" in cards[0]["back"]  # explanation appended
 
     def test_all_takes_every_question(self):
         from app.services.flashcard_generator import create_flashcards_from_questions
+
         questions = [self._question(is_correct=True), self._question(is_correct=False)]
         cards = create_flashcards_from_questions(questions, wrong_only=False)
         assert len(cards) == 2
@@ -402,6 +402,7 @@ class TestCreateFlashcardsFromQuestions:
         user_answer=None) must not become flashcards under
         wrong_only=True — None is falsy and used to fall through."""
         from app.services.flashcard_generator import create_flashcards_from_questions
+
         questions = [self._question(is_correct=None, user_answer=None)]
         cards = create_flashcards_from_questions(questions, wrong_only=True)
         assert len(cards) == 0
@@ -409,6 +410,7 @@ class TestCreateFlashcardsFromQuestions:
     def test_answered_wrong_is_still_included(self):
         """Guard: the B10b fix must not drop genuinely wrong answers."""
         from app.services.flashcard_generator import create_flashcards_from_questions
+
         questions = [
             self._question(is_correct=False, user_answer=1),
             self._question(is_correct=None, user_answer=None),
@@ -421,6 +423,7 @@ class TestCreateFlashcardsFromQuestions:
         """wrong_only=False keeps taking every question, including
         unanswered ones — that is explicit user intent."""
         from app.services.flashcard_generator import create_flashcards_from_questions
+
         questions = [self._question(is_correct=None, user_answer=None)]
         cards = create_flashcards_from_questions(questions, wrong_only=False)
         assert len(cards) == 1
@@ -429,6 +432,7 @@ class TestCreateFlashcardsFromQuestions:
         """P1.3: importing the same test into an existing deck twice
         must not create duplicate cards."""
         from app.services.flashcard_generator import filter_existing_cards
+
         cards_data = [
             {"front": "Q1", "back": "A1", "source_question_id": 10},
             {"front": "Q2", "back": "A2", "source_question_id": 11},
@@ -439,6 +443,7 @@ class TestCreateFlashcardsFromQuestions:
 
     def test_filter_existing_cards_without_matches(self):
         from app.services.flashcard_generator import filter_existing_cards
+
         cards_data = [{"front": "Q1", "back": "A1", "source_question_id": 10}]
         kept, skipped = filter_existing_cards(cards_data, existing_source_question_ids=[])
         assert len(kept) == 1
@@ -448,6 +453,7 @@ class TestCreateFlashcardsFromQuestions:
         """Manually created cards (source_question_id=None) must never be
         filtered — only the test-import path is duplicate-protected."""
         from app.services.flashcard_generator import filter_existing_cards
+
         cards_data = [{"front": "Q1", "back": "A1", "source_question_id": None}]
         kept, skipped = filter_existing_cards(cards_data, existing_source_question_ids=[10])
         assert len(kept) == 1

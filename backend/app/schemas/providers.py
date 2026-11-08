@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class OpenRouterKeyStatus(BaseModel):
     """Whether an OpenRouter key is configured — never the key itself."""
+
     configured: bool
     # "app" = entered in the web UI, "environment" = OPENROUTER_API_KEY
     source: Optional[Literal["app", "environment"]] = None
@@ -23,6 +24,7 @@ class ClaudeUsageWindow(BaseModel):
 
 class ClaudeUsage(BaseModel):
     """Plan usage as reported by the CLI with its most recent request."""
+
     five_hour: Optional[ClaudeUsageWindow] = None
     seven_day: Optional[ClaudeUsageWindow] = None
     checked_at: datetime
@@ -30,6 +32,7 @@ class ClaudeUsage(BaseModel):
 
 class ClaudeStatus(BaseModel):
     """Installation and sign-in state of the Claude Code CLI."""
+
     installed: bool
     can_install: bool
     version: Optional[str] = None
@@ -42,6 +45,7 @@ class ClaudeStatus(BaseModel):
 
 class ClaudeLoginStart(BaseModel):
     """Anthropic sign-in page the user opens to get the one-time code."""
+
     url: str
 
 

@@ -19,6 +19,7 @@ class LectureFormatRequest(BaseModel):
 
 class LectureListItem(BaseModel):
     """Lecture in the subject's list (without the full content)."""
+
     id: int
     subject_id: int
     title: str

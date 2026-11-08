@@ -19,7 +19,7 @@ class QuestionResponse(BaseModel):
     is_correct: Optional[bool] = None
     correct_answer: Optional[int] = None  # Only shown after test completion
     explanation: Optional[str] = None  # Only shown after test completion
-    
+
     class Config:
         from_attributes = True
 
@@ -39,6 +39,7 @@ class TestConfigCreate(BaseModel):
 
 class TestConfigUpdate(BaseModel):
     """Partial update of a (non-template) config — used to (un)assign a subject."""
+
     subject_id: Optional[int] = None
 
 
@@ -56,13 +57,15 @@ class TestConfigResponse(BaseModel):
     # Templates: number of tests attached to this config (deleted with it)
     test_count: int = 0
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class GenerateFromTemplateRequest(BaseModel):
-    num_questions: Optional[int] = Field(default=None, ge=1, le=100)  # Override the template's default
+    num_questions: Optional[int] = Field(
+        default=None, ge=1, le=100
+    )  # Override the template's default
 
 
 class CreateAndGenerateRequest(BaseModel):
@@ -72,6 +75,7 @@ class CreateAndGenerateRequest(BaseModel):
     Deliberately no is_template: a generated test must never hang on a
     template config (deleting the template would cascade to its tests).
     Templates are saved separately via POST /configs."""
+
     title: str
     num_questions: int = Field(default=10, ge=1, le=100)
     num_choices: int = Field(default=4, ge=2, le=10)
@@ -99,7 +103,7 @@ class TestResponse(BaseModel):
     total_questions: int
     correct_answers: Optional[int] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -116,7 +120,7 @@ class TestDetailResponse(BaseModel):
     correct_answers: Optional[int] = None
     created_at: datetime
     questions: List[QuestionResponse]
-    
+
     class Config:
         from_attributes = True
 
@@ -133,4 +137,3 @@ class TestResultResponse(BaseModel):
     total_questions: int
     correct_answers: int
     questions: List[QuestionResponse]
-

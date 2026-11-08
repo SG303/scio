@@ -4,6 +4,7 @@ Keeps subject validation and the per-subject dedupe source in one place, so
 creating material inside a subject behaves the same whether it starts from
 the subject page or from the regular create wizards.
 """
+
 from typing import List, Optional
 
 from fastapi import HTTPException

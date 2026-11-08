@@ -6,6 +6,7 @@ SQLite write transaction while the OpenRouter call is in flight).
 Mirrors the behaviour of the create-and-generate endpoints in
 tests.py / flashcards.py.
 """
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -14,9 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.database import Base
 from app import models
 from app.routers import subjects as subjects_router
-from app.schemas.subject import (
-    GenerateFlashcardsInSubjectRequest, GenerateTestInSubjectRequest
-)
+from app.schemas.subject import GenerateFlashcardsInSubjectRequest, GenerateTestInSubjectRequest
 
 FAKE_QUESTIONS = [
     {
@@ -28,9 +27,7 @@ FAKE_QUESTIONS = [
     for i in range(1, 3)
 ]
 
-FAKE_CARDS = [
-    {"front": f"Front {i}", "back": f"Back {i}"} for i in range(1, 3)
-]
+FAKE_CARDS = [{"front": f"Front {i}", "back": f"Back {i}"} for i in range(1, 3)]
 
 
 @pytest.fixture

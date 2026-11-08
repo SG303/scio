@@ -3,13 +3,16 @@
 The prompt builders put selected exam-objectives documents into their own
 focus section instead of mixing them into the study materials.
 """
+
 import pytest
 
 from app.services.flashcard_generator import build_flashcard_prompt
 from app.services.test_generator import build_prompt
 from tests.conftest import MockDocument
 
-GUIDE = MockDocument("Marketing Script", "study_guide", "The 4P model: product, price, place, promotion.")
+GUIDE = MockDocument(
+    "Marketing Script", "study_guide", "The 4P model: product, price, place, promotion."
+)
 OBJECTIVES = MockDocument("Exam Scope", "exam_objectives", "Explain the 4P model.")
 
 

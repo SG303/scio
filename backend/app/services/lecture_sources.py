@@ -4,6 +4,7 @@ The generators take document-like objects (title, doc_type, content);
 lectures are adapted to that shape. Image links are dropped — the AI only
 sees text, and the URLs would just be noise.
 """
+
 from dataclasses import dataclass
 from typing import List, Optional
 

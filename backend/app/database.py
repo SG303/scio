@@ -16,9 +16,7 @@ os.makedirs(os.path.dirname(settings.database_path), exist_ok=True)
 DATABASE_URL = f"sqlite+aiosqlite:///{settings.database_path}"
 
 engine = create_async_engine(
-    DATABASE_URL,
-    echo=settings.debug,
-    connect_args={"check_same_thread": False}
+    DATABASE_URL, echo=settings.debug, connect_args={"check_same_thread": False}
 )
 
 
@@ -38,11 +36,8 @@ def set_sqlite_pragmas(dbapi_connection, connection_record):
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
 
-async_session = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
+
+async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
@@ -60,4 +55,3 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-

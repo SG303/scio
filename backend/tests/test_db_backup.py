@@ -4,6 +4,7 @@ Covers the backup service (validated file creation, retention pruning,
 collision handling, cycle function), the /api/settings/backups endpoints
 and their exact response shape as consumed later by the frontend.
 """
+
 import json
 import os
 import sqlite3
@@ -142,9 +143,7 @@ async def test_run_backup_cycle_creates_and_prunes(source_db):
     assert (backup_dir / info["file_name"]).is_file()
 
 
-async def test_run_backup_cycle_errors_are_logged_not_raised(
-    source_db, monkeypatch, caplog
-):
+async def test_run_backup_cycle_errors_are_logged_not_raised(source_db, monkeypatch, caplog):
     async def failing_create_backup(_):
         raise RuntimeError("boom")
 

@@ -5,6 +5,7 @@
 - Images must survive unchanged; otherwise the result is discarded.
 - The migration upgrades lectures tables created before formatting existed.
 """
+
 import json
 import sqlite3
 
@@ -19,7 +20,7 @@ from app.routers import lectures as lectures_router
 from app.schemas.lecture import LectureFormatRequest
 from app.services import lecture_formatter
 
-IMAGE = '![1.00](/api/lectures/1/images/' + "a" * 32 + '.png "Slide 3")'
+IMAGE = "![1.00](/api/lectures/1/images/" + "a" * 32 + '.png "Slide 3")'
 NOTES = f"marketing mix\n- prodcut\n- price\n\n{IMAGE}\n"
 
 
@@ -27,6 +28,7 @@ def _ai_returns(markdown):
     async def fake_completion(**kwargs):
         fake_completion.prompt = kwargs["user_prompt"]
         return json.dumps({"markdown": markdown})
+
     return fake_completion
 
 
@@ -65,11 +67,14 @@ async def test_prompt_contains_notes_and_rules(monkeypatch):
     assert "Keep the language of the notes" in fake.prompt
 
 
-@pytest.mark.parametrize("formatted", [
-    "## Marketing mix\n\n- Product\n- Price",                       # image dropped
-    "## Marketing mix\n\n![1.00](/api/lectures/1/images/other.png)",  # image swapped
-    f"{IMAGE}\n\n{IMAGE}",                                           # image duplicated
-])
+@pytest.mark.parametrize(
+    "formatted",
+    [
+        "## Marketing mix\n\n- Product\n- Price",  # image dropped
+        "## Marketing mix\n\n![1.00](/api/lectures/1/images/other.png)",  # image swapped
+        f"{IMAGE}\n\n{IMAGE}",  # image duplicated
+    ],
+)
 async def test_changed_images_discard_the_result(monkeypatch, formatted):
     monkeypatch.setattr(lecture_formatter, "chat_completion_json", _ai_returns(formatted))
 
@@ -77,7 +82,9 @@ async def test_changed_images_discard_the_result(monkeypatch, formatted):
         await lecture_formatter.format_lecture(NOTES, "test/model")
 
 
-@pytest.mark.parametrize("response", ["not json", json.dumps({"markdown": "  "}), json.dumps(["x"])])
+@pytest.mark.parametrize(
+    "response", ["not json", json.dumps({"markdown": "  "}), json.dumps(["x"])]
+)
 def test_unusable_responses_raise(response):
     with pytest.raises(ValueError):
         lecture_formatter.parse_format_response(response)

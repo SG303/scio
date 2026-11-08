@@ -5,6 +5,7 @@ number of batched GROUP BY queries while producing values identical to the
 per-item get_deck_stats() computation, and generation endpoints must reject
 missing document IDs with a 404 *before* calling the AI generator.
 """
+
 import pytest
 from datetime import timedelta
 from fastapi import HTTPException
@@ -18,8 +19,10 @@ from app.routers import subjects as subjects_router
 from app.services.spaced_repetition import get_deck_stats, utc_now
 from app.schemas.flashcard import GenerateFlashcardsRequest
 from app.schemas.subject import (
-    GenerateFlashcardsInSubjectRequest, GenerateTestInSubjectRequest,
-    AddQuestionsRequest, AddCardsRequest,
+    GenerateFlashcardsInSubjectRequest,
+    GenerateTestInSubjectRequest,
+    AddQuestionsRequest,
+    AddCardsRequest,
 )
 
 
@@ -52,33 +55,49 @@ async def _build_decks_with_cards(db):
     db.add_all([deck_empty, deck_mixed])
     await db.flush()
 
-    db.add_all([
-        models.Flashcard(deck_id=deck_mixed.id, front="N1", back="B", state="new"),
-        models.Flashcard(deck_id=deck_mixed.id, front="N2", back="B", state="new"),
-        models.Flashcard(
-            deck_id=deck_mixed.id, front="L", back="B",
-            state="learning", next_review_at=past,
-        ),
-        models.Flashcard(
-            deck_id=deck_mixed.id, front="RL", back="B",
-            state="relearning", next_review_at=past,
-        ),
-        models.Flashcard(
-            deck_id=deck_mixed.id, front="R", back="B",
-            state="review", next_review_at=past,
-            interval_days=7, easiness_factor=2.5,
-        ),
-        models.Flashcard(
-            deck_id=deck_mixed.id, front="M", back="B",
-            state="review", next_review_at=future,
-            interval_days=30, easiness_factor=2.3,
-        ),
-        models.StudySession(
-            deck_id=deck_mixed.id,
-            new_cards_reviewed_today=1,
-            study_date=now.date(),
-        ),
-    ])
+    db.add_all(
+        [
+            models.Flashcard(deck_id=deck_mixed.id, front="N1", back="B", state="new"),
+            models.Flashcard(deck_id=deck_mixed.id, front="N2", back="B", state="new"),
+            models.Flashcard(
+                deck_id=deck_mixed.id,
+                front="L",
+                back="B",
+                state="learning",
+                next_review_at=past,
+            ),
+            models.Flashcard(
+                deck_id=deck_mixed.id,
+                front="RL",
+                back="B",
+                state="relearning",
+                next_review_at=past,
+            ),
+            models.Flashcard(
+                deck_id=deck_mixed.id,
+                front="R",
+                back="B",
+                state="review",
+                next_review_at=past,
+                interval_days=7,
+                easiness_factor=2.5,
+            ),
+            models.Flashcard(
+                deck_id=deck_mixed.id,
+                front="M",
+                back="B",
+                state="review",
+                next_review_at=future,
+                interval_days=30,
+                easiness_factor=2.3,
+            ),
+            models.StudySession(
+                deck_id=deck_mixed.id,
+                new_cards_reviewed_today=1,
+                study_date=now.date(),
+            ),
+        ]
+    )
     await db.commit()
     return [deck_empty, deck_mixed]
 
@@ -130,37 +149,71 @@ async def test_list_subjects_aggregates_config_and_deck_stats(stats_db):
     await db.flush()
 
     config = models.TestConfig(
-        title="Config", num_questions=2, num_choices=4,
-        ai_model=model, document_ids=[], subject_id=subject_a.id,
+        title="Config",
+        num_questions=2,
+        num_choices=4,
+        ai_model=model,
+        document_ids=[],
+        subject_id=subject_a.id,
     )
     db.add(config)
     await db.flush()
-    db.add_all([
-        models.Test(config=config, status="completed", total_questions=2,
-                    score=80, completed_at=utc_now()),
-        models.Test(config=config, status="completed", total_questions=2,
-                    score=90, completed_at=utc_now()),
-        # Not completed and not of this subject: must not count anywhere
-        models.Test(config=config, status="generated", total_questions=2),
-    ])
+    db.add_all(
+        [
+            models.Test(
+                config=config,
+                status="completed",
+                total_questions=2,
+                score=80,
+                completed_at=utc_now(),
+            ),
+            models.Test(
+                config=config,
+                status="completed",
+                total_questions=2,
+                score=90,
+                completed_at=utc_now(),
+            ),
+            # Not completed and not of this subject: must not count anywhere
+            models.Test(config=config, status="generated", total_questions=2),
+        ]
+    )
     orphan_config = models.TestConfig(
-        title="Orphan", num_questions=1, num_choices=4,
-        ai_model=model, document_ids=[],
+        title="Orphan",
+        num_questions=1,
+        num_choices=4,
+        ai_model=model,
+        document_ids=[],
     )
     db.add(orphan_config)
     await db.flush()
-    db.add(models.Test(config=orphan_config, status="completed", total_questions=1,
-                       score=100, completed_at=utc_now()))
+    db.add(
+        models.Test(
+            config=orphan_config,
+            status="completed",
+            total_questions=1,
+            score=100,
+            completed_at=utc_now(),
+        )
+    )
 
     deck = models.FlashcardDeck(title="Deck A", subject_id=subject_a.id)
     db.add(deck)
     await db.flush()
-    db.add_all([
-        models.Flashcard(deck_id=deck.id, front="N1", back="B", state="new"),
-        models.Flashcard(deck_id=deck.id, front="N2", back="B", state="new"),
-        models.Flashcard(deck_id=deck.id, front="M", back="B", state="review",
-                         interval_days=30, easiness_factor=2.3),
-    ])
+    db.add_all(
+        [
+            models.Flashcard(deck_id=deck.id, front="N1", back="B", state="new"),
+            models.Flashcard(deck_id=deck.id, front="N2", back="B", state="new"),
+            models.Flashcard(
+                deck_id=deck.id,
+                front="M",
+                back="B",
+                state="review",
+                interval_days=30,
+                easiness_factor=2.3,
+            ),
+        ]
+    )
     await db.commit()
 
     subjects = await subjects_router.list_subjects(db)
@@ -207,14 +260,12 @@ async def test_generate_deck_with_missing_document_404_without_ai_call(stats_db,
     assert error.value.status_code == 404
     assert "Document(s) not found" in error.value.detail
     assert calls == []  # no AI call
-    assert (await db.execute(
-        select(func.count()).select_from(models.Flashcard)
-    )).scalar_one() == 0  # and nothing was generated/persisted
+    assert (
+        await db.execute(select(func.count()).select_from(models.Flashcard))
+    ).scalar_one() == 0  # and nothing was generated/persisted
 
 
-async def test_subject_generation_with_missing_document_404_without_ai_call(
-    stats_db, monkeypatch
-):
+async def test_subject_generation_with_missing_document_404_without_ai_call(stats_db, monkeypatch):
     """All four subject generation endpoints 404 on missing documents
     before calling the AI generator."""
     db = stats_db
@@ -226,8 +277,12 @@ async def test_subject_generation_with_missing_document_404_without_ai_call(
         title="Deck", subject_id=subject.id, ai_model=model, document_ids=[999]
     )
     config = models.TestConfig(
-        title="Config", num_questions=2, num_choices=4,
-        ai_model=model, document_ids=[999], subject_id=subject.id,
+        title="Config",
+        num_questions=2,
+        num_choices=4,
+        ai_model=model,
+        document_ids=[999],
+        subject_id=subject.id,
     )
     db.add_all([deck, config])
     await db.commit()
@@ -260,9 +315,7 @@ async def test_subject_generation_with_missing_document_404_without_ai_call(
         subjects_router.add_questions_to_test_config(
             subject.id, config.id, AddQuestionsRequest(num_questions=1), db
         ),
-        subjects_router.add_cards_to_deck(
-            subject.id, deck.id, AddCardsRequest(num_cards=1), db
-        ),
+        subjects_router.add_cards_to_deck(subject.id, deck.id, AddCardsRequest(num_cards=1), db),
     ]
     for call in generate_test_cases:
         with pytest.raises(HTTPException) as error:
@@ -274,22 +327,19 @@ async def test_subject_generation_with_missing_document_404_without_ai_call(
     assert question_calls == []
     assert card_calls == []
     # And the generation left everything untouched (P5.2 contract)
-    assert (await db.execute(
-        select(func.count()).select_from(models.Test)
-    )).scalar_one() == 0
-    assert (await db.execute(
-        select(func.count()).select_from(models.Question)
-    )).scalar_one() == 0
-    assert (await db.execute(
-        select(func.count()).select_from(models.Flashcard)
-    )).scalar_one() == 0
+    assert (await db.execute(select(func.count()).select_from(models.Test))).scalar_one() == 0
+    assert (await db.execute(select(func.count()).select_from(models.Question))).scalar_one() == 0
+    assert (await db.execute(select(func.count()).select_from(models.Flashcard))).scalar_one() == 0
 
 
-@pytest.mark.parametrize("limit, introduced_today, expected", [
-    (20, 6, 8),   # plenty of quota left: all 8 remaining new cards are offered
-    (10, 6, 4),   # quota is the limit: 10 - 6
-    (5, 5, 0),    # quota used up
-])
+@pytest.mark.parametrize(
+    "limit, introduced_today, expected",
+    [
+        (20, 6, 8),  # plenty of quota left: all 8 remaining new cards are offered
+        (10, 6, 4),  # quota is the limit: 10 - 6
+        (5, 5, 0),  # quota used up
+    ],
+)
 async def test_new_cards_available_shrinks_only_by_the_daily_quota(
     stats_db, limit, introduced_today, expected
 ):
@@ -306,15 +356,21 @@ async def test_new_cards_available_shrinks_only_by_the_daily_quota(
         # introduced today: learning, due in the future so they are not due reviews
         + [
             models.Flashcard(
-                deck_id=deck.id, front=f"L{i}", back="B", state="learning",
+                deck_id=deck.id,
+                front=f"L{i}",
+                back="B",
+                state="learning",
                 next_review_at=utc_now() + timedelta(days=1),
             )
             for i in range(introduced_today)
         ]
-        + [models.StudySession(
-            deck_id=deck.id, new_cards_reviewed_today=introduced_today,
-            study_date=utc_now().date(),
-        )]
+        + [
+            models.StudySession(
+                deck_id=deck.id,
+                new_cards_reviewed_today=introduced_today,
+                study_date=utc_now().date(),
+            )
+        ]
     )
     await db.commit()
 

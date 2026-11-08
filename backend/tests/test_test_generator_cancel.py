@@ -5,6 +5,7 @@ re-raise for GenerationCancelled, an established cancellation would be
 swallowed and the fallback strategies would fire further paid OpenRouter
 calls after the user already cancelled.
 """
+
 import pytest
 
 import app.services.test_generator as tg
@@ -31,9 +32,7 @@ async def test_cancel_in_single_call_aborts_fallback_chain(monkeypatch):
     monkeypatch.setattr(tg, "_generate_batch", fake_batch)
 
     with pytest.raises(GenerationCancelled):
-        await tg.generate_test_questions(
-            [], num_questions=10, num_choices=4, model_id="test/model"
-        )
+        await tg.generate_test_questions([], num_questions=10, num_choices=4, model_id="test/model")
 
     assert len(calls) == 1
 

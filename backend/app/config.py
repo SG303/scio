@@ -7,7 +7,7 @@ import os
 class Settings(BaseSettings):
     app_name: str = "Scio"
     debug: bool = False
-    
+
     # OpenRouter
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -26,11 +26,17 @@ class Settings(BaseSettings):
     # CORS - comma-separated list of allowed origins
     # Use "*" for allow all (development), or specific origins for production
     allowed_origins: str = "http://localhost:3000,http://localhost:5173,http://localhost:8000"
-    
+
     # Paths
-    database_path: str = Field(default_factory=lambda: "/app/data/scio.db" if os.path.exists("/app/data") else "./data/scio.db")
-    uploads_path: str = Field(default_factory=lambda: "/app/uploads" if os.path.exists("/app/data") else "./uploads")
-    
+    database_path: str = Field(
+        default_factory=lambda: (
+            "/app/data/scio.db" if os.path.exists("/app/data") else "./data/scio.db"
+        )
+    )
+    uploads_path: str = Field(
+        default_factory=lambda: "/app/uploads" if os.path.exists("/app/data") else "./uploads"
+    )
+
     class Config:
         env_file = ".env"
         extra = "ignore"

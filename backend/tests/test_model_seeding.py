@@ -3,6 +3,7 @@
 Seeding replaces stale defaults and syncs name/description of models that
 already exist, so description fixes reach existing installations.
 """
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -66,18 +67,14 @@ async def test_reseed_syncs_name_and_description(session):
 
 @pytest.mark.asyncio
 async def test_reseed_leaves_user_models_alone(session):
-    session.add(
-        AIModel(name="My Model", openrouter_id="my/custom-model", description="mine")
-    )
+    session.add(AIModel(name="My Model", openrouter_id="my/custom-model", description="mine"))
     await session.commit()
     await _set_version(session, 0)
 
     await seed_default_models(session)
 
     row = (
-        await session.execute(
-            select(AIModel).where(AIModel.openrouter_id == "my/custom-model")
-        )
+        await session.execute(select(AIModel).where(AIModel.openrouter_id == "my/custom-model"))
     ).scalar_one()
     assert row.description == "mine"
     assert row.is_default is False
@@ -113,9 +110,7 @@ async def test_reseed_keeps_referenced_stale_default(session):
     to still-current defaults are untouched."""
     await seed_default_models(session)
     sonnet = (
-        await session.execute(
-            select(AIModel).where(AIModel.openrouter_id == SONNET_ID)
-        )
+        await session.execute(select(AIModel).where(AIModel.openrouter_id == SONNET_ID))
     ).scalar_one()
     stale = AIModel(
         name="Old Default",
@@ -141,18 +136,20 @@ async def test_reseed_keeps_referenced_stale_default(session):
 
     await seed_default_models(session)
 
-    row = (
-        await session.execute(select(AIModel).where(AIModel.id == stale_id))
-    ).scalar_one()
+    row = (await session.execute(select(AIModel).where(AIModel.id == stale_id))).scalar_one()
     assert row.is_default is False
     # References stayed intact (no dangling ids) …
     config_after = (
-        await session.execute(select(models.TestConfig).order_by(models.TestConfig.id))
-    ).scalars().first()
+        (await session.execute(select(models.TestConfig).order_by(models.TestConfig.id)))
+        .scalars()
+        .first()
+    )
     assert config_after.ai_model_id == stale_id
     subject_after = (
-        await session.execute(select(models.Subject).order_by(models.Subject.id))
-    ).scalars().first()
+        (await session.execute(select(models.Subject).order_by(models.Subject.id)))
+        .scalars()
+        .first()
+    )
     assert subject_after.ai_model_id == stale_id
     # … and the still-current default is untouched
     sonnet_after = (

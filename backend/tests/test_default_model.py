@@ -1,4 +1,5 @@
 """Global default AI model: settings API, resolution order, delete protection."""
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine

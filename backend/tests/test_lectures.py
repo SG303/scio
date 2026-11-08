@@ -1,4 +1,5 @@
 """Lecture notes: CRUD, image upload/serving and subject-delete protection."""
+
 import io
 from types import SimpleNamespace
 

@@ -7,6 +7,7 @@ consistent snapshot even while other connections write, and runs in a
 worker thread so the event loop is never blocked. Every backup is
 verified with PRAGMA quick_check before it counts as successful.
 """
+
 import asyncio
 import logging
 import sqlite3
@@ -34,9 +35,7 @@ def get_backup_dir(database_path: str) -> Path:
 def _unique_target_path(backup_dir: Path, now: datetime) -> Path:
     """Backup path for the current second; adds a counter suffix on
     collision (two backups within the same second)."""
-    target = backup_dir / (
-        f"{BACKUP_FILE_PREFIX}{now:%Y%m%d-%H%M%S}{BACKUP_FILE_SUFFIX}"
-    )
+    target = backup_dir / (f"{BACKUP_FILE_PREFIX}{now:%Y%m%d-%H%M%S}{BACKUP_FILE_SUFFIX}")
     counter = 1
     while target.exists():
         target = backup_dir / (
@@ -127,9 +126,7 @@ def list_backups(database_path: str) -> list[dict]:
             {
                 "file_name": path.name,
                 "size_bytes": stat.st_size,
-                "created_at": datetime.fromtimestamp(
-                    stat.st_mtime, tz=timezone.utc
-                ).isoformat(),
+                "created_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
             }
         )
     return backups

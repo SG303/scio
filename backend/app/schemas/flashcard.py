@@ -1,6 +1,7 @@
 """
 Pydantic schemas for Flashcard API endpoints.
 """
+
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
@@ -10,8 +11,10 @@ from app.services.language import Language
 
 # ============== Flashcard Deck Schemas ==============
 
+
 class FlashcardDeckCreate(BaseModel):
     """Schema for creating a new flashcard deck."""
+
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     ai_model_id: Optional[int] = None
@@ -24,6 +27,7 @@ class FlashcardDeckCreate(BaseModel):
 
 class FlashcardDeckUpdate(BaseModel):
     """Schema for updating a flashcard deck."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     new_cards_per_day: Optional[int] = Field(None, ge=1, le=100)
@@ -32,6 +36,7 @@ class FlashcardDeckUpdate(BaseModel):
 
 class FlashcardDeckResponse(BaseModel):
     """Schema for flashcard deck in responses."""
+
     id: int
     title: str
     description: Optional[str] = None
@@ -43,13 +48,14 @@ class FlashcardDeckResponse(BaseModel):
     subject_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class FlashcardDeckWithStats(FlashcardDeckResponse):
     """Deck response with computed statistics."""
+
     total_cards: int = 0
     new_cards: int = 0
     due_cards: int = 0
@@ -63,20 +69,24 @@ class FlashcardDeckWithStats(FlashcardDeckResponse):
 
 # ============== Flashcard Schemas ==============
 
+
 class FlashcardCreate(BaseModel):
     """Schema for creating a flashcard manually."""
+
     front: str = Field(..., min_length=1)
     back: str = Field(..., min_length=1)
 
 
 class FlashcardUpdate(BaseModel):
     """Schema for updating a flashcard's content."""
+
     front: Optional[str] = Field(None, min_length=1)
     back: Optional[str] = Field(None, min_length=1)
 
 
 class FlashcardResponse(BaseModel):
     """Schema for flashcard in responses."""
+
     id: int
     deck_id: int
     front: str
@@ -90,13 +100,14 @@ class FlashcardResponse(BaseModel):
     source_question_id: Optional[int] = None
     created_at: datetime
     last_reviewed_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
 
 class FlashcardStudyResponse(BaseModel):
     """Simplified flashcard response for study sessions (hides SR internals)."""
+
     id: int
     front: str
     back: str
@@ -105,14 +116,19 @@ class FlashcardStudyResponse(BaseModel):
 
 # ============== Review Schemas ==============
 
+
 class ReviewSubmit(BaseModel):
     """Schema for submitting a flashcard review."""
+
     rating: int = Field(..., ge=1, le=4, description="1=Again, 2=Hard, 3=Good, 4=Easy")
-    time_taken_ms: Optional[int] = Field(None, ge=0, description="Time taken to answer in milliseconds")
+    time_taken_ms: Optional[int] = Field(
+        None, ge=0, description="Time taken to answer in milliseconds"
+    )
 
 
 class ReviewResponse(BaseModel):
     """Schema for review submission response."""
+
     card_id: int
     rating: int
     new_state: str
@@ -122,13 +138,16 @@ class ReviewResponse(BaseModel):
 
 # ============== Study Session Schemas ==============
 
+
 class StudySessionCreate(BaseModel):
     """Schema for starting a study session."""
+
     deck_id: Optional[int] = None  # Null for all decks
 
 
 class StudySessionResponse(BaseModel):
     """Schema for study session in responses."""
+
     id: int
     deck_id: Optional[int] = None
     started_at: datetime
@@ -139,26 +158,30 @@ class StudySessionResponse(BaseModel):
     cards_good: int
     cards_easy: int
     total_time_ms: int
-    
+
     class Config:
         from_attributes = True
 
 
 class StudySessionComplete(BaseModel):
     """Schema for completing a study session."""
+
     total_time_ms: int = Field(default=0, ge=0)
 
 
 # ============== Generation Schemas ==============
 
+
 class GenerateFlashcardsRequest(BaseModel):
     """Schema for AI flashcard generation request."""
+
     num_cards: int = Field(default=20, ge=1, le=100)
     topic: Optional[str] = None  # Optional topic override
 
 
 class GenerateFlashcardsResponse(BaseModel):
     """Schema for flashcard generation response."""
+
     deck_id: int
     cards_generated: int
     cards: List[FlashcardResponse]
@@ -168,6 +191,7 @@ class CreateAndGenerateDeckRequest(FlashcardDeckCreate):
     """P5.2: create a deck and generate its first cards in one transaction —
     a failed generation leaves no empty deck behind. With ``deck_id`` the
     cards are added to that existing deck instead."""
+
     num_cards: int = Field(ge=1, le=100)  # required, no default
     topic: Optional[str] = None
     lecture_ids: List[int] = []  # lecture notes as additional study material
@@ -179,17 +203,20 @@ class CreateAndGenerateDeckRequest(FlashcardDeckCreate):
 
 class CreateAndGenerateDeckResponse(BaseModel):
     """Schema for the combined create-and-generate response."""
+
     deck: FlashcardDeckResponse
     cards_generated: int
 
 
 class ImportCardsResult(BaseModel):
     """P6.1: result of a CSV import into a deck."""
+
     cards_imported: int
     rows_skipped: int
 
 
 # ============== Analytics Schemas (P6.3) ==============
+
 
 class ReviewsPerDay(BaseModel):
     date: str  # YYYY-MM-DD
@@ -225,8 +252,10 @@ class FlashcardAnalytics(BaseModel):
 
 # ============== Test Integration Schemas ==============
 
+
 class CreateFromTestRequest(BaseModel):
     """Schema for creating flashcards from test results."""
+
     deck_id: Optional[int] = None  # Null to create new deck
     deck_title: Optional[str] = None  # Title for new deck (required if deck_id is None)
     wrong_only: bool = Field(default=True, description="Only create cards from wrong answers")
@@ -234,16 +263,22 @@ class CreateFromTestRequest(BaseModel):
 
 class CreateFromTestResponse(BaseModel):
     """Schema for test-to-flashcard conversion response."""
+
     deck_id: int
     cards_created: int
-    cards_skipped: int = Field(default=0, description="Cards skipped because the deck already has one for that source question")
+    cards_skipped: int = Field(
+        default=0,
+        description="Cards skipped because the deck already has one for that source question",
+    )
     cards: List[FlashcardResponse]
 
 
 # ============== Stats Schemas ==============
 
+
 class DeckStats(BaseModel):
     """Statistics for a single deck."""
+
     total_cards: int
     new_cards: int
     learning_cards: int
@@ -255,6 +290,7 @@ class DeckStats(BaseModel):
 
 class GlobalStats(BaseModel):
     """Global flashcard statistics."""
+
     total_decks: int
     total_cards: int
     due_today: int
@@ -264,6 +300,7 @@ class GlobalStats(BaseModel):
 
 class StreakResponse(BaseModel):
     """P4.2: study streak and daily goal statistics."""
+
     current_streak: int
     longest_streak: int
     reviews_today: int
@@ -273,9 +310,10 @@ class StreakResponse(BaseModel):
 
 # ============== Study Queue Schemas ==============
 
+
 class StudyQueueResponse(BaseModel):
     """Response containing cards to study."""
+
     deck_id: int
     total_cards: int
     cards: List[FlashcardStudyResponse]
-

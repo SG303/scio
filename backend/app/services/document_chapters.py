@@ -12,6 +12,7 @@ Detection, cheapest first:
    book, and only returns start pages. The text itself is always cut by the
    server, so the AI can neither rewrite nor lose content.
 """
+
 import asyncio
 import json
 import logging
@@ -38,9 +39,7 @@ SEARCH_BEFORE = 3
 SEARCH_AFTER = 40
 HEADING_ZONE_CHARS = 400
 
-SYSTEM_PROMPT = (
-    "You find the chapter structure of books. Always respond with valid JSON only."
-)
+SYSTEM_PROMPT = "You find the chapter structure of books. Always respond with valid JSON only."
 
 
 @dataclass

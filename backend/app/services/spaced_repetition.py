@@ -240,9 +240,7 @@ async def get_learning_cards(db: AsyncSession, deck_id: int) -> List[Flashcard]:
             and_(
                 Flashcard.deck_id == deck_id,
                 Flashcard.state.in_(["learning", "relearning"]),
-                or_(
-                    Flashcard.next_review_at <= now, Flashcard.next_review_at.is_(None)
-                ),
+                or_(Flashcard.next_review_at <= now, Flashcard.next_review_at.is_(None)),
             )
         )
         .order_by(Flashcard.next_review_at.asc())
@@ -349,9 +347,7 @@ def _build_interleaved_queue(
     return queue
 
 
-async def get_incomplete_session(
-    db: AsyncSession, deck_id: int
-) -> Optional[StudySession]:
+async def get_incomplete_session(db: AsyncSession, deck_id: int) -> Optional[StudySession]:
     """
     Get the most recent incomplete session for a deck from today.
 
@@ -534,9 +530,7 @@ async def get_global_stats(db: AsyncSession) -> dict:
         # P4.3: remaining quota subtracts the new cards already introduced
         # today across this deck's sessions
         new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
-        total_new_available += min(
-            new_in_deck, max(0, deck.new_cards_per_day - new_reviewed_today)
-        )
+        total_new_available += min(new_in_deck, max(0, deck.new_cards_per_day - new_reviewed_today))
 
     total_due = due_reviews + total_new_available
 
@@ -556,9 +550,7 @@ async def get_global_stats(db: AsyncSession) -> dict:
 # ============== Streaks (P4.2) ==============
 
 
-async def get_deck_new_cards_today(
-    db: AsyncSession, deck_id: int, today: date
-) -> int:
+async def get_deck_new_cards_today(db: AsyncSession, deck_id: int, today: date) -> int:
     """
     P4.3: new cards already introduced today for a deck — summed over all
     of the day's sessions, so the daily limit is deck-wide instead of
@@ -657,9 +649,7 @@ async def get_streak_stats(db: AsyncSession) -> dict:
         Dictionary with current_streak, longest_streak, reviews_today
         and daily_goal
     """
-    result = await db.execute(
-        select(StudySession).where(StudySession.completed_at.isnot(None))
-    )
+    result = await db.execute(select(StudySession).where(StudySession.completed_at.isnot(None)))
     sessions = result.scalars().all()
 
     now = utc_now()

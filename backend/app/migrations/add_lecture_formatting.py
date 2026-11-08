@@ -3,6 +3,7 @@
 Fresh databases get them from create_all(); this only upgrades databases
 created before lecture formatting existed. Idempotent (PRAGMA check).
 """
+
 import logging
 import os
 import sqlite3

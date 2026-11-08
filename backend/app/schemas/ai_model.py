@@ -24,7 +24,6 @@ class AIModelResponse(BaseModel):
     is_enabled: bool
     is_default: bool = False
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
-

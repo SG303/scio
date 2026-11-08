@@ -9,6 +9,7 @@ router cleanup logic keep children consistent when parents are deleted:
   and Subject no longer reference it
 - Delete a test -> flashcards no longer point at its questions
 """
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select

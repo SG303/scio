@@ -32,27 +32,27 @@ DEFAULT_MODELS = [
     {
         "name": "GPT-6.1 Sol",
         "openrouter_id": "openai/gpt-6.1-sol",
-        "description": "OpenAI's strongest model for factual accuracy and document reasoning"
+        "description": "OpenAI's strongest model for factual accuracy and document reasoning",
     },
     {
         "name": "Claude Sonnet 5.5",
         "openrouter_id": "anthropic/claude-sonnet-5.5",
-        "description": "Anthropic's balanced model: excellent at grounded questions from documents, very low hallucination rate"
+        "description": "Anthropic's balanced model: excellent at grounded questions from documents, very low hallucination rate",
     },
     {
         "name": "Gemini 3.8 Flash",
         "openrouter_id": "google/gemini-3.8-flash",
-        "description": "Google's fast all-rounder: strong document grounding at a low price"
+        "description": "Google's fast all-rounder: strong document grounding at a low price",
     },
     {
         "name": "Claude Haiku 5.5",
         "openrouter_id": "anthropic/claude-haiku-5.5",
-        "description": "Anthropic's budget model, great for high-volume generation"
+        "description": "Anthropic's budget model, great for high-volume generation",
     },
     {
         "name": "MiMo V2.6 Pro",
         "openrouter_id": "xiaomi/mimo-v2.6-pro",
-        "description": "Best price-performance for very long documents"
+        "description": "Best price-performance for very long documents",
     },
 ]
 
@@ -72,9 +72,7 @@ async def seed_default_models(db: AsyncSession):
         result = await db.execute(text("PRAGMA table_info(ai_models)"))
         columns = {row[1] for row in result.fetchall()}
         if "is_default" not in columns:
-            await db.execute(
-                text("ALTER TABLE ai_models ADD COLUMN is_default BOOLEAN DEFAULT 0")
-            )
+            await db.execute(text("ALTER TABLE ai_models ADD COLUMN is_default BOOLEAN DEFAULT 0"))
             await db.commit()
 
         # Check current models version in database
@@ -124,7 +122,9 @@ async def seed_default_models(db: AsyncSession):
                 logger.info(
                     "Keeping stale default model %s (id=%d): still referenced by "
                     "%d row(s). It is un-flagged so it stops appearing as a default.",
-                    stale.openrouter_id, stale.id, reference_counts[stale.id],
+                    stale.openrouter_id,
+                    stale.id,
+                    reference_counts[stale.id],
                 )
             else:
                 await db.delete(stale)
@@ -142,7 +142,7 @@ async def seed_default_models(db: AsyncSession):
                 existing.description = model_data["description"]
             else:
                 db.add(AIModel(is_default=True, **model_data))
-        
+
         # Update version
         try:
             if version_setting:
@@ -151,9 +151,9 @@ async def seed_default_models(db: AsyncSession):
                 db.add(Setting(key="models_version", value=str(MODELS_VERSION)))
         except Exception:
             pass  # Settings table might not exist yet
-        
+
         await db.commit()
-        
+
     except Exception as e:
         logger.error(f"Failed to seed default models: {e}")
         await db.rollback()
@@ -205,22 +205,19 @@ async def seed_subscription_models(db: AsyncSession) -> None:
 
 
 @router.get("", response_model=List[Dict[str, Any]])
-async def list_models(
-    enabled_only: bool = False,
-    db: AsyncSession = Depends(get_db)
-):
+async def list_models(enabled_only: bool = False, db: AsyncSession = Depends(get_db)):
     """List all AI models with OpenRouter pricing info"""
     query = select(AIModel)
     if enabled_only:
         query = query.where(AIModel.is_enabled.is_(True))
     query = query.order_by(AIModel.name)
-    
+
     result = await db.execute(query)
     db_models = result.scalars().all()
-    
+
     # Fetch OpenRouter data
     openrouter_data = await fetch_openrouter_models()
-    
+
     # Merge data
     models = []
     for model in db_models:
@@ -232,9 +229,9 @@ async def list_models(
             "is_enabled": model.is_enabled,
             "created_at": model.created_at,
             "pricing": None,
-            "context_length": None
+            "context_length": None,
         }
-        
+
         # Add pricing and context length if available
         if model.openrouter_id in openrouter_data:
             or_model = openrouter_data[model.openrouter_id]
@@ -242,9 +239,9 @@ async def list_models(
             model_dict["context_length"] = or_model.get("context_length")
         elif is_subscription_model(model.openrouter_id):
             model_dict["context_length"] = SUBSCRIPTION_CONTEXT_LENGTH
-            
+
         models.append(model_dict)
-        
+
     return models
 
 
@@ -255,10 +252,10 @@ async def get_model(model_id: int, db: AsyncSession = Depends(get_db)):
     model = result.scalar_one_or_none()
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
-    
+
     # Fetch OpenRouter data
     openrouter_data = await fetch_openrouter_models()
-    
+
     model_dict = {
         "id": model.id,
         "name": model.name,
@@ -267,9 +264,9 @@ async def get_model(model_id: int, db: AsyncSession = Depends(get_db)):
         "is_enabled": model.is_enabled,
         "created_at": model.created_at,
         "pricing": None,
-        "context_length": None
+        "context_length": None,
     }
-    
+
     # Add pricing and context length if available
     if model.openrouter_id in openrouter_data:
         or_model = openrouter_data[model.openrouter_id]
@@ -277,7 +274,7 @@ async def get_model(model_id: int, db: AsyncSession = Depends(get_db)):
         model_dict["context_length"] = or_model.get("context_length")
     elif is_subscription_model(model.openrouter_id):
         model_dict["context_length"] = SUBSCRIPTION_CONTEXT_LENGTH
-        
+
     return model_dict
 
 
@@ -285,12 +282,10 @@ async def get_model(model_id: int, db: AsyncSession = Depends(get_db)):
 async def create_model(model: AIModelCreate, db: AsyncSession = Depends(get_db)):
     """Add a new AI model"""
     # Check if model with same openrouter_id exists
-    result = await db.execute(
-        select(AIModel).where(AIModel.openrouter_id == model.openrouter_id)
-    )
+    result = await db.execute(select(AIModel).where(AIModel.openrouter_id == model.openrouter_id))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Model with this OpenRouter ID already exists")
-    
+
     db_model = AIModel(**model.model_dump())
     db.add(db_model)
     await db.commit()
@@ -299,21 +294,17 @@ async def create_model(model: AIModelCreate, db: AsyncSession = Depends(get_db))
 
 
 @router.put("/{model_id}", response_model=AIModelResponse)
-async def update_model(
-    model_id: int,
-    model: AIModelUpdate,
-    db: AsyncSession = Depends(get_db)
-):
+async def update_model(model_id: int, model: AIModelUpdate, db: AsyncSession = Depends(get_db)):
     """Update an AI model"""
     result = await db.execute(select(AIModel).where(AIModel.id == model_id))
     db_model = result.scalar_one_or_none()
     if not db_model:
         raise HTTPException(status_code=404, detail="Model not found")
-    
+
     update_data = model.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_model, key, value)
-    
+
     await db.commit()
     await db.refresh(db_model)
     return db_model
@@ -338,9 +329,7 @@ async def delete_model(model_id: int, db: AsyncSession = Depends(get_db)):
         ("subject", Subject),
     ):
         count_result = await db.execute(
-            select(func.count()).select_from(model_cls).where(
-                model_cls.ai_model_id == model_id
-            )
+            select(func.count()).select_from(model_cls).where(model_cls.ai_model_id == model_id)
         )
         count = count_result.scalar() or 0
         if count > 0:

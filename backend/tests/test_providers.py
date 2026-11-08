@@ -4,6 +4,7 @@ seeding of the Claude subscription models.
 OpenRouter itself is never contacted: key verification and the chat
 endpoint are replaced by fakes.
 """
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -32,6 +33,7 @@ async def session():
 def env_key(monkeypatch):
     def _set(value: str):
         monkeypatch.setattr(get_settings(), "openrouter_api_key", value)
+
     _set("")
     return _set
 
@@ -40,6 +42,7 @@ def env_key(monkeypatch):
 def accept_any_key(monkeypatch):
     async def fake_verify(key):
         return None
+
     monkeypatch.setattr(openrouter_key, "verify_key", fake_verify)
 
 
@@ -70,7 +73,9 @@ async def test_stored_key_wins_and_is_never_returned(session, env_key, accept_an
 
 async def test_delete_falls_back_to_environment(session, env_key, accept_any_key):
     env_key("sk-or-env-0000000001234")
-    await providers.set_openrouter_key(OpenRouterKeyUpdate(api_key="sk-or-app-0000000005678"), session)
+    await providers.set_openrouter_key(
+        OpenRouterKeyUpdate(api_key="sk-or-app-0000000005678"), session
+    )
     status = await providers.delete_openrouter_key(session)
     assert status.source == "environment"
     assert status.key_hint == "…1234"
@@ -79,10 +84,13 @@ async def test_delete_falls_back_to_environment(session, env_key, accept_any_key
 async def test_rejected_key_is_not_stored(session, env_key, monkeypatch):
     async def reject(key):
         raise ValueError("OpenRouter rejected this API key.")
+
     monkeypatch.setattr(openrouter_key, "verify_key", reject)
 
     with pytest.raises(HTTPException) as exc:
-        await providers.set_openrouter_key(OpenRouterKeyUpdate(api_key="sk-or-bad-000000000"), session)
+        await providers.set_openrouter_key(
+            OpenRouterKeyUpdate(api_key="sk-or-bad-000000000"), session
+        )
     assert exc.value.status_code == 400
     assert (await providers.get_openrouter_status(session)).configured is False
 
@@ -152,10 +160,18 @@ async def test_subscription_seed_keeps_existing_models(session):
     await seed_subscription_models(session)
 
     opus = (
-        await session.execute(
-            select(AIModel).where(AIModel.openrouter_id == "claude-subscription/opus")
+        (
+            await session.execute(
+                select(AIModel).where(AIModel.openrouter_id == "claude-subscription/opus")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert [m.name for m in opus] == ["My Opus"]
-    flag = (await session.execute(select(Setting).where(Setting.key == "claude_subscription_models_seeded"))).scalar_one()
+    flag = (
+        await session.execute(
+            select(Setting).where(Setting.key == "claude_subscription_models_seeded")
+        )
+    ).scalar_one()
     assert flag.value == "1"

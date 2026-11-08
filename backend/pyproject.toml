@@ -34,8 +34,34 @@ dependencies = [
 dev = [
     "pytest>=9.2.0",
     "pytest-asyncio>=1.4.1.post1",
+    "ruff>=0.17.4",
 ]
 
 [tool.uv]
 # An application, not a library: install the dependencies only.
 package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    # The convention is datetime.now(timezone.utc) via utc_now() (AGENTS.md).
+    "UP017",
+    # Exception chaining in the 42 existing handlers is a separate review.
+    "B904",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependencies and parameters are declared as default values.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+]

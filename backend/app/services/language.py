@@ -2,6 +2,7 @@
 
 ``None`` means "auto": the AI writes in the language of the study material.
 """
+
 from typing import Annotated, Optional
 
 from pydantic import BeforeValidator, StringConstraints

@@ -17,6 +17,7 @@ imports chat_completion_json directly), so no real API key or network
 access is involved. Each fake call logs how many questions the prompt
 requested, letting the tests assert the per-call spend.
 """
+
 import json
 import re
 
@@ -48,13 +49,11 @@ class FakeOpenRouter:
         self.outcomes = outcomes
         self.repeats = repeats or [[] for _ in outcomes]
         self.requested = []  # question counts requested by each prompt
-        self.prompts = []    # full user prompt of each call
+        self.prompts = []  # full user prompt of each call
         self._next = 1
 
     async def __call__(self, **kwargs):
-        match = re.search(
-            r"Create (\d+) multiple-choice questions", kwargs["user_prompt"]
-        )
+        match = re.search(r"Create (\d+) multiple-choice questions", kwargs["user_prompt"])
         assert match, "prompt does not state a question count"
         count = int(match.group(1))
         self.requested.append(count)
@@ -83,9 +82,7 @@ async def test_partial_single_call_is_reused_by_next_strategy(monkeypatch):
     # Strategy 1 asks 10, delivers 4; strategy 2 asks only the missing 6
     assert fake.requested == [10, 6]
     # All 10 questions present in order, no duplicates, correct shape
-    assert [q["question"] for q in questions] == [
-        f"Question {i}" for i in range(1, 11)
-    ]
+    assert [q["question"] for q in questions] == [f"Question {i}" for i in range(1, 11)]
     assert len(set(q["question"] for q in questions)) == 10
     for q in questions:
         assert set(q.keys()) == {"question", "choices", "correct_answer", "explanation"}
@@ -107,9 +104,7 @@ async def test_partial_results_accumulate_over_two_fallbacks(monkeypatch):
     # Questions requested per call: 20 (S1), the missing 15 (S2), the
     # missing 7 (S3) — never the full amount twice
     assert fake.requested == [20, 15, 7]
-    assert [q["question"] for q in questions] == [
-        f"Question {i}" for i in range(1, 21)
-    ]
+    assert [q["question"] for q in questions] == [f"Question {i}" for i in range(1, 21)]
     assert len(set(q["question"] for q in questions)) == 20
     # All questions known before strategy 3 were passed on to it
     for text in ["Question 5", "Question 13"]:
@@ -141,7 +136,11 @@ async def test_duplicates_from_db_and_model_do_not_consume_budget(monkeypatch):
     monkeypatch.setattr(test_generator, "chat_completion_json", fake)
 
     questions = await generate_test_questions(
-        [], 5, 4, "test-model", "Test Topic",
+        [],
+        5,
+        4,
+        "test-model",
+        "Test Topic",
         existing_questions=["Question 1"],
     )
 
@@ -150,24 +149,30 @@ async def test_duplicates_from_db_and_model_do_not_consume_budget(monkeypatch):
     assert fake.requested == [5, 2]
     # The DB question is not re-generated, everything else is unique
     assert [q["question"] for q in questions] == [
-        "Question 2", "Question 3", "Question 4", "Question 5",
+        "Question 2",
+        "Question 3",
+        "Question 4",
+        "Question 5",
     ]
     # The DB question was instructed not to repeat
     assert "Question 1" in fake.prompts[1]
 
 
 async def test_paid_partial_result_survives_failure_of_all_later_strategies(monkeypatch):
-    fake = FakeOpenRouter(outcomes=[4, ValueError('Provider down'), ValueError('Provider down')])
-    monkeypatch.setattr(test_generator, 'chat_completion_json', fake)
-    questions = await generate_test_questions([], 10, 4, 'test-model', 'Topic')
+    fake = FakeOpenRouter(outcomes=[4, ValueError("Provider down"), ValueError("Provider down")])
+    monkeypatch.setattr(test_generator, "chat_completion_json", fake)
+    questions = await generate_test_questions([], 10, 4, "test-model", "Topic")
     assert fake.requested == [10, 6, 6]
-    assert [q['question'] for q in questions] == [f'Question {i}' for i in range(1, 5)]
+    assert [q["question"] for q in questions] == [f"Question {i}" for i in range(1, 5)]
 
 
 async def test_cancellation_still_discards_partial_results_in_final_strategy(monkeypatch):
     from app.services.generation_progress import GenerationCancelled
-    fake = FakeOpenRouter(outcomes=[4, ValueError('Provider down'), GenerationCancelled('Cancelled')])
-    monkeypatch.setattr(test_generator, 'chat_completion_json', fake)
+
+    fake = FakeOpenRouter(
+        outcomes=[4, ValueError("Provider down"), GenerationCancelled("Cancelled")]
+    )
+    monkeypatch.setattr(test_generator, "chat_completion_json", fake)
     with pytest.raises(GenerationCancelled):
-        await generate_test_questions([], 10, 4, 'test-model', 'Topic')
+        await generate_test_questions([], 10, 4, "test-model", "Topic")
     assert fake.requested == [10, 6, 6]
