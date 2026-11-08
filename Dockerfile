@@ -1,5 +1,8 @@
 # Multi-stage build for Scio - AI Learning Hub
 
+# uv binary for installing the backend dependencies from backend/uv.lock
+FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
+
 # Stage 1: Build frontend
 FROM node:24-alpine AS frontend-builder
 
@@ -39,9 +42,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # with its sign-in and self-updates.
 ENV CLAUDE_CLI_HOME=/app/claude
 
-# Copy backend requirements and install
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install the backend dependencies exactly as locked in backend/uv.lock
+# (no dev group) into /app/.venv, which is first on PATH.
+COPY --from=uv /uv /usr/local/bin/uv
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    PATH=/app/.venv/bin:$PATH
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --locked --no-dev --no-cache
 
 # Copy backend code
 COPY backend/app ./app
