@@ -15,6 +15,10 @@ and uses [Semantic Versioning](https://semver.org/).
 - Update the frontend toolchain to Vite 8, Vitest 5, @vitejs/plugin-react 6
   and vite-plugin-pwa 2, and React Router to 6.30.6. This resolves all
   critical and high npm audit findings.
+- Update pytest to 9.2 (fixes GHSA-6w46-j5rx-g56g) together with
+  pytest-asyncio 1.4, and update SQLAlchemy 2.1, aiosqlite, httpx and
+  python-docx. SQLAlchemy is now installed with its `asyncio` extra because
+  2.1 no longer pulls in `greenlet` on its own.
 
 ### Changed
 
