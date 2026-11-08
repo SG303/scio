@@ -20,7 +20,7 @@ pypdf==7.0.0
 python-magic==0.4.27
 
 # Utilities
-python-dateutil==2.8.2
+python-dateutil==4.0.0
 aiofiles==25.1.0
 
 # Anki export (P6.1)
