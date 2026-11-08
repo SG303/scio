@@ -21,6 +21,8 @@ and uses [Semantic Versioning](https://semver.org/).
 - Build the frontend with Node 24 LTS (Node 20 reached end of life) and
   update the GitHub Actions used by CI and releases to their current major
   versions.
+- Let Dependabot propose weekly updates for npm, pip, Docker and GitHub
+  Actions dependencies.
 
 ## [v0.7.1] - 2026-11-04
 
