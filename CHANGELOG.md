@@ -19,6 +19,9 @@ and uses [Semantic Versioning](https://semver.org/).
   pytest-asyncio 1.4, and update SQLAlchemy 2.1, aiosqlite, httpx and
   python-docx. SQLAlchemy is now installed with its `asyncio` extra because
   2.1 no longer pulls in `greenlet` on its own.
+- Force patched versions of the build-time dependencies minimatch 11
+  (GHSA-g3hv-75wg-m249), KaTeX 0.19 (GHSA-238p-pmpm-9mq7) and, for the PWA
+  service worker build, glob 14 through npm overrides.
 
 ### Changed
 

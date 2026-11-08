@@ -49,5 +49,12 @@
     "vite": "^8.3.6",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "minimatch@^10": "^11.0.5",
+    "katex": "^0.19.1",
+    "workbox-build": {
+      "glob": "^14.0.4"
+    }
   }
 }
