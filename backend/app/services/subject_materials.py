@@ -4,7 +4,6 @@ Keeps subject validation and the per-subject dedupe source in one place, so
 creating material inside a subject behaves the same whether it starts from
 the subject page or from the regular create wizards.
 """
-from typing import List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -13,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Flashcard, FlashcardDeck, Question, Subject, Test, TestConfig
 
 
-async def ensure_subject_exists(db: AsyncSession, subject_id: Optional[int]) -> None:
+async def ensure_subject_exists(db: AsyncSession, subject_id: int | None) -> None:
     """404 for an unknown subject id — SQLite has foreign_keys=OFF, so a bad
     id would otherwise be stored silently as a dangling reference."""
     if subject_id is None:
@@ -23,7 +22,7 @@ async def ensure_subject_exists(db: AsyncSession, subject_id: Optional[int]) -> 
         raise HTTPException(status_code=404, detail="Subject not found")
 
 
-async def existing_subject_questions(db: AsyncSession, subject_id: int) -> List[str]:
+async def existing_subject_questions(db: AsyncSession, subject_id: int) -> list[str]:
     """All question texts already generated for a subject (dedupe input)."""
     result = await db.execute(
         select(Question.question_text)
@@ -34,7 +33,7 @@ async def existing_subject_questions(db: AsyncSession, subject_id: int) -> List[
     return [row[0] for row in result.fetchall()]
 
 
-async def existing_subject_fronts(db: AsyncSession, subject_id: int) -> List[str]:
+async def existing_subject_fronts(db: AsyncSession, subject_id: int) -> list[str]:
     """All flashcard fronts already generated for a subject (dedupe input)."""
     result = await db.execute(
         select(Flashcard.front)

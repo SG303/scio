@@ -4,17 +4,17 @@ Covers the backup service (validated file creation, retention pruning,
 collision handling, cycle function), the /api/settings/backups endpoints
 and their exact response shape as consumed later by the frontend.
 """
+
 import json
 import os
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
 
-from app.schemas.settings import BackupCreateResponse, BackupListResponse
 from app.routers import settings as settings_router
+from app.schemas.settings import BackupCreateResponse, BackupListResponse
 from app.services import db_backup
 
 
@@ -64,7 +64,7 @@ async def test_create_backup_writes_valid_verified_db(source_db):
 
 async def test_create_backup_missing_db_raises(source_db):
     missing = source_db.parent / "does-not-exist.db"
-    with pytest.raises(Exception):
+    with pytest.raises(FileNotFoundError):
         await db_backup.create_backup(str(missing))
 
 
@@ -142,9 +142,7 @@ async def test_run_backup_cycle_creates_and_prunes(source_db):
     assert (backup_dir / info["file_name"]).is_file()
 
 
-async def test_run_backup_cycle_errors_are_logged_not_raised(
-    source_db, monkeypatch, caplog
-):
+async def test_run_backup_cycle_errors_are_logged_not_raised(source_db, monkeypatch, caplog):
     async def failing_create_backup(_):
         raise RuntimeError("boom")
 

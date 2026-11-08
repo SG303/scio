@@ -1,10 +1,10 @@
 """Add chapter columns (parent_document_id, page_start, page_end) to
 documents. Fresh databases get them from create_all(); this upgrades
 existing ones. Idempotent (PRAGMA check)."""
+
 import logging
 import os
 import sqlite3
-from typing import Optional
 
 from app.config import get_settings
 
@@ -17,7 +17,7 @@ COLUMNS = (
 )
 
 
-def migrate(db_path: Optional[str] = None) -> None:
+def migrate(db_path: str | None = None) -> None:
     db_path = db_path or get_settings().database_path
     if not os.path.exists(db_path):
         return

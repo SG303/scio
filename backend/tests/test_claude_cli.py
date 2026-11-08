@@ -5,6 +5,7 @@ no account and no subscription usage are involved. It records the
 arguments, stdin and environment of `-p` calls and emulates the
 `auth login` flow (prints a sign-in URL, then waits for the code).
 """
+
 import json
 import os
 import stat

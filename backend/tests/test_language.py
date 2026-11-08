@@ -4,6 +4,7 @@ The language is stored on subject, test config and deck. The subject's
 language is the default of the generation endpoints inside it; a request
 overrides it. None means "language of the material".
 """
+
 import sqlite3
 
 import pytest
@@ -86,7 +87,9 @@ async def test_subject_language_is_the_default_and_a_request_overrides_it(subjec
     )
 
     assert seen == ["German", "French"]
-    decks = (await db.execute(select(models.FlashcardDeck).order_by(models.FlashcardDeck.id))).scalars()
+    decks = (
+        await db.execute(select(models.FlashcardDeck).order_by(models.FlashcardDeck.id))
+    ).scalars()
     assert [deck.language for deck in decks] == ["German", "French"]
 
 
@@ -108,10 +111,8 @@ async def test_follow_up_generations_reuse_the_stored_language(subject_db, monke
     test = await subjects_router.generate_test_in_subject(
         subject.id, GenerateTestInSubjectRequest(title="Exam", num_questions=1), db
     )
-    deck = (
-        await subjects_router.generate_flashcards_in_subject(
-            subject.id, GenerateFlashcardsInSubjectRequest(title="Terms", num_cards=1), db
-        )
+    deck = await subjects_router.generate_flashcards_in_subject(
+        subject.id, GenerateFlashcardsInSubjectRequest(title="Terms", num_cards=1), db
     )
     seen.clear()
     from app.schemas.subject import AddCardsRequest, AddQuestionsRequest
@@ -119,7 +120,9 @@ async def test_follow_up_generations_reuse_the_stored_language(subject_db, monke
     await subjects_router.add_questions_to_test_config(
         subject.id, test.config_id, AddQuestionsRequest(num_questions=1), db
     )
-    await subjects_router.add_cards_to_deck(subject.id, deck.deck_id, AddCardsRequest(num_cards=1), db)
+    await subjects_router.add_cards_to_deck(
+        subject.id, deck.deck_id, AddCardsRequest(num_cards=1), db
+    )
 
     assert seen == [("questions", "German"), ("cards", "German")]
 

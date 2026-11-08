@@ -12,13 +12,13 @@ Detection, cheapest first:
    book, and only returns start pages. The text itself is always cut by the
    server, so the AI can neither rewrite nor lose content.
 """
+
 import asyncio
 import json
 import logging
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 
 from app.services.openrouter_client import chat_completion_json
 
@@ -38,9 +38,7 @@ SEARCH_BEFORE = 3
 SEARCH_AFTER = 40
 HEADING_ZONE_CHARS = 400
 
-SYSTEM_PROMPT = (
-    "You find the chapter structure of books. Always respond with valid JSON only."
-)
+SYSTEM_PROMPT = "You find the chapter structure of books. Always respond with valid JSON only."
 
 
 @dataclass
@@ -52,19 +50,19 @@ class Chapter:
 @dataclass
 class DocumentUnits:
     kind: str  # "pdf" | "docx" | "text"
-    units: List[str]
+    units: list[str]
     # heading level per unit (DOCX/Markdown), None = not a heading
-    levels: List[Optional[int]] = field(default_factory=list)
+    levels: list[int | None] = field(default_factory=list)
     # PDF bookmarks: top-level chapters
-    outline: List[Chapter] = field(default_factory=list)
+    outline: list[Chapter] = field(default_factory=list)
 
 
 # ============== Loading ==============
 
-_pdf_cache: Dict[Tuple[str, int, int], Tuple[List[str], List[Chapter]]] = {}
+_pdf_cache: dict[tuple[str, int, int], tuple[list[str], list[Chapter]]] = {}
 
 
-def _read_pdf(path: str) -> Tuple[List[str], List[Chapter]]:
+def _read_pdf(path: str) -> tuple[list[str], list[Chapter]]:
     """Page texts and top-level bookmarks. The last PDF is cached: detection
     and splitting read the same (possibly very large) book back to back."""
     stat = os.stat(path)
@@ -83,7 +81,7 @@ def _read_pdf(path: str) -> Tuple[List[str], List[Chapter]]:
             logger.warning("Could not read text of PDF page %s: %s", index + 1, e)
             pages.append("")
 
-    outline: List[Chapter] = []
+    outline: list[Chapter] = []
     try:
         outline = _top_level_outline(reader, reader.outline)
     except Exception as e:
@@ -94,7 +92,7 @@ def _read_pdf(path: str) -> Tuple[List[str], List[Chapter]]:
     return pages, outline
 
 
-def _top_level_outline(reader, items) -> List[Chapter]:
+def _top_level_outline(reader, items) -> list[Chapter]:
     """Top-level bookmarks. A single top-level entry (book title wrapping
     everything) is skipped in favour of its children."""
     entries = []  # (title, page, children)
@@ -118,15 +116,15 @@ def _top_level_outline(reader, items) -> List[Chapter]:
     return _ordered(chapters)
 
 
-def _read_docx(path: str) -> Tuple[List[str], List[Optional[int]]]:
+def _read_docx(path: str) -> tuple[list[str], list[int | None]]:
     """Body blocks in document order (tables stay inside their chapter)."""
     from docx import Document as DocxDocument
     from docx.table import Table
     from docx.text.paragraph import Paragraph
 
     doc = DocxDocument(path)
-    units: List[str] = []
-    levels: List[Optional[int]] = []
+    units: list[str] = []
+    levels: list[int | None] = []
     for element in doc.element.body.iterchildren():
         tag = element.tag.rsplit("}", 1)[-1]
         if tag == "p":
@@ -146,10 +144,10 @@ def _read_docx(path: str) -> Tuple[List[str], List[Optional[int]]]:
     return units, levels
 
 
-def _read_text(content: str) -> Tuple[List[str], List[Optional[int]]]:
+def _read_text(content: str) -> tuple[list[str], list[int | None]]:
     """Lines with their Markdown heading level (ignoring code blocks)."""
     lines = content.split("\n")
-    levels: List[Optional[int]] = []
+    levels: list[int | None] = []
     in_code = False
     for line in lines:
         if line.lstrip().startswith("```"):
@@ -161,7 +159,7 @@ def _read_text(content: str) -> Tuple[List[str], List[Optional[int]]]:
     return lines, levels
 
 
-def _load_units_sync(file_path: Optional[str], content: Optional[str]) -> DocumentUnits:
+def _load_units_sync(file_path: str | None, content: str | None) -> DocumentUnits:
     ext = os.path.splitext(file_path)[1].lower() if file_path else ""
     if file_path and os.path.exists(file_path):
         if ext == ".pdf":
@@ -174,7 +172,7 @@ def _load_units_sync(file_path: Optional[str], content: Optional[str]) -> Docume
     return DocumentUnits(kind="text", units=units, levels=levels)
 
 
-async def load_units(file_path: Optional[str], content: Optional[str]) -> DocumentUnits:
+async def load_units(file_path: str | None, content: str | None) -> DocumentUnits:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _load_units_sync, file_path, content)
 
@@ -182,7 +180,7 @@ async def load_units(file_path: Optional[str], content: Optional[str]) -> Docume
 # ============== Detection without AI ==============
 
 
-def detect_chapters(source: DocumentUnits) -> Tuple[str, List[Chapter]]:
+def detect_chapters(source: DocumentUnits) -> tuple[str, list[Chapter]]:
     """("outline" | "headings" | "none", chapters). At least two chapters,
     otherwise there is nothing to split."""
     if source.kind == "pdf":
@@ -212,7 +210,7 @@ def _collapse(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def build_ai_prompt(pages: List[str]) -> str:
+def build_ai_prompt(pages: list[str]) -> str:
     total = len(pages)
     front, used = [], 0
     for number, text in enumerate(pages[:TOC_PAGES], start=1):
@@ -250,7 +248,7 @@ PART B - FIRST CHARACTERS OF EVERY PAGE:
 {heads}"""
 
 
-def parse_ai_response(content: str, page_count: int) -> List[Chapter]:
+def parse_ai_response(content: str, page_count: int) -> list[Chapter]:
     text = content.strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text)
@@ -278,7 +276,7 @@ def _norm(text: str) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", text.lower()).split())
 
 
-def _is_toc_page(page_text: str, titles: List[str]) -> bool:
+def _is_toc_page(page_text: str, titles: list[str]) -> bool:
     """A table-of-contents page mentions several chapter titles at once."""
     if len(titles) < 2:
         return False
@@ -286,7 +284,7 @@ def _is_toc_page(page_text: str, titles: List[str]) -> bool:
     return sum(1 for title in titles if title and title in text) >= min(3, len(titles))
 
 
-def locate_chapters(chapters: List[Chapter], pages: List[str]) -> List[Chapter]:
+def locate_chapters(chapters: list[Chapter], pages: list[str]) -> list[Chapter]:
     """Move each AI start page to the page whose top shows the chapter title.
 
     Guards against the AI using printed instead of PDF page numbers. A title
@@ -294,7 +292,7 @@ def locate_chapters(chapters: List[Chapter], pages: List[str]) -> List[Chapter]:
     """
     titles = [_norm(c.title)[:60] for c in chapters]
     located = []
-    for chapter, needle in zip(chapters, titles):
+    for chapter, needle in zip(chapters, titles, strict=True):
         start = chapter.start
         if len(needle) >= 4:
             candidates = [start] + list(
@@ -309,7 +307,7 @@ def locate_chapters(chapters: List[Chapter], pages: List[str]) -> List[Chapter]:
     return _ordered(located)
 
 
-def _ordered(chapters: List[Chapter]) -> List[Chapter]:
+def _ordered(chapters: list[Chapter]) -> list[Chapter]:
     """Book order, one chapter per start unit."""
     seen, result = set(), []
     for chapter in sorted(chapters, key=lambda c: c.start):
@@ -319,7 +317,7 @@ def _ordered(chapters: List[Chapter]) -> List[Chapter]:
     return result
 
 
-async def detect_chapters_with_ai(pages: List[str], model_id: str) -> List[Chapter]:
+async def detect_chapters_with_ai(pages: list[str], model_id: str) -> list[Chapter]:
     """Raises ValueError if the AI found no usable chapters."""
     content = await chat_completion_json(
         model_id=model_id,

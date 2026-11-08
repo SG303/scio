@@ -12,10 +12,9 @@ The OpenRouter call is replaced by a fake in the module namespace (the
 service imports chat_completion_json directly), so no real API key or
 network access is involved.
 """
+
 import json
 import re
-
-import pytest
 
 import app.services.flashcard_generator as flashcard_generator
 from app.services.flashcard_generator import generate_flashcards
@@ -30,15 +29,10 @@ def _install_fake(monkeypatch, counts):
         count = int(match.group(1))
         counts.append(count)
         start = sum(counts) - count
-        cards = [
-            {"front": f"Front {start + i}", "back": f"Back {start + i}"}
-            for i in range(count)
-        ]
+        cards = [{"front": f"Front {start + i}", "back": f"Back {start + i}"} for i in range(count)]
         return json.dumps({"flashcards": cards})
 
-    monkeypatch.setattr(
-        flashcard_generator, "chat_completion_json", fake_chat_completion_json
-    )
+    monkeypatch.setattr(flashcard_generator, "chat_completion_json", fake_chat_completion_json)
 
 
 async def test_batch_generation_no_name_error(monkeypatch):
@@ -61,19 +55,21 @@ async def test_null_front_or_back_skips_card_keeps_rest(monkeypatch):
     .get(key, "") default and crashed .strip() with an AttributeError,
     discarding the whole batch. Invalid cards must be skipped, valid
     ones kept."""
-    response = json.dumps({"flashcards": [
-        {"front": "F1", "back": "B1"},
-        {"front": None, "back": "B2"},  # null front -> skipped
-        {"front": "F3", "back": None},  # null back -> skipped
-        {"question": None, "q": "F4", "answer": "B4"},  # alternate keys survive nulls
-    ]})
+    response = json.dumps(
+        {
+            "flashcards": [
+                {"front": "F1", "back": "B1"},
+                {"front": None, "back": "B2"},  # null front -> skipped
+                {"front": "F3", "back": None},  # null back -> skipped
+                {"question": None, "q": "F4", "answer": "B4"},  # alternate keys survive nulls
+            ]
+        }
+    )
 
     async def fake_chat_completion_json(**kwargs):
         return response
 
-    monkeypatch.setattr(
-        flashcard_generator, "chat_completion_json", fake_chat_completion_json
-    )
+    monkeypatch.setattr(flashcard_generator, "chat_completion_json", fake_chat_completion_json)
 
     cards = await generate_flashcards([], 4, "test-model", "Test Topic")
 

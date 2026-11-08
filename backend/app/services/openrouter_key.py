@@ -5,8 +5,6 @@ set via the OPENROUTER_API_KEY environment variable. A key stored in the
 app wins; the environment variable is the fallback.
 """
 
-from typing import Optional, Tuple
-
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,12 +19,12 @@ SOURCE_APP = "app"
 SOURCE_ENVIRONMENT = "environment"
 
 
-async def _stored_row(db: AsyncSession) -> Optional[Setting]:
+async def _stored_row(db: AsyncSession) -> Setting | None:
     result = await db.execute(select(Setting).where(Setting.key == OPENROUTER_KEY_SETTING))
     return result.scalar_one_or_none()
 
 
-async def get_effective_key(db: AsyncSession) -> Tuple[str, Optional[str]]:
+async def get_effective_key(db: AsyncSession) -> tuple[str, str | None]:
     """Return (key, source); ("", None) when no key is configured."""
     row = await _stored_row(db)
     if row and row.value:

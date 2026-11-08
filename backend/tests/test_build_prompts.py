@@ -8,18 +8,20 @@ prompts when no custom instructions are given, empty/whitespace
 normalization, and the "do not repeat" sections for existing questions
 and flashcards.
 """
-from tests.conftest import MockDocument
 
-from app.services.test_generator import build_prompt
 from app.services.flashcard_generator import build_flashcard_prompt
+from app.services.test_generator import build_prompt
+from tests.conftest import MockDocument
 
 
 def make_docs():
-    return [MockDocument(
-        title="AWS Study Guide",
-        doc_type="study_guide",
-        content="AWS EC2 is a web service that provides resizable compute capacity...",
-    )]
+    return [
+        MockDocument(
+            title="AWS Study Guide",
+            doc_type="study_guide",
+            content="AWS EC2 is a web service that provides resizable compute capacity...",
+        )
+    ]
 
 
 # ============== build_prompt (test generator) ==============

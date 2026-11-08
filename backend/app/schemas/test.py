@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, List
+
+from pydantic import BaseModel, Field
 
 from app.services.language import Language
 
@@ -14,12 +14,12 @@ class QuestionResponse(BaseModel):
     id: int
     question_number: int
     question_text: str
-    choices: List[Choice]
-    user_answer: Optional[int] = None
-    is_correct: Optional[bool] = None
-    correct_answer: Optional[int] = None  # Only shown after test completion
-    explanation: Optional[str] = None  # Only shown after test completion
-    
+    choices: list[Choice]
+    user_answer: int | None = None
+    is_correct: bool | None = None
+    correct_answer: int | None = None  # Only shown after test completion
+    explanation: str | None = None  # Only shown after test completion
+
     class Config:
         from_attributes = True
 
@@ -29,17 +29,18 @@ class TestConfigCreate(BaseModel):
     num_questions: int = Field(default=10, ge=1, le=100)
     num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: int
-    document_ids: List[int]
+    document_ids: list[int]
     is_template: bool = False
-    custom_prompt: Optional[str] = None
+    custom_prompt: str | None = None
     language: Language = None  # None = language of the material
     # Optional subject grouping; templates never belong to a subject
-    subject_id: Optional[int] = None
+    subject_id: int | None = None
 
 
 class TestConfigUpdate(BaseModel):
     """Partial update of a (non-template) config — used to (un)assign a subject."""
-    subject_id: Optional[int] = None
+
+    subject_id: int | None = None
 
 
 class TestConfigResponse(BaseModel):
@@ -48,21 +49,21 @@ class TestConfigResponse(BaseModel):
     num_questions: int
     num_choices: int
     ai_model_id: int
-    document_ids: List[int]
+    document_ids: list[int]
     is_template: bool
-    custom_prompt: Optional[str] = None
+    custom_prompt: str | None = None
     language: Language = None  # None = language of the material
-    subject_id: Optional[int] = None
+    subject_id: int | None = None
     # Templates: number of tests attached to this config (deleted with it)
     test_count: int = 0
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class GenerateFromTemplateRequest(BaseModel):
-    num_questions: Optional[int] = Field(default=None, ge=1, le=100)  # Override the template's default
+    num_questions: int | None = Field(default=None, ge=1, le=100)  # Override the template's default
 
 
 class CreateAndGenerateRequest(BaseModel):
@@ -72,34 +73,35 @@ class CreateAndGenerateRequest(BaseModel):
     Deliberately no is_template: a generated test must never hang on a
     template config (deleting the template would cascade to its tests).
     Templates are saved separately via POST /configs."""
+
     title: str
     num_questions: int = Field(default=10, ge=1, le=100)
     num_choices: int = Field(default=4, ge=2, le=10)
     ai_model_id: int
-    document_ids: List[int]
-    lecture_ids: List[int] = []  # lecture notes as additional study material
-    custom_prompt: Optional[str] = None
+    document_ids: list[int]
+    lecture_ids: list[int] = []  # lecture notes as additional study material
+    custom_prompt: str | None = None
     language: Language = None  # None = language of the material
-    subject_id: Optional[int] = None
+    subject_id: int | None = None
     # optional override of num_questions for the generated test
-    generate_num_questions: Optional[int] = None
+    generate_num_questions: int | None = None
 
 
 class TestResponse(BaseModel):
     id: int
     config_id: int
-    config_title: Optional[str] = None
-    subject_id: Optional[int] = None
+    config_title: str | None = None
+    subject_id: int | None = None
     # Legacy tests generated directly from a template config
     from_template: bool = False
     status: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    score: Optional[int] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    score: int | None = None
     total_questions: int
-    correct_answers: Optional[int] = None
+    correct_answers: int | None = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -107,16 +109,16 @@ class TestResponse(BaseModel):
 class TestDetailResponse(BaseModel):
     id: int
     config_id: int
-    config_title: Optional[str] = None
+    config_title: str | None = None
     status: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    score: Optional[int] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    score: int | None = None
     total_questions: int
-    correct_answers: Optional[int] = None
+    correct_answers: int | None = None
     created_at: datetime
-    questions: List[QuestionResponse]
-    
+    questions: list[QuestionResponse]
+
     class Config:
         from_attributes = True
 
@@ -132,5 +134,4 @@ class TestResultResponse(BaseModel):
     score: int
     total_questions: int
     correct_answers: int
-    questions: List[QuestionResponse]
-
+    questions: list[QuestionResponse]

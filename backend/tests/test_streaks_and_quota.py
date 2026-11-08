@@ -4,12 +4,13 @@ Unit tests for P4.2 (streaks) and P4.3 (deck-wide daily new-card limit).
 The functions under test are pure (no DB access) — the streak helpers take
 simple data structures, the quota helper takes plain integers and dates.
 """
+
 from datetime import date, timedelta
 
 from app.services.spaced_repetition import (
+    DAILY_GOAL_REVIEWS,
     compute_streak,
     remaining_new_quota,
-    DAILY_GOAL_REVIEWS,
 )
 
 TODAY = date(2026, 9, 17)

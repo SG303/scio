@@ -182,13 +182,14 @@ the owner may stay in German.
 
 | Check | Command | Status |
 |-------|---------|--------|
+| Backend lint | `cd backend && uv run ruff check && uv run ruff format --check` | Rules in `backend/pyproject.toml`; `uv run ruff check --fix && uv run ruff format` fixes most findings |
 | Backend tests | `cd backend && uv run pytest` | Available since P0.2 (`backend/tests/`; the dev dependencies come with `uv sync`). Also runs as a GitHub Actions job on every push/PR |
 | Frontend type check | `cd frontend && npm run typecheck` | Available since P0.3 |
 | Lint | `cd frontend && npm run lint` | Available since P0.3. Existing warnings are known, planned bugs (see `eslint.config.js`) and do not block |
 | Docker build | `docker build .` (only for Dockerfile/Compose changes) | Available |
 
 **Iron rule: never commit while an available check is red.** Since P0.2/P0.3
-this applies to `pytest`, `typecheck` and `lint` without exception.
+this applies to `pytest`, `ruff`, `typecheck` and `lint` without exception.
 
 In addition, for every finished work package the owner checks the result **by
 using the app** (click test). So deliver a one-line, non-technical test
@@ -363,5 +364,6 @@ prompt appears").
 
 ## Deviations from baseline
 
-- `tool-canon`: the backend has no ruff yet; `scripts/` are plain Python
-  scripts tested with `unittest` (no third-party dependencies).
+- `tool-canon`: `scripts/` are plain Python scripts without third-party
+  dependencies, tested with `unittest` and not covered by the backend's uv
+  project or ruff.

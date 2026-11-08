@@ -1,4 +1,5 @@
 """Shared fixtures and helpers for the Scio backend test suite."""
+
 import sys
 from pathlib import Path
 

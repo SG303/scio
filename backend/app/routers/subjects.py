@@ -4,35 +4,53 @@ Subjects API Router.
 Implements endpoints for organizing tests and flashcard decks into subjects
 with shared configuration and centralized management.
 """
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, update
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from datetime import datetime, timezone
+
 import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import (
-    Subject, TestConfig, Test, Question, FlashcardDeck, Flashcard,
-    Document, AIModel, Lecture
+    AIModel,
+    Document,
+    Flashcard,
+    FlashcardDeck,
+    Lecture,
+    Question,
+    Subject,
+    Test,
+    TestConfig,
+)
+from app.routers.flashcards import get_deck_stats_map
+from app.routers.tests import build_test_response
+from app.schemas.flashcard import (
+    FlashcardResponse,
+    GenerateFlashcardsResponse,
 )
 from app.schemas.subject import (
-    SubjectCreate, SubjectUpdate, SubjectResponse, SubjectListResponse,
-    SubjectDetailResponse, TestConfigInSubject, FlashcardDeckInSubject,
-    GenerateTestInSubjectRequest, GenerateFlashcardsInSubjectRequest,
-    AddQuestionsRequest, AddCardsRequest
+    AddCardsRequest,
+    AddQuestionsRequest,
+    FlashcardDeckInSubject,
+    GenerateFlashcardsInSubjectRequest,
+    GenerateTestInSubjectRequest,
+    SubjectCreate,
+    SubjectDetailResponse,
+    SubjectListResponse,
+    SubjectResponse,
+    SubjectUpdate,
+    TestConfigInSubject,
 )
 from app.schemas.test import TestResponse
-from app.routers.tests import build_test_response
-from app.schemas.flashcard import FlashcardDeckResponse, GenerateFlashcardsResponse, FlashcardResponse
 from app.services.default_model import resolve_ai_model_id
-from app.services.language import clean_language
-from app.services.test_generator import generate_test_questions
 from app.services.flashcard_generator import generate_flashcards
-from app.routers.flashcards import get_deck_stats_map
+from app.services.language import clean_language
 from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import existing_subject_fronts, existing_subject_questions
+from app.services.test_generator import generate_test_questions
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
 logger = logging.getLogger(__name__)
@@ -45,13 +63,12 @@ def utc_now() -> datetime:
 
 # ============== Subject CRUD ==============
 
-@router.get("", response_model=List[SubjectListResponse])
+
+@router.get("", response_model=list[SubjectListResponse])
 async def list_subjects(db: AsyncSession = Depends(get_db)):
     """List all subjects with statistics."""
     result = await db.execute(
-        select(Subject)
-        .options(selectinload(Subject.ai_model))
-        .order_by(Subject.created_at.desc())
+        select(Subject).options(selectinload(Subject.ai_model)).order_by(Subject.created_at.desc())
     )
     subjects = result.scalars().all()
 
@@ -86,9 +103,7 @@ async def list_subjects(db: AsyncSession = Depends(get_db)):
     )
     avg_score_by_subject = dict(result.all())
 
-    result = await db.execute(
-        select(FlashcardDeck).where(FlashcardDeck.subject_id.isnot(None))
-    )
+    result = await db.execute(select(FlashcardDeck).where(FlashcardDeck.subject_id.isnot(None)))
     decks_by_subject: dict = {}
     for deck in result.scalars().all():
         decks_by_subject.setdefault(deck.subject_id, []).append(deck)
@@ -106,38 +121,37 @@ async def list_subjects(db: AsyncSession = Depends(get_db)):
         due_cards = 0
         for deck in decks:
             stats = stats_map.get(deck.id, {})
-            total_cards += stats.get('total_cards', 0)
-            mastered_cards += stats.get('mastered_cards', 0)
-            due_cards += stats.get('due_today', 0)
+            total_cards += stats.get("total_cards", 0)
+            mastered_cards += stats.get("mastered_cards", 0)
+            due_cards += stats.get("due_today", 0)
 
-        response.append(SubjectListResponse(
-            id=subject.id,
-            title=subject.title,
-            description=subject.description,
-            ai_model_id=subject.ai_model_id,
-            ai_model_name=subject.ai_model.name if subject.ai_model else None,
-            language=subject.language,
-            document_ids=subject.document_ids,
-            document_count=len(subject.document_ids) if subject.document_ids else 0,
-            test_count=config_count_by_subject.get(subject.id, 0),
-            deck_count=len(decks),
-            total_tests_taken=tests_taken_by_subject.get(subject.id, 0),
-            average_score=avg_score_by_subject.get(subject.id),
-            total_cards=total_cards,
-            mastered_cards=mastered_cards,
-            due_cards=due_cards,
-            created_at=subject.created_at,
-            updated_at=subject.updated_at
-        ))
-    
+        response.append(
+            SubjectListResponse(
+                id=subject.id,
+                title=subject.title,
+                description=subject.description,
+                ai_model_id=subject.ai_model_id,
+                ai_model_name=subject.ai_model.name if subject.ai_model else None,
+                language=subject.language,
+                document_ids=subject.document_ids,
+                document_count=len(subject.document_ids) if subject.document_ids else 0,
+                test_count=config_count_by_subject.get(subject.id, 0),
+                deck_count=len(decks),
+                total_tests_taken=tests_taken_by_subject.get(subject.id, 0),
+                average_score=avg_score_by_subject.get(subject.id),
+                total_cards=total_cards,
+                mastered_cards=mastered_cards,
+                due_cards=due_cards,
+                created_at=subject.created_at,
+                updated_at=subject.updated_at,
+            )
+        )
+
     return response
 
 
 @router.post("", response_model=SubjectResponse)
-async def create_subject(
-    subject_data: SubjectCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_subject(subject_data: SubjectCreate, db: AsyncSession = Depends(get_db)):
     """Create a new subject."""
     # Validate AI model if provided
     if subject_data.ai_model_id:
@@ -147,7 +161,7 @@ async def create_subject(
             raise HTTPException(status_code=404, detail="AI model not found")
         if not ai_model.is_enabled:
             raise HTTPException(status_code=400, detail="AI model is not enabled")
-    
+
     # Validate documents if provided
     if subject_data.document_ids:
         result = await db.execute(
@@ -157,12 +171,12 @@ async def create_subject(
         missing_ids = set(subject_data.document_ids) - found_ids
         if missing_ids:
             raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
-    
+
     subject = Subject(**subject_data.model_dump())
     db.add(subject)
     await db.commit()
     await db.refresh(subject)
-    
+
     return subject
 
 
@@ -170,15 +184,13 @@ async def create_subject(
 async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
     """Get a subject with all its tests and flashcard decks."""
     result = await db.execute(
-        select(Subject)
-        .options(selectinload(Subject.ai_model))
-        .where(Subject.id == subject_id)
+        select(Subject).options(selectinload(Subject.ai_model)).where(Subject.id == subject_id)
     )
     subject = result.scalar_one_or_none()
-    
+
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
-    
+
     # Get test configs with their tests
     test_result = await db.execute(
         select(TestConfig)
@@ -187,7 +199,7 @@ async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
         .order_by(TestConfig.created_at.desc())
     )
     test_configs = test_result.scalars().all()
-    
+
     # Get flashcard decks
     deck_result = await db.execute(
         select(FlashcardDeck)
@@ -195,41 +207,45 @@ async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
         .order_by(FlashcardDeck.created_at.desc())
     )
     decks = deck_result.scalars().all()
-    
+
     # Build test config responses with stats
     test_config_responses = []
     total_tests_taken = 0
     all_scores = []
-    
+
     for tc in test_configs:
         completed_tests = [t for t in tc.tests if t.status == "completed"]
         tests_taken = len(tc.tests)
         total_tests_taken += tests_taken
-        
+
         best_score = None
         last_score = None
-        
+
         if completed_tests:
             scores = [t.score for t in completed_tests if t.score is not None]
             all_scores.extend(scores)
             if scores:
                 best_score = max(scores)
             # Get last completed test's score
-            sorted_tests = sorted(completed_tests, key=lambda t: t.completed_at or t.created_at, reverse=True)
+            sorted_tests = sorted(
+                completed_tests, key=lambda t: t.completed_at or t.created_at, reverse=True
+            )
             if sorted_tests:
                 last_score = sorted_tests[0].score
-        
-        test_config_responses.append(TestConfigInSubject(
-            id=tc.id,
-            title=tc.title,
-            num_questions=tc.num_questions,
-            num_choices=tc.num_choices,
-            tests_taken=tests_taken,
-            best_score=best_score,
-            last_score=last_score,
-            created_at=tc.created_at
-        ))
-    
+
+        test_config_responses.append(
+            TestConfigInSubject(
+                id=tc.id,
+                title=tc.title,
+                num_questions=tc.num_questions,
+                num_choices=tc.num_choices,
+                tests_taken=tests_taken,
+                best_score=best_score,
+                last_score=last_score,
+                created_at=tc.created_at,
+            )
+        )
+
     # Build flashcard deck responses with stats
     # One batched stats computation for all decks (no per-deck queries)
     stats_map = await get_deck_stats_map(db, decks)
@@ -237,30 +253,32 @@ async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
     deck_responses = []
     total_cards = 0
     mastered_cards = 0
-    
+
     for deck in decks:
         stats = stats_map.get(deck.id, {})
-        total_cards += stats.get('total_cards', 0)
-        mastered_cards += stats.get('mastered_cards', 0)
-        
-        deck_responses.append(FlashcardDeckInSubject(
-            id=deck.id,
-            title=deck.title,
-            description=deck.description,
-            total_cards=stats.get('total_cards', 0),
-            new_cards=stats.get('new_cards', 0),
-            learning_cards=stats.get('learning_cards', 0),
-            review_cards=stats.get('review_cards', 0),
-            due_cards=stats.get('due_today', 0),
-            due_reviews=stats.get('due_reviews', 0),
-            new_available=stats.get('new_available', 0),
-            created_at=deck.created_at
-        ))
-    
+        total_cards += stats.get("total_cards", 0)
+        mastered_cards += stats.get("mastered_cards", 0)
+
+        deck_responses.append(
+            FlashcardDeckInSubject(
+                id=deck.id,
+                title=deck.title,
+                description=deck.description,
+                total_cards=stats.get("total_cards", 0),
+                new_cards=stats.get("new_cards", 0),
+                learning_cards=stats.get("learning_cards", 0),
+                review_cards=stats.get("review_cards", 0),
+                due_cards=stats.get("due_today", 0),
+                due_reviews=stats.get("due_reviews", 0),
+                new_available=stats.get("new_available", 0),
+                created_at=deck.created_at,
+            )
+        )
+
     average_score = None
     if all_scores:
         average_score = sum(all_scores) / len(all_scores)
-    
+
     return SubjectDetailResponse(
         id=subject.id,
         title=subject.title,
@@ -277,64 +295,58 @@ async def get_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
         total_cards=total_cards,
         mastered_cards=mastered_cards,
         test_configs=test_config_responses,
-        flashcard_decks=deck_responses
+        flashcard_decks=deck_responses,
     )
 
 
 @router.put("/{subject_id}", response_model=SubjectResponse)
 async def update_subject(
-    subject_id: int,
-    subject_data: SubjectUpdate,
-    db: AsyncSession = Depends(get_db)
+    subject_id: int, subject_data: SubjectUpdate, db: AsyncSession = Depends(get_db)
 ):
     """Update a subject's settings."""
     result = await db.execute(select(Subject).where(Subject.id == subject_id))
     subject = result.scalar_one_or_none()
-    
+
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
-    
+
     # Validate AI model if being updated
-    if subject_data.ai_model_id is not None:
-        if subject_data.ai_model_id:
-            result = await db.execute(select(AIModel).where(AIModel.id == subject_data.ai_model_id))
-            ai_model = result.scalar_one_or_none()
-            if not ai_model:
-                raise HTTPException(status_code=404, detail="AI model not found")
-            if not ai_model.is_enabled:
-                raise HTTPException(status_code=400, detail="AI model is not enabled")
-    
+    if subject_data.ai_model_id is not None and subject_data.ai_model_id:
+        result = await db.execute(select(AIModel).where(AIModel.id == subject_data.ai_model_id))
+        ai_model = result.scalar_one_or_none()
+        if not ai_model:
+            raise HTTPException(status_code=404, detail="AI model not found")
+        if not ai_model.is_enabled:
+            raise HTTPException(status_code=400, detail="AI model is not enabled")
+
     # Validate documents if being updated
-    if subject_data.document_ids is not None:
-        if subject_data.document_ids:
-            result = await db.execute(
-                select(Document.id).where(Document.id.in_(subject_data.document_ids))
-            )
-            found_ids = set(row[0] for row in result.fetchall())
-            missing_ids = set(subject_data.document_ids) - found_ids
-            if missing_ids:
-                raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
-    
+    if subject_data.document_ids is not None and subject_data.document_ids:
+        result = await db.execute(
+            select(Document.id).where(Document.id.in_(subject_data.document_ids))
+        )
+        found_ids = set(row[0] for row in result.fetchall())
+        missing_ids = set(subject_data.document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
+
     update_data = subject_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(subject, key, value)
-    
+
     await db.commit()
     await db.refresh(subject)
-    
+
     return subject
 
 
 @router.delete("/{subject_id}")
 async def delete_subject(
-    subject_id: int,
-    cascade: bool = False,
-    db: AsyncSession = Depends(get_db)
+    subject_id: int, cascade: bool = False, db: AsyncSession = Depends(get_db)
 ):
     """Delete a subject. Optionally cascade to delete all associated materials."""
     result = await db.execute(select(Subject).where(Subject.id == subject_id))
     subject = result.scalar_one_or_none()
-    
+
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
 
@@ -350,18 +362,20 @@ async def delete_subject(
             status_code=409,
             detail=f"This subject still has {lecture_count} lecture(s). Delete them first.",
         )
-    
+
     if cascade:
         # Cards outside this subject survive; clear their question references
         # in one update before the test/question cascades run.
         await db.execute(
             update(Flashcard)
-            .where(Flashcard.source_question_id.in_(
-                select(Question.id)
-                .join(Test, Question.test_id == Test.id)
-                .join(TestConfig, Test.config_id == TestConfig.id)
-                .where(TestConfig.subject_id == subject_id)
-            ))
+            .where(
+                Flashcard.source_question_id.in_(
+                    select(Question.id)
+                    .join(Test, Question.test_id == Test.id)
+                    .join(TestConfig, Test.config_id == TestConfig.id)
+                    .where(TestConfig.subject_id == subject_id)
+                )
+            )
             .values(source_question_id=None)
         )
         # Delete all test configs (tests and questions will cascade)
@@ -370,7 +384,7 @@ async def delete_subject(
         )
         for tc in test_result.scalars().all():
             await db.delete(tc)
-        
+
         # Delete all flashcard decks (cards will cascade)
         deck_result = await db.execute(
             select(FlashcardDeck).where(FlashcardDeck.subject_id == subject_id)
@@ -384,39 +398,36 @@ async def delete_subject(
         )
         for tc in test_result.scalars().all():
             tc.subject_id = None
-        
+
         deck_result = await db.execute(
             select(FlashcardDeck).where(FlashcardDeck.subject_id == subject_id)
         )
         for deck in deck_result.scalars().all():
             deck.subject_id = None
-    
+
     await db.delete(subject)
     await db.commit()
-    
+
     return {"message": "Subject deleted successfully"}
 
 
 # ============== Generate Materials ==============
 
+
 @router.post("/{subject_id}/generate-test", response_model=TestResponse)
 async def generate_test_in_subject(
-    subject_id: int,
-    request: GenerateTestInSubjectRequest,
-    db: AsyncSession = Depends(get_db)
+    subject_id: int, request: GenerateTestInSubjectRequest, db: AsyncSession = Depends(get_db)
 ):
     """Generate a practice test within a subject."""
     # Get subject
     result = await db.execute(
-        select(Subject)
-        .options(selectinload(Subject.ai_model))
-        .where(Subject.id == subject_id)
+        select(Subject).options(selectinload(Subject.ai_model)).where(Subject.id == subject_id)
     )
     subject = result.scalar_one_or_none()
-    
+
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
-    
+
     # Determine AI model (request override > subject default > global default)
     ai_model_id = await resolve_ai_model_id(db, request.ai_model_id, subject.ai_model_id)
     if not ai_model_id:
@@ -426,20 +437,20 @@ async def generate_test_in_subject(
         )
     # Output language (request override > subject default; None = auto)
     language = clean_language(request.language) or subject.language
-    
+
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
-    
+
     if not ai_model or not ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model not available")
-    
+
     # Determine documents (request override > subject default)
-    document_ids = request.document_ids if request.document_ids is not None else subject.document_ids
+    document_ids = (
+        request.document_ids if request.document_ids is not None else subject.document_ids
+    )
     documents = []
     if document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(document_ids)))
         documents = list(result.scalars().all())
         # Same validation as create-and-generate: a deleted document must not
         # silently turn into generation without study material
@@ -447,7 +458,7 @@ async def generate_test_in_subject(
         missing_ids = set(document_ids) - found_ids
         if missing_ids:
             raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
-    
+
     # Get existing questions from this subject to avoid duplicates
     # (read before the AI call — does not depend on the config created below)
     existing_questions = await existing_subject_questions(db, subject_id)
@@ -463,7 +474,7 @@ async def generate_test_in_subject(
             topic=request.title,
             custom_prompt=request.custom_prompt,
             language=language,
-            existing_questions=existing_questions if existing_questions else None
+            existing_questions=existing_questions if existing_questions else None,
         )
     except ValueError as e:
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
@@ -471,7 +482,7 @@ async def generate_test_in_subject(
     except Exception as e:
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate test. Please try again.")
-    
+
     # Create test config linked to subject
     test_config = TestConfig(
         title=request.title,
@@ -482,20 +493,16 @@ async def generate_test_in_subject(
         custom_prompt=request.custom_prompt,
         language=language,
         subject_id=subject_id,
-        is_template=False
+        is_template=False,
     )
     db.add(test_config)
     await db.flush()
-    
+
     # Create test
-    test = Test(
-        config_id=test_config.id,
-        status="generated",
-        total_questions=len(questions_data)
-    )
+    test = Test(config_id=test_config.id, status="generated", total_questions=len(questions_data))
     db.add(test)
     await db.flush()
-    
+
     # Create questions
     for i, q_data in enumerate(questions_data):
         question = Question(
@@ -504,34 +511,30 @@ async def generate_test_in_subject(
             question_text=q_data["question"],
             choices=[{"index": j, "text": c} for j, c in enumerate(q_data["choices"])],
             correct_answer=q_data["correct_answer"],
-            explanation=q_data.get("explanation", "")
+            explanation=q_data.get("explanation", ""),
         )
         db.add(question)
-    
+
     await db.commit()
     await db.refresh(test)
-    
+
     return build_test_response(test, test_config)
 
 
 @router.post("/{subject_id}/generate-flashcards", response_model=GenerateFlashcardsResponse)
 async def generate_flashcards_in_subject(
-    subject_id: int,
-    request: GenerateFlashcardsInSubjectRequest,
-    db: AsyncSession = Depends(get_db)
+    subject_id: int, request: GenerateFlashcardsInSubjectRequest, db: AsyncSession = Depends(get_db)
 ):
     """Generate flashcards within a subject."""
     # Get subject
     result = await db.execute(
-        select(Subject)
-        .options(selectinload(Subject.ai_model))
-        .where(Subject.id == subject_id)
+        select(Subject).options(selectinload(Subject.ai_model)).where(Subject.id == subject_id)
     )
     subject = result.scalar_one_or_none()
-    
+
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
-    
+
     # Determine AI model (request override > subject default > global default)
     ai_model_id = await resolve_ai_model_id(db, request.ai_model_id, subject.ai_model_id)
     if not ai_model_id:
@@ -541,20 +544,20 @@ async def generate_flashcards_in_subject(
         )
     # Output language (request override > subject default; None = auto)
     language = clean_language(request.language) or subject.language
-    
+
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
-    
+
     if not ai_model or not ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model not available")
-    
+
     # Determine documents (request override > subject default)
-    document_ids = request.document_ids if request.document_ids is not None else subject.document_ids
+    document_ids = (
+        request.document_ids if request.document_ids is not None else subject.document_ids
+    )
     documents = []
     if document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(document_ids)))
         documents = list(result.scalars().all())
         # Same validation as create-and-generate: a deleted document must not
         # silently turn into generation without study material
@@ -562,7 +565,7 @@ async def generate_flashcards_in_subject(
         missing_ids = set(document_ids) - found_ids
         if missing_ids:
             raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
-    
+
     # Get existing card fronts from this subject to avoid duplicates
     # (read before the AI call — does not depend on the deck created below)
     existing_fronts = await existing_subject_fronts(db, subject_id)
@@ -577,15 +580,17 @@ async def generate_flashcards_in_subject(
             topic=request.title,
             custom_prompt=request.custom_prompt,
             language=language,
-            existing_fronts=existing_fronts if existing_fronts else None
+            existing_fronts=existing_fronts if existing_fronts else None,
         )
     except ValueError as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate flashcards: {str(e)}")
     except Exception as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to generate flashcards. Please try again.")
-    
+        raise HTTPException(
+            status_code=500, detail="Failed to generate flashcards. Please try again."
+        )
+
     # Create deck linked to subject
     deck = FlashcardDeck(
         title=request.title,
@@ -594,11 +599,11 @@ async def generate_flashcards_in_subject(
         document_ids=document_ids,
         custom_prompt=request.custom_prompt,
         language=language,
-        subject_id=subject_id
+        subject_id=subject_id,
     )
     db.add(deck)
     await db.flush()
-    
+
     # Create flashcard records
     created_cards = []
     for card_data in cards_data:
@@ -606,33 +611,34 @@ async def generate_flashcards_in_subject(
             deck_id=deck.id,
             front=card_data["front"],
             back=card_data["back"],
-            source_type="ai_generated"
+            source_type="ai_generated",
         )
         db.add(card)
         await db.flush()
         created_cards.append(card)
-    
+
     await db.commit()
-    
+
     # Refresh cards to get IDs
     for card in created_cards:
         await db.refresh(card)
-    
+
     return GenerateFlashcardsResponse(
         deck_id=deck.id,
         cards_generated=len(created_cards),
-        cards=[FlashcardResponse.model_validate(c) for c in created_cards]
+        cards=[FlashcardResponse.model_validate(c) for c in created_cards],
     )
 
 
 # ============== Add to Existing Materials ==============
+
 
 @router.post("/{subject_id}/test-configs/{config_id}/add-questions", response_model=TestResponse)
 async def add_questions_to_test_config(
     subject_id: int,
     config_id: int,
     request: AddQuestionsRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Add new questions to an existing test config by generating a new test."""
     # Verify subject exists
@@ -640,7 +646,7 @@ async def add_questions_to_test_config(
     subject = result.scalar_one_or_none()
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
-    
+
     # Get test config
     result = await db.execute(
         select(TestConfig)
@@ -648,24 +654,22 @@ async def add_questions_to_test_config(
         .where(TestConfig.id == config_id, TestConfig.subject_id == subject_id)
     )
     test_config = result.scalar_one_or_none()
-    
+
     if not test_config:
         raise HTTPException(status_code=404, detail="Test config not found in this subject")
-    
+
     # Determine AI model
     ai_model_id = request.ai_model_id or test_config.ai_model_id
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
-    
+
     if not ai_model or not ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model not available")
-    
+
     # Get documents
     documents = []
     if test_config.document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(test_config.document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(test_config.document_ids)))
         documents = list(result.scalars().all())
         # Same validation as create-and-generate: a deleted document must not
         # silently turn into generation without study material
@@ -673,7 +677,7 @@ async def add_questions_to_test_config(
         missing_ids = set(test_config.document_ids) - found_ids
         if missing_ids:
             raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
-    
+
     # Get ALL existing questions from this config to avoid duplicates
     existing_result = await db.execute(
         select(Question.question_text)
@@ -681,7 +685,7 @@ async def add_questions_to_test_config(
         .where(Test.config_id == config_id)
     )
     existing_questions = [row[0] for row in existing_result.fetchall()]
-    
+
     # Generate new questions
     lectures = await load_lecture_sources(db, test_config.lecture_ids)
     try:
@@ -693,24 +697,22 @@ async def add_questions_to_test_config(
             topic=test_config.title,
             custom_prompt=request.custom_prompt or test_config.custom_prompt,
             language=test_config.language,
-            existing_questions=existing_questions if existing_questions else None
+            existing_questions=existing_questions if existing_questions else None,
         )
     except ValueError as e:
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate questions: {str(e)}")
     except Exception as e:
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to generate questions. Please try again.")
-    
+        raise HTTPException(
+            status_code=500, detail="Failed to generate questions. Please try again."
+        )
+
     # Create new test with the new questions
-    test = Test(
-        config_id=test_config.id,
-        status="generated",
-        total_questions=len(questions_data)
-    )
+    test = Test(config_id=test_config.id, status="generated", total_questions=len(questions_data))
     db.add(test)
     await db.flush()
-    
+
     # Create questions
     for i, q_data in enumerate(questions_data):
         question = Question(
@@ -719,22 +721,19 @@ async def add_questions_to_test_config(
             question_text=q_data["question"],
             choices=[{"index": j, "text": c} for j, c in enumerate(q_data["choices"])],
             correct_answer=q_data["correct_answer"],
-            explanation=q_data.get("explanation", "")
+            explanation=q_data.get("explanation", ""),
         )
         db.add(question)
-    
+
     await db.commit()
     await db.refresh(test)
-    
+
     return build_test_response(test, test_config)
 
 
 @router.post("/{subject_id}/decks/{deck_id}/add-cards", response_model=GenerateFlashcardsResponse)
 async def add_cards_to_deck(
-    subject_id: int,
-    deck_id: int,
-    request: AddCardsRequest,
-    db: AsyncSession = Depends(get_db)
+    subject_id: int, deck_id: int, request: AddCardsRequest, db: AsyncSession = Depends(get_db)
 ):
     """Add new cards to an existing flashcard deck."""
     # Verify subject exists
@@ -742,17 +741,18 @@ async def add_cards_to_deck(
     subject = result.scalar_one_or_none()
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
-    
+
     # Get deck
     result = await db.execute(
-        select(FlashcardDeck)
-        .where(FlashcardDeck.id == deck_id, FlashcardDeck.subject_id == subject_id)
+        select(FlashcardDeck).where(
+            FlashcardDeck.id == deck_id, FlashcardDeck.subject_id == subject_id
+        )
     )
     deck = result.scalar_one_or_none()
-    
+
     if not deck:
         raise HTTPException(status_code=404, detail="Deck not found in this subject")
-    
+
     # Determine AI model
     ai_model_id = await resolve_ai_model_id(
         db, request.ai_model_id, deck.ai_model_id, subject.ai_model_id
@@ -762,19 +762,17 @@ async def add_cards_to_deck(
             status_code=400,
             detail="No AI model specified. Choose one or set a default model in Settings.",
         )
-    
+
     result = await db.execute(select(AIModel).where(AIModel.id == ai_model_id))
     ai_model = result.scalar_one_or_none()
-    
+
     if not ai_model or not ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model not available")
-    
+
     # Get documents
     documents = []
     if deck.document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(deck.document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(deck.document_ids)))
         documents = list(result.scalars().all())
         # Same validation as create-and-generate: a deleted document must not
         # silently turn into generation without study material
@@ -782,13 +780,11 @@ async def add_cards_to_deck(
         missing_ids = set(deck.document_ids) - found_ids
         if missing_ids:
             raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
-    
+
     # Get existing card fronts to avoid duplicates
-    existing_result = await db.execute(
-        select(Flashcard.front).where(Flashcard.deck_id == deck_id)
-    )
+    existing_result = await db.execute(select(Flashcard.front).where(Flashcard.deck_id == deck_id))
     existing_fronts = [row[0] for row in existing_result.fetchall()]
-    
+
     # Generate new cards
     lectures = await load_lecture_sources(db, deck.lecture_ids)
     try:
@@ -799,7 +795,7 @@ async def add_cards_to_deck(
             topic=deck.title,
             custom_prompt=request.custom_prompt or deck.custom_prompt,
             language=deck.language,
-            existing_fronts=existing_fronts if existing_fronts else None
+            existing_fronts=existing_fronts if existing_fronts else None,
         )
     except ValueError as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
@@ -807,7 +803,7 @@ async def add_cards_to_deck(
     except Exception as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate cards. Please try again.")
-    
+
     # Create flashcard records
     created_cards = []
     for card_data in cards_data:
@@ -815,21 +811,20 @@ async def add_cards_to_deck(
             deck_id=deck_id,
             front=card_data["front"],
             back=card_data["back"],
-            source_type="ai_generated"
+            source_type="ai_generated",
         )
         db.add(card)
         await db.flush()
         created_cards.append(card)
-    
+
     await db.commit()
-    
+
     # Refresh cards to get IDs
     for card in created_cards:
         await db.refresh(card)
-    
+
     return GenerateFlashcardsResponse(
         deck_id=deck_id,
         cards_generated=len(created_cards),
-        cards=[FlashcardResponse.model_validate(c) for c in created_cards]
+        cards=[FlashcardResponse.model_validate(c) for c in created_cards],
     )
-

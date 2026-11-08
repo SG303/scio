@@ -7,6 +7,7 @@
   never stores anything for an invalid request.
 - Deleting a book deletes its chapters and scrubs all references.
 """
+
 import io
 import json
 import sqlite3
@@ -31,11 +32,15 @@ def make_pdf(page_texts, outline=()):
     """PDF with one text line per '\\n' on each page plus top-level bookmarks
     given as (title, 0-based page index) or (title, index, [children])."""
     writer = PdfWriter()
-    font = writer._add_object(DictionaryObject({
-        NameObject("/Type"): NameObject("/Font"),
-        NameObject("/Subtype"): NameObject("/Type1"),
-        NameObject("/BaseFont"): NameObject("/Helvetica"),
-    }))
+    font = writer._add_object(
+        DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+            }
+        )
+    )
     for text in page_texts:
         writer.add_blank_page(612, 792)
         page = writer.pages[-1]
@@ -48,7 +53,7 @@ def make_pdf(page_texts, outline=()):
         )
     for entry in outline:
         parent = writer.add_outline_item(entry[0], entry[1])
-        for child_title, child_page in (entry[2] if len(entry) > 2 else []):
+        for child_title, child_page in entry[2] if len(entry) > 2 else []:
             writer.add_outline_item(child_title, child_page, parent=parent)
     buffer = io.BytesIO()
     writer.write(buffer)
@@ -114,7 +119,9 @@ async def test_single_wrapping_bookmark_uses_its_children(tmp_path):
     path = tmp_path / "wrapped.pdf"
     path.write_bytes(make_pdf(BOOK_PAGES, [("My Book", 0, [("One", 1), ("Two", 3)])]))
 
-    _, chapters = document_chapters.detect_chapters(await document_chapters.load_units(str(path), None))
+    _, chapters = document_chapters.detect_chapters(
+        await document_chapters.load_units(str(path), None)
+    )
 
     assert [c.title for c in chapters] == ["One", "Two"]
 
@@ -123,7 +130,9 @@ async def test_pdf_without_bookmarks_finds_nothing_for_free(tmp_path):
     path = tmp_path / "plain.pdf"
     path.write_bytes(make_pdf(BOOK_PAGES))
 
-    assert document_chapters.detect_chapters(await document_chapters.load_units(str(path), None)) == ("none", [])
+    assert document_chapters.detect_chapters(
+        await document_chapters.load_units(str(path), None)
+    ) == ("none", [])
 
 
 def test_markdown_h1_headings_outside_code_blocks():
@@ -139,7 +148,9 @@ def test_markdown_h1_headings_outside_code_blocks():
 
 def test_markdown_falls_back_to_h2_when_only_one_h1():
     content = "# Book\n## A\nx\n## B\ny"
-    _, chapters = document_chapters.detect_chapters(DocumentUnits("text", *document_chapters._read_text(content)))
+    _, chapters = document_chapters.detect_chapters(
+        DocumentUnits("text", *document_chapters._read_text(content))
+    )
     assert [c.title for c in chapters] == ["A", "B"]
 
 
@@ -176,24 +187,29 @@ def test_ai_prompt_sends_front_pages_and_page_tops_only():
 
     assert "This book PDF has 100 pages" in prompt
     assert "[100] top of page 100" in prompt
-    assert "SECRET30" in prompt          # first pages in full (table of contents)
-    assert "SECRET31" not in prompt      # later pages: only their top line
+    assert "SECRET30" in prompt  # first pages in full (table of contents)
+    assert "SECRET31" not in prompt  # later pages: only their top line
     assert "NOT the printed page number" in prompt
     assert "every glossary as its own entry" in prompt
 
 
 def test_ai_response_drops_unusable_entries():
-    response = json.dumps({"chapters": [
-        {"title": "Good", "pdf_page": 3},
-        {"title": "Page as text", "pdf_page": "5"},
-        {"title": "Out of range", "pdf_page": 99},
-        {"title": "", "pdf_page": 4},
-        {"title": "No page"},
-        "garbage",
-    ]})
+    response = json.dumps(
+        {
+            "chapters": [
+                {"title": "Good", "pdf_page": 3},
+                {"title": "Page as text", "pdf_page": "5"},
+                {"title": "Out of range", "pdf_page": 99},
+                {"title": "", "pdf_page": 4},
+                {"title": "No page"},
+                "garbage",
+            ]
+        }
+    )
 
     assert document_chapters.parse_ai_response(response, 10) == [
-        Chapter("Good", 3), Chapter("Page as text", 5),
+        Chapter("Good", 3),
+        Chapter("Page as text", 5),
     ]
 
 
@@ -208,7 +224,11 @@ def test_ai_response_without_chapter_list_finds_nothing():
 
 def test_printed_page_numbers_are_moved_to_the_real_page():
     pages = ["Contents\nOrigins 1\nGrowth 3\nDecline 5", "Preface", "Preface"] + [
-        "1 Origins\nx", "", "2 Growth\ny", "", "3: Decline\nz",
+        "1 Origins\nx",
+        "",
+        "2 Growth\ny",
+        "",
+        "3: Decline\nz",
     ]
     # the AI used the printed numbers from the table of contents
     ai = [Chapter("Origins", 1), Chapter("Growth", 3), Chapter("Decline", 5)]
@@ -235,27 +255,31 @@ async def test_detect_proposes_bookmarks_without_storing(db, book_pdf):
     assert proposal.method == "outline" and proposal.unit == "page"
     assert proposal.unit_count == 5 and proposal.ai_available
     assert [(c.title, c.start) for c in proposal.chapters] == [
-        ("Chapter 1 Basics", 2), ("Chapter 2 Networks", 4),
+        ("Chapter 1 Basics", 2),
+        ("Chapter 2 Networks", 4),
     ]
     assert len(await _documents(db)) == 1
 
 
 async def test_split_creates_chapters_and_keeps_the_book(db, book_pdf):
     book = await _add_document(db, file_path=book_pdf, content="x")
-    request = ChapterSplitRequest(chapters=[
-        ChapterRange(title="Chapter 1 Basics", start=2, end=3),
-        ChapterRange(title="Chapter 2 Networks", start=4, end=4),
-    ])
+    request = ChapterSplitRequest(
+        chapters=[
+            ChapterRange(title="Chapter 1 Basics", start=2, end=3),
+            ChapterRange(title="Chapter 2 Networks", start=4, end=4),
+        ]
+    )
 
     created = await documents_router.split_into_chapters(book.id, request, db)
 
     assert [(c.title, c.page_start, c.page_end) for c in created] == [
-        ("Chapter 1 Basics", 2, 3), ("Chapter 2 Networks", 4, 4),
+        ("Chapter 1 Basics", 2, 3),
+        ("Chapter 2 Networks", 4, 4),
     ]
     assert all(c.parent_document_id == book.id and c.doc_type == "study_guide" for c in created)
     assert created[0].content == "Chapter 1 Basics\nAtoms are small\n\nBasics continued"
     assert "Index" not in created[1].content  # deselected back matter stays out
-    assert len(await _documents(db)) == 3     # the book is kept
+    assert len(await _documents(db)) == 3  # the book is kept
 
 
 async def test_a_book_is_split_only_once_and_chapters_not_again(db, book_pdf):
@@ -274,10 +298,12 @@ async def test_a_book_is_split_only_once_and_chapters_not_again(db, book_pdf):
 
 async def test_invalid_range_stores_nothing(db, book_pdf):
     book = await _add_document(db, file_path=book_pdf, content="x")
-    request = ChapterSplitRequest(chapters=[
-        ChapterRange(title="Fine", start=1, end=2),
-        ChapterRange(title="Too far", start=3, end=6),
-    ])
+    request = ChapterSplitRequest(
+        chapters=[
+            ChapterRange(title="Fine", start=1, end=2),
+            ChapterRange(title="Too far", start=3, end=6),
+        ]
+    )
 
     with pytest.raises(HTTPException) as error:
         await documents_router.split_into_chapters(book.id, request, db)
@@ -292,20 +318,28 @@ async def test_ai_detection_for_a_pdf_without_bookmarks(db, tmp_path, monkeypatc
     book = await _add_document(db, file_path=str(path), content="x")
 
     async def fake_completion(**kwargs):
-        return json.dumps({"chapters": [
-            {"title": "Chapter 1 Basics", "pdf_page": 1},     # printed number
-            {"title": "Chapter 2 Networks", "pdf_page": 4},
-        ]})
+        return json.dumps(
+            {
+                "chapters": [
+                    {"title": "Chapter 1 Basics", "pdf_page": 1},  # printed number
+                    {"title": "Chapter 2 Networks", "pdf_page": 4},
+                ]
+            }
+        )
+
     monkeypatch.setattr(document_chapters, "chat_completion_json", fake_completion)
 
     free = await documents_router.detect_chapters(book.id, ChapterDetectRequest(), db)
-    proposal = await documents_router.detect_chapters(book.id, ChapterDetectRequest(ai_model_id=1), db)
+    proposal = await documents_router.detect_chapters(
+        book.id, ChapterDetectRequest(ai_model_id=1), db
+    )
 
     assert free.method == "none" and free.ai_available
     assert free.ai_input_tokens and free.ai_input_tokens > 0
     assert proposal.method == "ai"
     assert [(c.title, c.start) for c in proposal.chapters] == [
-        ("Chapter 1 Basics", 2), ("Chapter 2 Networks", 4),
+        ("Chapter 1 Basics", 2),
+        ("Chapter 2 Networks", 4),
     ]
 
 
@@ -316,6 +350,7 @@ async def test_failed_ai_detection_reports_an_error(db, tmp_path, monkeypatch):
 
     async def fake_completion(**kwargs):
         return json.dumps({"chapters": []})
+
     monkeypatch.setattr(document_chapters, "chat_completion_json", fake_completion)
 
     with pytest.raises(HTTPException) as error:

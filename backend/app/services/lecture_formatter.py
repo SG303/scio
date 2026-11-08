@@ -5,6 +5,7 @@ The owner checks the result in a diff view; the server additionally makes
 sure every image survives unchanged, because a lost image link is hard to
 spot in a diff and impossible to recover from the AI output.
 """
+
 import json
 import logging
 import re

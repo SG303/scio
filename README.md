@@ -162,8 +162,9 @@ cd backend
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 
-# Backend tests
+# Backend tests and lint
 uv run pytest
+uv run ruff check && uv run ruff format --check
 
 # Frontend (in another terminal)
 cd frontend

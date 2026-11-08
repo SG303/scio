@@ -8,14 +8,15 @@ so all cases run synchronously.
 Rating scale: 1=Again, 2=Hard, 3=Good, 4=Easy.
 Learning steps: [1, 10] minutes. EF bounds: [1.3, 3.0].
 """
+
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from app.services.spaced_repetition import (
-    calculate_next_review,
     LEARNING_STEPS,
     MIN_EF,
+    calculate_next_review,
 )
 
 
@@ -180,9 +181,7 @@ class TestReview:
 
     def test_good_multiplies_interval_by_ef(self):
         # reps 2 -> 3: interval = round(prev_interval * EF)
-        _, new_ef, new_interval, new_reps, _, _ = run(
-            "review", 3, ef=2.5, interval=6, reps=2
-        )
+        _, new_ef, new_interval, new_reps, _, _ = run("review", 3, ef=2.5, interval=6, reps=2)
         assert new_reps == 3
         assert new_interval == 15  # round(6 * 2.5)
         assert new_ef == pytest.approx(2.5)

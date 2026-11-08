@@ -9,6 +9,7 @@
   always writes a non-template config and the direct generate endpoint
   refuses template ids.
 """
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -19,8 +20,8 @@ from app.database import Base
 from app.routers import flashcards as flashcards_router
 from app.routers import subjects as subjects_router
 from app.routers import tests as tests_router
-from app.schemas.flashcard import CreateAndGenerateDeckRequest, FlashcardDeckUpdate
 from app.schemas import test as test_schemas
+from app.schemas.flashcard import CreateAndGenerateDeckRequest, FlashcardDeckUpdate
 from app.schemas.test import CreateAndGenerateRequest
 
 FAKE_QUESTIONS = [
@@ -44,7 +45,9 @@ async def db_with_subject():
             await db.flush()
 
             config = models.TestConfig(
-                title="Existing", ai_model_id=model.id, document_ids=[],
+                title="Existing",
+                ai_model_id=model.id,
+                document_ids=[],
                 subject_id=subject.id,
             )
             db.add(config)
@@ -52,10 +55,15 @@ async def db_with_subject():
             test = models.Test(config_id=config.id, total_questions=1)
             db.add(test)
             await db.flush()
-            db.add(models.Question(
-                test_id=test.id, question_number=1, question_text="Old question",
-                choices=[{"index": 0, "text": "A"}], correct_answer=0,
-            ))
+            db.add(
+                models.Question(
+                    test_id=test.id,
+                    question_number=1,
+                    question_text="Old question",
+                    choices=[{"index": 0, "text": "A"}],
+                    correct_answer=0,
+                )
+            )
 
             deck = models.FlashcardDeck(title="Existing deck", subject_id=subject.id)
             db.add(deck)
@@ -78,7 +86,9 @@ def _test_request(model, **kw):
     )
 
 
-async def test_create_and_generate_test_with_subject_dedupes_and_links(db_with_subject, monkeypatch):
+async def test_create_and_generate_test_with_subject_dedupes_and_links(
+    db_with_subject, monkeypatch
+):
     db, subject, model = db_with_subject
     seen = {}
 
@@ -126,17 +136,24 @@ async def test_create_and_generate_test_ignores_is_template(db_with_subject, mon
 
     monkeypatch.setattr(tests_router, "generate_test_questions", fake_generate)
 
-    request = CreateAndGenerateRequest.model_validate({
-        "title": "T", "num_questions": 1, "ai_model_id": model.id,
-        "document_ids": [], "is_template": True,
-    })
+    request = CreateAndGenerateRequest.model_validate(
+        {
+            "title": "T",
+            "num_questions": 1,
+            "ai_model_id": model.id,
+            "document_ids": [],
+            "is_template": True,
+        }
+    )
     response = await tests_router.create_and_generate_test(request, db, progress_token=None)
 
     config = await db.get(models.TestConfig, response.config_id)
     assert config.is_template is False
 
 
-async def test_create_and_generate_test_unknown_subject_writes_nothing(db_with_subject, monkeypatch):
+async def test_create_and_generate_test_unknown_subject_writes_nothing(
+    db_with_subject, monkeypatch
+):
     db, subject, model = db_with_subject
 
     async def fake_generate(**kwargs):  # pragma: no cover - must not be called
@@ -157,7 +174,9 @@ async def test_create_and_generate_test_unknown_subject_writes_nothing(db_with_s
 async def test_direct_generate_refuses_templates(db_with_subject):
     db, subject, model = db_with_subject
     template = await tests_router.create_test_config(
-        test_schemas.TestConfigCreate(title="Tpl", ai_model_id=model.id, document_ids=[], is_template=True),
+        test_schemas.TestConfigCreate(
+            title="Tpl", ai_model_id=model.id, document_ids=[], is_template=True
+        ),
         db,
     )
 
@@ -173,15 +192,20 @@ async def test_template_cannot_get_a_subject(db_with_subject):
     with pytest.raises(HTTPException) as error:
         await tests_router.create_test_config(
             test_schemas.TestConfigCreate(
-                title="Tpl", ai_model_id=model.id, document_ids=[],
-                is_template=True, subject_id=subject.id,
+                title="Tpl",
+                ai_model_id=model.id,
+                document_ids=[],
+                is_template=True,
+                subject_id=subject.id,
             ),
             db,
         )
     assert error.value.status_code == 400
 
     template = await tests_router.create_test_config(
-        test_schemas.TestConfigCreate(title="Tpl", ai_model_id=model.id, document_ids=[], is_template=True),
+        test_schemas.TestConfigCreate(
+            title="Tpl", ai_model_id=model.id, document_ids=[], is_template=True
+        ),
         db,
     )
     with pytest.raises(HTTPException) as error:
@@ -217,9 +241,9 @@ async def test_patch_config_assigns_and_unassigns_subject(db_with_subject):
 
 async def test_delete_config_removes_tests_but_not_templates(db_with_subject):
     db, subject, model = db_with_subject
-    config = (await db.execute(
-        select(models.TestConfig).where(models.TestConfig.title == "Existing")
-    )).scalar_one()
+    config = (
+        await db.execute(select(models.TestConfig).where(models.TestConfig.title == "Existing"))
+    ).scalar_one()
 
     await tests_router.delete_test_config(config.id, db)
 
@@ -228,7 +252,9 @@ async def test_delete_config_removes_tests_but_not_templates(db_with_subject):
     assert await _count(db, models.Question) == 0
 
     template = await tests_router.create_test_config(
-        test_schemas.TestConfigCreate(title="Tpl", ai_model_id=model.id, document_ids=[], is_template=True),
+        test_schemas.TestConfigCreate(
+            title="Tpl", ai_model_id=model.id, document_ids=[], is_template=True
+        ),
         db,
     )
     with pytest.raises(HTTPException) as error:
@@ -243,10 +269,12 @@ async def test_template_list_reports_attached_test_count(db_with_subject):
     )
     db.add(template)
     await db.flush()
-    db.add_all([
-        models.Test(config_id=template.id, total_questions=1),
-        models.Test(config_id=template.id, total_questions=1),
-    ])
+    db.add_all(
+        [
+            models.Test(config_id=template.id, total_questions=1),
+            models.Test(config_id=template.id, total_questions=1),
+        ]
+    )
     await db.commit()
 
     templates = await tests_router.list_test_templates(db)
@@ -264,7 +292,9 @@ async def test_list_tests_reports_subject_and_template_origin(db_with_subject):
     ]
 
 
-async def test_create_and_generate_deck_with_subject_dedupes_and_links(db_with_subject, monkeypatch):
+async def test_create_and_generate_deck_with_subject_dedupes_and_links(
+    db_with_subject, monkeypatch
+):
     db, subject, model = db_with_subject
     seen = {}
 
@@ -285,7 +315,9 @@ async def test_create_and_generate_deck_with_subject_dedupes_and_links(db_with_s
     assert response.deck.subject_id == subject.id
 
 
-async def test_create_and_generate_deck_unknown_subject_writes_nothing(db_with_subject, monkeypatch):
+async def test_create_and_generate_deck_unknown_subject_writes_nothing(
+    db_with_subject, monkeypatch
+):
     db, subject, model = db_with_subject
 
     async def fake_generate(**kwargs):  # pragma: no cover - must not be called

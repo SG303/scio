@@ -1,17 +1,19 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import (
+    JSON,
+    Boolean,
     Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
     Integer,
     String,
     Text,
-    Boolean,
-    DateTime,
-    Date,
-    ForeignKey,
-    JSON,
-    Float,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+
 from app.database import Base
 
 
@@ -101,9 +103,7 @@ class Document(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
-    doc_type = Column(
-        String(50), nullable=False
-    )  # exam_objectives, study_guide, example_questions
+    doc_type = Column(String(50), nullable=False)  # exam_objectives, study_guide, example_questions
     content = Column(Text, nullable=True)  # Extracted text content
     file_path = Column(String(500), nullable=True)  # Original file path
     file_name = Column(String(255), nullable=True)
@@ -124,16 +124,10 @@ class TestConfig(Base):
     num_questions = Column(Integer, nullable=False, default=10)
     num_choices = Column(Integer, nullable=False, default=4)
     ai_model_id = Column(Integer, ForeignKey("ai_models.id"), nullable=False)
-    document_ids = Column(
-        JSON, nullable=False
-    )  # List of document IDs to use as context
+    document_ids = Column(JSON, nullable=False)  # List of document IDs to use as context
     lecture_ids = Column(JSON, nullable=True)  # Lecture notes used as context
-    is_template = Column(
-        Boolean, default=False
-    )  # Whether this config is a reusable template
-    custom_prompt = Column(
-        Text, nullable=True
-    )  # Optional custom prompt for test generation
+    is_template = Column(Boolean, default=False)  # Whether this config is a reusable template
+    custom_prompt = Column(Text, nullable=True)  # Optional custom prompt for test generation
     language = Column(String(50), nullable=True)  # NULL = language of the material
     subject_id = Column(
         Integer, ForeignKey("subjects.id"), nullable=True, index=True
@@ -154,12 +148,8 @@ class Test(Base):
     __tablename__ = "tests"
 
     id = Column(Integer, primary_key=True, index=True)
-    config_id = Column(
-        Integer, ForeignKey("test_configs.id"), nullable=False, index=True
-    )
-    status = Column(
-        String(50), default="generated"
-    )  # generated, in_progress, completed
+    config_id = Column(Integer, ForeignKey("test_configs.id"), nullable=False, index=True)
+    status = Column(String(50), default="generated")  # generated, in_progress, completed
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     score = Column(Integer, nullable=True)  # Percentage score
@@ -169,9 +159,7 @@ class Test(Base):
 
     # Relationships
     config = relationship("TestConfig", back_populates="tests")
-    questions = relationship(
-        "Question", back_populates="test", cascade="all, delete-orphan"
-    )
+    questions = relationship("Question", back_populates="test", cascade="all, delete-orphan")
 
 
 class Question(Base):
@@ -221,9 +209,7 @@ class FlashcardDeck(Base):
 
     # Relationships
     ai_model = relationship("AIModel")
-    cards = relationship(
-        "Flashcard", back_populates="deck", cascade="all, delete-orphan"
-    )
+    cards = relationship("Flashcard", back_populates="deck", cascade="all, delete-orphan")
     study_sessions = relationship(
         "StudySession", back_populates="deck", cascade="all, delete-orphan"
     )
@@ -236,18 +222,14 @@ class Flashcard(Base):
     __tablename__ = "flashcards"
 
     id = Column(Integer, primary_key=True, index=True)
-    deck_id = Column(
-        Integer, ForeignKey("flashcard_decks.id"), nullable=False, index=True
-    )
+    deck_id = Column(Integer, ForeignKey("flashcard_decks.id"), nullable=False, index=True)
 
     # Content
     front = Column(Text, nullable=False)  # Question/prompt
     back = Column(Text, nullable=False)  # Answer
 
     # SM-2 Spaced Repetition Fields
-    state = Column(
-        String(20), default="new"
-    )  # 'new', 'learning', 'review', 'relearning'
+    state = Column(String(20), default="new")  # 'new', 'learning', 'review', 'relearning'
     easiness_factor = Column(Float, default=2.5)  # EF, minimum 1.3
     interval_days = Column(Integer, default=0)  # Current interval in days
     repetitions = Column(Integer, default=0)  # Consecutive correct reviews
@@ -257,9 +239,7 @@ class Flashcard(Base):
     learning_step = Column(Integer, default=0)  # Current step in learning sequence
 
     # Source tracking (for test integration)
-    source_type = Column(
-        String(50), nullable=True
-    )  # 'ai_generated', 'from_test', 'manual'
+    source_type = Column(String(50), nullable=True)  # 'ai_generated', 'from_test', 'manual'
     source_question_id = Column(Integer, ForeignKey("questions.id"), nullable=True)
 
     created_at = Column(DateTime, default=utc_now)
@@ -267,9 +247,7 @@ class Flashcard(Base):
 
     # Relationships
     deck = relationship("FlashcardDeck", back_populates="cards")
-    reviews = relationship(
-        "FlashcardReview", back_populates="card", cascade="all, delete-orphan"
-    )
+    reviews = relationship("FlashcardReview", back_populates="card", cascade="all, delete-orphan")
     source_question = relationship("Question")
 
 
@@ -283,9 +261,7 @@ class FlashcardReview(Base):
     # A review belongs to exactly one optional study session. Persisting this
     # relation prevents overlapping sessions of the same deck from sharing
     # their completion statistics.
-    session_id = Column(
-        Integer, ForeignKey("study_sessions.id"), nullable=True, index=True
-    )
+    session_id = Column(Integer, ForeignKey("study_sessions.id"), nullable=True, index=True)
 
     rating = Column(Integer, nullable=False)  # 1=Again, 2=Hard, 3=Good, 4=Easy
     time_taken_ms = Column(Integer, nullable=True)  # How long user took to answer
@@ -307,9 +283,7 @@ class StudySession(Base):
     __tablename__ = "study_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    deck_id = Column(
-        Integer, ForeignKey("flashcard_decks.id"), nullable=True
-    )  # Null = mixed decks
+    deck_id = Column(Integer, ForeignKey("flashcard_decks.id"), nullable=True)  # Null = mixed decks
 
     started_at = Column(DateTime, default=utc_now)
     completed_at = Column(DateTime, nullable=True)
@@ -329,9 +303,7 @@ class StudySession(Base):
     new_cards_reviewed_today = Column(
         Integer, default=0
     )  # Count of new cards reviewed today (for daily limit)
-    study_date = Column(
-        Date, nullable=True
-    )  # Date of session (for daily limit tracking)
+    study_date = Column(Date, nullable=True)  # Date of session (for daily limit tracking)
 
     # Relationships
     deck = relationship("FlashcardDeck", back_populates="study_sessions")

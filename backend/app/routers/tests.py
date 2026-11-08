@@ -1,28 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update, func
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import Test, TestConfig, Question, Document, AIModel, Flashcard
-from app.schemas.test import (
-    TestConfigCreate, TestConfigUpdate, TestConfigResponse,
-    TestResponse, TestDetailResponse,
-    QuestionResponse, AnswerSubmit, TestResultResponse,
-    Choice, GenerateFromTemplateRequest, CreateAndGenerateRequest
-)
-from app.services.test_generator import generate_test_questions, verify_question_integrity
+from app.models import AIModel, Document, Flashcard, Question, Test, TestConfig
 from app.routers.settings import get_verification_model
+from app.schemas.test import (
+    AnswerSubmit,
+    Choice,
+    CreateAndGenerateRequest,
+    GenerateFromTemplateRequest,
+    QuestionResponse,
+    TestConfigCreate,
+    TestConfigResponse,
+    TestConfigUpdate,
+    TestDetailResponse,
+    TestResponse,
+    TestResultResponse,
+)
 from app.services import generation_progress
 from app.services.generation_progress import GenerationCancelled
 from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import ensure_subject_exists, existing_subject_questions
+from app.services.test_generator import generate_test_questions, verify_question_integrity
 
 
-def _progress_reporter(token: Optional[str]):
+def _progress_reporter(token: str | None):
     """P6.2: build an on_progress callback for a generation token (or None)."""
     if not token:
         return None
@@ -33,7 +40,7 @@ def _progress_reporter(token: Optional[str]):
     return report
 
 
-def build_test_response(test: Test, config: Optional[TestConfig]) -> TestResponse:
+def build_test_response(test: Test, config: TestConfig | None) -> TestResponse:
     """Single place that maps a Test (+ its config) to TestResponse, so
     config-derived fields cannot be forgotten in one of the endpoints."""
     return TestResponse(
@@ -51,15 +58,13 @@ def build_test_response(test: Test, config: Optional[TestConfig]) -> TestRespons
         created_at=test.created_at,
     )
 
+
 router = APIRouter(prefix="/api/tests", tags=["tests"])
 logger = logging.getLogger(__name__)
 
 
 @router.post("/configs", response_model=TestConfigResponse)
-async def create_test_config(
-    config: TestConfigCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_test_config(config: TestConfigCreate, db: AsyncSession = Depends(get_db)):
     """Create a new test configuration"""
     # Validate AI model exists and is enabled
     result = await db.execute(select(AIModel).where(AIModel.id == config.ai_model_id))
@@ -68,12 +73,10 @@ async def create_test_config(
         raise HTTPException(status_code=404, detail="AI model not found")
     if not ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model is not enabled")
-    
+
     # Validate documents exist (if any provided) - single query instead of N queries
     if config.document_ids:
-        result = await db.execute(
-            select(Document.id).where(Document.id.in_(config.document_ids))
-        )
+        result = await db.execute(select(Document.id).where(Document.id.in_(config.document_ids)))
         found_ids = set(row[0] for row in result.fetchall())
         missing_ids = set(config.document_ids) - found_ids
         if missing_ids:
@@ -82,7 +85,7 @@ async def create_test_config(
     if config.is_template and config.subject_id is not None:
         raise HTTPException(status_code=400, detail="Templates cannot belong to a subject")
     await ensure_subject_exists(db, config.subject_id)
-    
+
     db_config = TestConfig(**config.model_dump())
     db.add(db_config)
     await db.commit()
@@ -90,7 +93,7 @@ async def create_test_config(
     return db_config
 
 
-@router.get("/configs", response_model=List[TestConfigResponse])
+@router.get("/configs", response_model=list[TestConfigResponse])
 async def list_test_configs(db: AsyncSession = Depends(get_db)):
     """List all test configurations (non-templates)"""
     result = await db.execute(
@@ -104,16 +107,11 @@ async def list_test_configs(db: AsyncSession = Depends(get_db)):
 
 @router.patch("/configs/{config_id}", response_model=TestConfigResponse)
 async def update_test_config(
-    config_id: int,
-    update_data: TestConfigUpdate,
-    db: AsyncSession = Depends(get_db)
+    config_id: int, update_data: TestConfigUpdate, db: AsyncSession = Depends(get_db)
 ):
     """Assign or unassign a subject for a (non-template) test config."""
     result = await db.execute(
-        select(TestConfig).where(
-            TestConfig.id == config_id,
-            TestConfig.is_template.is_(False)
-        )
+        select(TestConfig).where(TestConfig.id == config_id, TestConfig.is_template.is_(False))
     )
     config = result.scalar_one_or_none()
     if not config:
@@ -133,10 +131,7 @@ async def update_test_config(
 async def delete_test_config(config_id: int, db: AsyncSession = Depends(get_db)):
     """Delete a (non-template) test config together with all of its tests."""
     result = await db.execute(
-        select(TestConfig).where(
-            TestConfig.id == config_id,
-            TestConfig.is_template.is_(False)
-        )
+        select(TestConfig).where(TestConfig.id == config_id, TestConfig.is_template.is_(False))
     )
     config = result.scalar_one_or_none()
     if not config:
@@ -148,10 +143,8 @@ async def delete_test_config(config_id: int, db: AsyncSession = Depends(get_db))
     return {"message": "Test configuration deleted successfully"}
 
 
-@router.get("/configs/{config_id}/scores", response_model=List[int])
-async def get_config_scores(
-    config_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)
-):
+@router.get("/configs/{config_id}/scores", response_model=list[int])
+async def get_config_scores(config_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)):
     """
     P5.1: chronological scores of the last completed tests for a config.
     Used by the frontend to render a score sparkline per template.
@@ -167,7 +160,7 @@ async def get_config_scores(
     return list(reversed(scores))
 
 
-@router.get("/templates", response_model=List[TestConfigResponse])
+@router.get("/templates", response_model=list[TestConfigResponse])
 async def list_test_templates(db: AsyncSession = Depends(get_db)):
     """List all test templates"""
     result = await db.execute(
@@ -199,10 +192,7 @@ async def list_test_templates(db: AsyncSession = Depends(get_db)):
 async def get_test_template(template_id: int, db: AsyncSession = Depends(get_db)):
     """Get a specific test template"""
     result = await db.execute(
-        select(TestConfig).where(
-            TestConfig.id == template_id,
-            TestConfig.is_template.is_(True)
-        )
+        select(TestConfig).where(TestConfig.id == template_id, TestConfig.is_template.is_(True))
     )
     template = result.scalar_one_or_none()
     if not template:
@@ -212,21 +202,16 @@ async def get_test_template(template_id: int, db: AsyncSession = Depends(get_db)
 
 @router.put("/templates/{template_id}", response_model=TestConfigResponse)
 async def update_test_template(
-    template_id: int,
-    config: TestConfigCreate,
-    db: AsyncSession = Depends(get_db)
+    template_id: int, config: TestConfigCreate, db: AsyncSession = Depends(get_db)
 ):
     """Update a test template"""
     result = await db.execute(
-        select(TestConfig).where(
-            TestConfig.id == template_id,
-            TestConfig.is_template.is_(True)
-        )
+        select(TestConfig).where(TestConfig.id == template_id, TestConfig.is_template.is_(True))
     )
     template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    
+
     # Validate AI model exists and is enabled
     result = await db.execute(select(AIModel).where(AIModel.id == config.ai_model_id))
     ai_model = result.scalar_one_or_none()
@@ -234,17 +219,15 @@ async def update_test_template(
         raise HTTPException(status_code=404, detail="AI model not found")
     if not ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model is not enabled")
-    
+
     # Validate documents exist (if any provided) - single query instead of N queries
     if config.document_ids:
-        result = await db.execute(
-            select(Document.id).where(Document.id.in_(config.document_ids))
-        )
+        result = await db.execute(select(Document.id).where(Document.id.in_(config.document_ids)))
         found_ids = set(row[0] for row in result.fetchall())
         missing_ids = set(config.document_ids) - found_ids
         if missing_ids:
             raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
-    
+
     # Update template fields
     template.title = config.title
     template.num_questions = config.num_questions
@@ -252,7 +235,7 @@ async def update_test_template(
     template.ai_model_id = config.ai_model_id
     template.document_ids = config.document_ids
     template.custom_prompt = config.custom_prompt
-    
+
     await db.commit()
     await db.refresh(template)
     return template
@@ -262,10 +245,7 @@ async def update_test_template(
 async def delete_test_template(template_id: int, db: AsyncSession = Depends(get_db)):
     """Delete a test template"""
     result = await db.execute(
-        select(TestConfig).where(
-            TestConfig.id == template_id,
-            TestConfig.is_template.is_(True)
-        )
+        select(TestConfig).where(TestConfig.id == template_id, TestConfig.is_template.is_(True))
     )
     template = result.scalar_one_or_none()
     if not template:
@@ -286,7 +266,7 @@ async def delete_test_template(template_id: int, db: AsyncSession = Depends(get_
 async def create_and_generate_test(
     request: CreateAndGenerateRequest,
     db: AsyncSession = Depends(get_db),
-    progress_token: Optional[str] = Query(None),
+    progress_token: str | None = Query(None),
 ):
     """P5.2: create a config and generate its first test in one commit.
 
@@ -304,16 +284,12 @@ async def create_and_generate_test(
     # Validate documents (if any provided)
     documents = []
     if request.document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(request.document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(request.document_ids)))
         documents = list(result.scalars().all())
         found_ids = {d.id for d in documents}
         missing_ids = set(request.document_ids) - found_ids
         if missing_ids:
-            raise HTTPException(
-                status_code=404, detail=f"Document(s) not found: {missing_ids}"
-            )
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
 
     await ensure_subject_exists(db, request.subject_id)
 
@@ -334,9 +310,7 @@ async def create_and_generate_test(
     # AI call first — nothing is persisted if it fails
     lectures = await load_lecture_sources(db, request.lecture_ids)
     if progress_token:
-        generation_progress.update(
-            progress_token, status="running", stage="Starting generation"
-        )
+        generation_progress.update(progress_token, status="running", stage="Starting generation")
     try:
         questions_data = await generate_test_questions(
             documents=documents + lectures,
@@ -362,9 +336,7 @@ async def create_and_generate_test(
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
         if progress_token:
             generation_progress.fail(progress_token, "Generation failed")
-        raise HTTPException(
-            status_code=500, detail="Failed to generate test. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Failed to generate test. Please try again.")
 
     # Persist config + test + questions in a single commit
     db_config = TestConfig(
@@ -410,9 +382,9 @@ async def create_and_generate_test(
 @router.post("/generate/{config_id}", response_model=TestResponse)
 async def generate_test(
     config_id: int,
-    request: Optional[GenerateFromTemplateRequest] = Body(default=None),
+    request: GenerateFromTemplateRequest | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
-    progress_token: Optional[str] = Query(None),
+    progress_token: str | None = Query(None),
 ):
     """Generate a new test from a configuration or template"""
     # Get config with AI model
@@ -433,27 +405,25 @@ async def generate_test(
             status_code=400,
             detail="Templates cannot generate tests directly. Use the template in the Create Test wizard.",
         )
-    
+
     # Validate AI model exists
     if not config.ai_model:
         raise HTTPException(status_code=400, detail="AI model not found for this configuration")
-    
+
     if not config.ai_model.is_enabled:
         raise HTTPException(status_code=400, detail="AI model is not enabled")
-    
+
     # Determine number of questions (allow override for templates)
     num_questions = config.num_questions
     if request is not None and request.num_questions is not None:
         num_questions = request.num_questions
-    
+
     # Get documents (if any) - single query instead of N queries
     documents = []
     if config.document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(config.document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(config.document_ids)))
         documents = list(result.scalars().all())
-    
+
     # Query existing questions from same template to avoid duplicates
     existing_result = await db.execute(
         select(Question.question_text)
@@ -461,13 +431,11 @@ async def generate_test(
         .where(Test.config_id == config_id)
     )
     existing_questions = [row[0] for row in existing_result.fetchall()]
-    
+
     # Generate questions using AI
     lectures = await load_lecture_sources(db, config.lecture_ids)
     if progress_token:
-        generation_progress.update(
-            progress_token, status="running", stage="Starting generation"
-        )
+        generation_progress.update(progress_token, status="running", stage="Starting generation")
     try:
         questions_data = await generate_test_questions(
             documents=documents + lectures,
@@ -495,17 +463,15 @@ async def generate_test(
         logger.error(f"Failed to generate test questions: {str(e)}", exc_info=True)
         if progress_token:
             generation_progress.fail(progress_token, "Generation failed")
-        raise HTTPException(status_code=500, detail="Failed to generate test. Please try again or contact support.")
+        raise HTTPException(
+            status_code=500, detail="Failed to generate test. Please try again or contact support."
+        )
 
     # Create test
-    test = Test(
-        config_id=config.id,
-        status="generated",
-        total_questions=len(questions_data)
-    )
+    test = Test(config_id=config.id, status="generated", total_questions=len(questions_data))
     db.add(test)
     await db.flush()
-    
+
     # Create questions
     for i, q_data in enumerate(questions_data):
         question = Question(
@@ -514,26 +480,24 @@ async def generate_test(
             question_text=q_data["question"],
             choices=[{"index": j, "text": c} for j, c in enumerate(q_data["choices"])],
             correct_answer=q_data["correct_answer"],
-            explanation=q_data.get("explanation", "")
+            explanation=q_data.get("explanation", ""),
         )
         db.add(question)
-    
+
     await db.commit()
     await db.refresh(test)
-    
+
     return build_test_response(test, config)
 
 
-@router.get("", response_model=List[TestResponse])
+@router.get("", response_model=list[TestResponse])
 async def list_tests(db: AsyncSession = Depends(get_db)):
     """List all tests"""
     result = await db.execute(
-        select(Test)
-        .options(selectinload(Test.config))
-        .order_by(Test.created_at.desc())
+        select(Test).options(selectinload(Test.config)).order_by(Test.created_at.desc())
     )
     tests = result.scalars().all()
-    
+
     return [build_test_response(t, t.config) for t in tests]
 
 
@@ -548,7 +512,7 @@ async def get_test(test_id: int, db: AsyncSession = Depends(get_db)):
     test = result.scalar_one_or_none()
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
-    
+
     # Build questions response
     questions = []
     for q in sorted(test.questions, key=lambda x: x.question_number):
@@ -561,10 +525,10 @@ async def get_test(test_id: int, db: AsyncSession = Depends(get_db)):
             is_correct=q.is_correct,
             # Only show correct answer and explanation if test is completed
             correct_answer=q.correct_answer if test.status == "completed" else None,
-            explanation=q.explanation if test.status == "completed" else None
+            explanation=q.explanation if test.status == "completed" else None,
         )
         questions.append(q_response)
-    
+
     return TestDetailResponse(
         id=test.id,
         config_id=test.config_id,
@@ -576,7 +540,7 @@ async def get_test(test_id: int, db: AsyncSession = Depends(get_db)):
         total_questions=test.total_questions,
         correct_answers=test.correct_answers,
         created_at=test.created_at,
-        questions=questions
+        questions=questions,
     )
 
 
@@ -589,51 +553,44 @@ async def start_test(test_id: int, db: AsyncSession = Depends(get_db)):
     test = result.scalar_one_or_none()
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
-    
+
     if test.status != "generated":
         raise HTTPException(status_code=400, detail="Test has already been started")
-    
+
     test.status = "in_progress"
     test.started_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(test)
-    
+
     return build_test_response(test, test.config)
 
 
 @router.post("/{test_id}/answer")
-async def submit_answer(
-    test_id: int,
-    answer: AnswerSubmit,
-    db: AsyncSession = Depends(get_db)
-):
+async def submit_answer(test_id: int, answer: AnswerSubmit, db: AsyncSession = Depends(get_db)):
     """Submit an answer for a question"""
     # Get test
     result = await db.execute(select(Test).where(Test.id == test_id))
     test = result.scalar_one_or_none()
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
-    
+
     if test.status != "in_progress":
         raise HTTPException(status_code=400, detail="Test is not in progress")
-    
+
     # Get question
     result = await db.execute(
-        select(Question).where(
-            Question.id == answer.question_id,
-            Question.test_id == test_id
-        )
+        select(Question).where(Question.id == answer.question_id, Question.test_id == test_id)
     )
     question = result.scalar_one_or_none()
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
-    
+
     # Update answer
     question.user_answer = answer.answer
-    question.is_correct = (answer.answer == question.correct_answer)
-    
+    question.is_correct = answer.answer == question.correct_answer
+
     await db.commit()
-    
+
     return {"message": "Answer submitted", "is_correct": question.is_correct}
 
 
@@ -641,51 +598,51 @@ async def submit_answer(
 async def submit_test(test_id: int, db: AsyncSession = Depends(get_db)):
     """Submit a test for grading"""
     result = await db.execute(
-        select(Test)
-        .options(selectinload(Test.questions))
-        .where(Test.id == test_id)
+        select(Test).options(selectinload(Test.questions)).where(Test.id == test_id)
     )
     test = result.scalar_one_or_none()
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
-    
+
     if test.status == "completed":
         raise HTTPException(status_code=400, detail="Test has already been submitted")
-    
+
     # Calculate score
     correct = sum(1 for q in test.questions if q.is_correct)
     total = len(test.questions)
     score = int((correct / total) * 100) if total > 0 else 0
-    
+
     # Update test
     test.status = "completed"
     test.completed_at = datetime.now(timezone.utc)
     test.score = score
     test.correct_answers = correct
-    
+
     await db.commit()
-    
+
     # Build response with full question details
     questions = []
     for q in sorted(test.questions, key=lambda x: x.question_number):
-        questions.append(QuestionResponse(
-            id=q.id,
-            question_number=q.question_number,
-            question_text=q.question_text,
-            choices=[Choice(**c) for c in q.choices],
-            user_answer=q.user_answer,
-            is_correct=q.is_correct,
-            correct_answer=q.correct_answer,
-            explanation=q.explanation
-        ))
-    
+        questions.append(
+            QuestionResponse(
+                id=q.id,
+                question_number=q.question_number,
+                question_text=q.question_text,
+                choices=[Choice(**c) for c in q.choices],
+                user_answer=q.user_answer,
+                is_correct=q.is_correct,
+                correct_answer=q.correct_answer,
+                explanation=q.explanation,
+            )
+        )
+
     return TestResultResponse(
         test_id=test.id,
         status=test.status,
         score=score,
         total_questions=total,
         correct_answers=correct,
-        questions=questions
+        questions=questions,
     )
 
 
@@ -712,9 +669,7 @@ async def _clear_flashcard_source_for_test(test_id: int, db: AsyncSession):
     await db.execute(
         update(Flashcard)
         .where(
-            Flashcard.source_question_id.in_(
-                select(Question.id).where(Question.test_id == test_id)
-            )
+            Flashcard.source_question_id.in_(select(Question.id).where(Question.test_id == test_id))
         )
         .values(source_question_id=None)
     )
@@ -737,49 +692,43 @@ async def _clear_flashcard_source_for_config(config_id: int, db: AsyncSession):
 
 @router.post("/{test_id}/questions/{question_id}/verify")
 async def verify_single_question(
-    test_id: int, 
-    question_id: int, 
-    db: AsyncSession = Depends(get_db)
+    test_id: int, question_id: int, db: AsyncSession = Depends(get_db)
 ):
     """Verify a specific question's validity using AI (only allowed after test completion)"""
-    
+
     # 1. Fetch Test and Question
     result = await db.execute(
         select(Question)
         .join(Test, Question.test_id == Test.id)
-        .where(
-            Question.id == question_id,
-            Test.id == test_id
-        )
+        .where(Question.id == question_id, Test.id == test_id)
         .options(selectinload(Question.test))
     )
     question = result.scalar_one_or_none()
-    
+
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
-        
+
     # 2. Enforce "Review Phase" Only
     if question.test.status != "completed":
         raise HTTPException(
-            status_code=400, 
-            detail="Verification is only available after completing the test."
+            status_code=400, detail="Verification is only available after completing the test."
         )
 
     # 3. Prepare data for the AI
     # Helper to extract text from choices structure
     choices_text = [c["text"] for c in sorted(question.choices, key=lambda x: x["index"])]
-    
+
     try:
         verification_result = await verify_question_integrity(
             question_text=question.question_text,
             choices=choices_text,
             correct_answer_index=question.correct_answer,
             explanation=question.explanation,
-            verification_model=await get_verification_model(db)
+            verification_model=await get_verification_model(db),
         )
-        
+
         return verification_result
-        
+
     except Exception as e:
         logger.error(f"Verification failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to verify question with AI")

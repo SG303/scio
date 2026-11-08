@@ -22,14 +22,13 @@ mid-flight and finishes in the background (its result is discarded).
 
 import time
 import uuid
-from typing import Dict, Optional
 
 # Finished entries are kept long enough for the final poll to read them;
 # abandoned entries (browser closed mid-generation) are reaped later.
 COMPLETED_TTL = 300  # 5 minutes
 RUNNING_TTL = 1800  # 30 minutes (very large generations)
 
-_entries: Dict[str, dict] = {}
+_entries: dict[str, dict] = {}
 
 _CANCELLED_MESSAGE = "Generation cancelled by user"
 
@@ -73,7 +72,7 @@ def update(
         _raise_cancelled(token)
 
 
-def get(token: str) -> Optional[dict]:
+def get(token: str) -> dict | None:
     """Read a progress entry (None if unknown or expired)."""
     _reap()
     entry = _entries.get(token)
@@ -86,7 +85,7 @@ def get(token: str) -> Optional[dict]:
     return result
 
 
-def cancel(token: str) -> Optional[str]:
+def cancel(token: str) -> str | None:
     """Request cancellation of a running generation.
 
     Returns ``"cancellation_requested"`` only for a currently running
@@ -112,7 +111,7 @@ def fail(token: str, message: str) -> None:
     }
 
 
-def complete(token: str, done: int, total: Optional[int] = None) -> None:
+def complete(token: str, done: int, total: int | None = None) -> None:
     # A cancellation can arrive after the last batch reported progress but
     # before the route persists its generated result. Do not let that race
     # turn a requested cancellation into a completed generation.

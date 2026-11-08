@@ -6,6 +6,7 @@ None, so the generator raised
 `TypeError: object NoneType can't be used in 'await' expression` and
 every test generation failed (including all fallback strategies).
 """
+
 import app.services.test_generator as tg
 from app.routers.tests import _progress_reporter
 from app.services import generation_progress
@@ -39,7 +40,10 @@ async def test_generation_with_router_reporter_reports_progress(monkeypatch):
     monkeypatch.setattr(tg, "_generate_batch", fake_batch)
 
     questions = await tg.generate_test_questions(
-        [], num_questions=5, num_choices=4, model_id="test/model",
+        [],
+        num_questions=5,
+        num_choices=4,
+        model_id="test/model",
         on_progress=_progress_reporter(token),
     )
 

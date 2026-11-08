@@ -1,12 +1,12 @@
 """Lecture notes inside a subject: CRUD for the Markdown editor plus image
 upload/serving. Images are stored per lecture under ``<uploads>/lectures/<id>/``
 so deleting a lecture removes its images with it."""
+
 import logging
 import os
 import re
 import shutil
 import uuid
-from typing import List
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -58,7 +58,7 @@ async def _get_lecture(db: AsyncSession, lecture_id: int) -> Lecture:
     return lecture
 
 
-@router.get("/subjects/{subject_id}/lectures", response_model=List[LectureListItem])
+@router.get("/subjects/{subject_id}/lectures", response_model=list[LectureListItem])
 async def list_lectures(subject_id: int, db: AsyncSession = Depends(get_db)):
     """Lectures of a subject, newest first."""
     await ensure_subject_exists(db, subject_id)
@@ -82,11 +82,11 @@ async def list_lectures(subject_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/subjects/{subject_id}/lectures", response_model=LectureResponse)
-async def create_lecture(
-    subject_id: int, data: LectureCreate, db: AsyncSession = Depends(get_db)
-):
+async def create_lecture(subject_id: int, data: LectureCreate, db: AsyncSession = Depends(get_db)):
     await ensure_subject_exists(db, subject_id)
-    lecture = Lecture(subject_id=subject_id, title=data.title.strip() or "Untitled lecture", content="")
+    lecture = Lecture(
+        subject_id=subject_id, title=data.title.strip() or "Untitled lecture", content=""
+    )
     db.add(lecture)
     await db.commit()
     await db.refresh(lecture)
@@ -99,9 +99,7 @@ async def get_lecture(lecture_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/lectures/{lecture_id}", response_model=LectureResponse)
-async def update_lecture(
-    lecture_id: int, data: LectureUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_lecture(lecture_id: int, data: LectureUpdate, db: AsyncSession = Depends(get_db)):
     """Autosave target of the editor: title and/or content."""
     lecture = await _get_lecture(db, lecture_id)
     if data.title is not None:

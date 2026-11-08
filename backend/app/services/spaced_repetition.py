@@ -11,10 +11,10 @@ Rating Scale:
 - 4 (Easy): Perfect recall with no hesitation
 """
 
-from datetime import datetime, timedelta, timezone, date
 import json
-from typing import Tuple, List, Optional
-from sqlalchemy import select, and_, or_, func
+from datetime import date, datetime, timedelta, timezone
+
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Flashcard, FlashcardDeck, StudySession
@@ -45,7 +45,7 @@ def calculate_next_review(
     repetitions: int,
     learning_step: int,
     rating: int,
-) -> Tuple[str, float, int, int, int, datetime]:
+) -> tuple[str, float, int, int, int, datetime]:
     """
     Calculate the next review parameters based on SM-2 algorithm.
 
@@ -93,10 +93,7 @@ def calculate_next_review(
                 new_repetitions = 1
 
                 # First review interval depends on rating
-                if rating == 4:  # Easy
-                    new_interval = 4
-                else:  # Good
-                    new_interval = 1
+                new_interval = 4 if rating == 4 else 1  # Easy: 4 days, Good: 1 day
 
                 next_review = now + timedelta(days=new_interval)
                 return (
@@ -164,8 +161,8 @@ def calculate_next_review(
 
 
 async def get_due_cards(
-    db: AsyncSession, deck_id: int, limit: Optional[int] = None
-) -> List[Flashcard]:
+    db: AsyncSession, deck_id: int, limit: int | None = None
+) -> list[Flashcard]:
     """
     Get cards that are due for review (next_review_at <= now).
 
@@ -198,7 +195,7 @@ async def get_due_cards(
     return list(result.scalars().all())
 
 
-async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> List[Flashcard]:
+async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> list[Flashcard]:
     """
     Get new cards that haven't been studied yet.
 
@@ -221,7 +218,7 @@ async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> List[Flas
     return list(result.scalars().all())
 
 
-async def get_learning_cards(db: AsyncSession, deck_id: int) -> List[Flashcard]:
+async def get_learning_cards(db: AsyncSession, deck_id: int) -> list[Flashcard]:
     """
     Get cards currently in learning phase (not yet graduated).
 
@@ -240,9 +237,7 @@ async def get_learning_cards(db: AsyncSession, deck_id: int) -> List[Flashcard]:
             and_(
                 Flashcard.deck_id == deck_id,
                 Flashcard.state.in_(["learning", "relearning"]),
-                or_(
-                    Flashcard.next_review_at <= now, Flashcard.next_review_at.is_(None)
-                ),
+                or_(Flashcard.next_review_at <= now, Flashcard.next_review_at.is_(None)),
             )
         )
         .order_by(Flashcard.next_review_at.asc())
@@ -256,11 +251,11 @@ async def get_study_queue(
     db: AsyncSession,
     deck_id: int,
     new_cards_limit: int = 20,
-    session_id: Optional[int] = None,
-    cards_studied_json: Optional[str] = None,
+    session_id: int | None = None,
+    cards_studied_json: str | None = None,
     new_cards_reviewed_today: int = 0,
-    study_date: Optional[date] = None,
-) -> List[Flashcard]:
+    study_date: date | None = None,
+) -> list[Flashcard]:
     """
     Build the study queue for a deck following this priority:
     1. Learning/relearning cards that are due (interleaved throughout)
@@ -314,10 +309,10 @@ async def get_study_queue(
 
 
 def _build_interleaved_queue(
-    learning_cards: List[Flashcard],
-    review_cards: List[Flashcard],
-    new_cards: List[Flashcard],
-) -> List[Flashcard]:
+    learning_cards: list[Flashcard],
+    review_cards: list[Flashcard],
+    new_cards: list[Flashcard],
+) -> list[Flashcard]:
     """
     Build study queue with learning cards interleaved.
 
@@ -349,9 +344,7 @@ def _build_interleaved_queue(
     return queue
 
 
-async def get_incomplete_session(
-    db: AsyncSession, deck_id: int
-) -> Optional[StudySession]:
+async def get_incomplete_session(db: AsyncSession, deck_id: int) -> StudySession | None:
     """
     Get the most recent incomplete session for a deck from today.
 
@@ -493,7 +486,6 @@ async def get_global_stats(db: AsyncSession) -> dict:
         Dictionary with global statistics
     """
     now = utc_now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # B15/P6.3: SQL aggregates instead of loading every card row
     # Total cards due across all decks
@@ -534,9 +526,7 @@ async def get_global_stats(db: AsyncSession) -> dict:
         # P4.3: remaining quota subtracts the new cards already introduced
         # today across this deck's sessions
         new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
-        total_new_available += min(
-            new_in_deck, max(0, deck.new_cards_per_day - new_reviewed_today)
-        )
+        total_new_available += min(new_in_deck, max(0, deck.new_cards_per_day - new_reviewed_today))
 
     total_due = due_reviews + total_new_available
 
@@ -556,9 +546,7 @@ async def get_global_stats(db: AsyncSession) -> dict:
 # ============== Streaks (P4.2) ==============
 
 
-async def get_deck_new_cards_today(
-    db: AsyncSession, deck_id: int, today: date
-) -> int:
+async def get_deck_new_cards_today(db: AsyncSession, deck_id: int, today: date) -> int:
     """
     P4.3: new cards already introduced today for a deck — summed over all
     of the day's sessions, so the daily limit is deck-wide instead of
@@ -586,7 +574,7 @@ async def get_deck_new_cards_today(
 def compute_streak(
     reviews_by_day: dict,
     today: date,
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """
     Compute current and longest study streak from daily review counts.
 
@@ -624,7 +612,7 @@ def compute_streak(
 def remaining_new_quota(
     new_cards_limit: int,
     new_cards_reviewed_today: int,
-    study_date: Optional[date],
+    study_date: date | None,
     today: date,
 ) -> int:
     """
@@ -657,9 +645,7 @@ async def get_streak_stats(db: AsyncSession) -> dict:
         Dictionary with current_streak, longest_streak, reviews_today
         and daily_goal
     """
-    result = await db.execute(
-        select(StudySession).where(StudySession.completed_at.isnot(None))
-    )
+    result = await db.execute(select(StudySession).where(StudySession.completed_at.isnot(None)))
     sessions = result.scalars().all()
 
     now = utc_now()

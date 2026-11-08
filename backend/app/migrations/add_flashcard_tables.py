@@ -5,35 +5,38 @@ Run this script once to add the flashcard_decks, flashcards, flashcard_reviews, 
 Note: If you're starting fresh, these tables will be created automatically by SQLAlchemy's create_all().
 This script is for adding tables to an existing database.
 """
-import sqlite3
+
 import os
+import sqlite3
 
 # Determine database path
 if os.path.exists("/app/data"):
     DATABASE_PATH = "/app/data/scio.db"
 else:
-    DATABASE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "scio.db")
+    DATABASE_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "scio.db"
+    )
 
 
 def migrate(db_path: str = None):
     """Create flashcard tables if they don't exist."""
     db_path = db_path or DATABASE_PATH
     print(f"Using database: {db_path}")
-    
+
     if not os.path.exists(db_path):
         print(f"Database not found at {db_path}")
         return
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     try:
         # Check existing tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         existing_tables = {row[0] for row in cursor.fetchall()}
-        
+
         # Create flashcard_decks table
-        if 'flashcard_decks' not in existing_tables:
+        if "flashcard_decks" not in existing_tables:
             cursor.execute("""
                 CREATE TABLE flashcard_decks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,9 +54,9 @@ def migrate(db_path: str = None):
             print("Created 'flashcard_decks' table")
         else:
             print("'flashcard_decks' table already exists")
-        
+
         # Create flashcards table
-        if 'flashcards' not in existing_tables:
+        if "flashcards" not in existing_tables:
             cursor.execute("""
                 CREATE TABLE flashcards (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,13 +77,15 @@ def migrate(db_path: str = None):
             """)
             cursor.execute("CREATE INDEX ix_flashcards_id ON flashcards(id)")
             cursor.execute("CREATE INDEX ix_flashcards_deck_id ON flashcards(deck_id)")
-            cursor.execute("CREATE INDEX ix_flashcards_next_review_at ON flashcards(next_review_at)")
+            cursor.execute(
+                "CREATE INDEX ix_flashcards_next_review_at ON flashcards(next_review_at)"
+            )
             print("Created 'flashcards' table")
         else:
             print("'flashcards' table already exists")
-        
+
         # Create flashcard_reviews table
-        if 'flashcard_reviews' not in existing_tables:
+        if "flashcard_reviews" not in existing_tables:
             cursor.execute("""
                 CREATE TABLE flashcard_reviews (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,15 +99,21 @@ def migrate(db_path: str = None):
                 )
             """)
             cursor.execute("CREATE INDEX ix_flashcard_reviews_id ON flashcard_reviews(id)")
-            cursor.execute("CREATE INDEX ix_flashcard_reviews_card_id ON flashcard_reviews(card_id)")
-            cursor.execute("CREATE INDEX ix_flashcard_reviews_session_id ON flashcard_reviews(session_id)")
-            cursor.execute("CREATE INDEX ix_flashcard_reviews_reviewed_at ON flashcard_reviews(reviewed_at)")
+            cursor.execute(
+                "CREATE INDEX ix_flashcard_reviews_card_id ON flashcard_reviews(card_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX ix_flashcard_reviews_session_id ON flashcard_reviews(session_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX ix_flashcard_reviews_reviewed_at ON flashcard_reviews(reviewed_at)"
+            )
             print("Created 'flashcard_reviews' table")
         else:
             print("'flashcard_reviews' table already exists")
-        
+
         # Create study_sessions table
-        if 'study_sessions' not in existing_tables:
+        if "study_sessions" not in existing_tables:
             cursor.execute("""
                 CREATE TABLE study_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,9 +148,7 @@ def migrate(db_path: str = None):
         }
         for column, col_type in session_column_adds.items():
             if column not in session_columns:
-                cursor.execute(
-                    f"ALTER TABLE study_sessions ADD COLUMN {column} {col_type}"
-                )
+                cursor.execute(f"ALTER TABLE study_sessions ADD COLUMN {column} {col_type}")
                 print(f"Added '{column}' column to 'study_sessions'")
             else:
                 print(f"'study_sessions.{column}' already exists")

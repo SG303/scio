@@ -3,9 +3,10 @@
 The settings router reads the verification model from the settings table
 with the config default as fallback; updating upserts the stored value.
 """
+
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import get_settings
 from app.models import Base, Setting
@@ -56,9 +57,7 @@ async def test_update_persists_new_setting(session):
     assert response.verification_model == "google/gemini-3.8-flash"
 
     stored = (
-        await session.execute(
-            select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY)
-        )
+        await session.execute(select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY))
     ).scalar_one()
     assert stored.value == "google/gemini-3.8-flash"
     assert await get_verification_model(session) == "google/gemini-3.8-flash"
@@ -75,10 +74,10 @@ async def test_update_overwrites_existing_setting(session):
 
     assert await get_verification_model(session) == "anthropic/claude-sonnet-5.5"
     count = (
-        await session.execute(
-            select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY)
-        )
-    ).scalars().all()
+        (await session.execute(select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY)))
+        .scalars()
+        .all()
+    )
     assert len(count) == 1
 
 

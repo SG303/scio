@@ -1,10 +1,11 @@
 import asyncio
+
 import aiofiles
 
 
 async def parse_document(file_path: str, file_ext: str) -> str:
     """Parse document and extract text content"""
-    
+
     if file_ext in [".txt", ".md"]:
         return await parse_text_file(file_path)
     elif file_ext == ".pdf":
@@ -17,22 +18,22 @@ async def parse_document(file_path: str, file_ext: str) -> str:
 
 async def parse_text_file(file_path: str) -> str:
     """Parse plain text or markdown file"""
-    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+    async with aiofiles.open(file_path, encoding="utf-8") as f:
         return await f.read()
 
 
 def _sync_parse_pdf(file_path: str) -> str:
     """Synchronous PDF parsing (runs in executor to avoid blocking)"""
     from pypdf import PdfReader
-    
+
     reader = PdfReader(file_path)
     text_parts = []
-    
+
     for page in reader.pages:
         text = page.extract_text()
         if text:
             text_parts.append(text)
-    
+
     return "\n\n".join(text_parts)
 
 
@@ -50,14 +51,14 @@ async def parse_pdf(file_path: str) -> str:
 def _sync_parse_docx(file_path: str) -> str:
     """Synchronous DOCX parsing (runs in executor to avoid blocking)"""
     from docx import Document
-    
+
     doc = Document(file_path)
     text_parts = []
-    
+
     for paragraph in doc.paragraphs:
         if paragraph.text.strip():
             text_parts.append(paragraph.text)
-    
+
     # Also extract text from tables
     for table in doc.tables:
         for row in table.rows:
@@ -67,7 +68,7 @@ def _sync_parse_docx(file_path: str) -> str:
                     row_text.append(cell.text.strip())
             if row_text:
                 text_parts.append(" | ".join(row_text))
-    
+
     return "\n\n".join(text_parts)
 
 

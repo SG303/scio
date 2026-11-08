@@ -23,7 +23,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from app.config import get_settings
 from app.models import utc_now
@@ -45,8 +45,7 @@ LOGIN_CODE_TIMEOUT_SECONDS = 60
 GENERATION_TIMEOUT_SECONDS = 600
 
 NOT_CONNECTED_MESSAGE = (
-    "Claude subscription is not connected. "
-    "Connect it under Settings → AI providers."
+    "Claude subscription is not connected. Connect it under Settings → AI providers."
 )
 
 # Smallest possible request, only sent when the user asks for fresh usage
@@ -60,7 +59,7 @@ def is_subscription_model(model_id: str) -> bool:
     return model_id.startswith(MODEL_PREFIX)
 
 
-def _cli_home() -> Optional[str]:
+def _cli_home() -> str | None:
     return get_settings().claude_cli_home or None
 
 
@@ -69,7 +68,7 @@ def can_install() -> bool:
     return _cli_home() is not None
 
 
-def cli_path() -> Optional[str]:
+def cli_path() -> str | None:
     home = _cli_home()
     if home:
         path = os.path.join(home, ".local", "bin", "claude")
@@ -77,7 +76,7 @@ def cli_path() -> Optional[str]:
     return shutil.which("claude")
 
 
-def _cli_env() -> Dict[str, str]:
+def _cli_env() -> dict[str, str]:
     # Drop ANTHROPIC_* so an API key or proxy in the app's environment can
     # never silently replace the subscription login.
     env = {k: v for k, v in os.environ.items() if not k.startswith("ANTHROPIC_")}
@@ -91,9 +90,9 @@ def _cli_env() -> Dict[str, str]:
 async def _run(
     args: list,
     timeout: float,
-    stdin_data: Optional[bytes] = None,
-    cwd: Optional[str] = None,
-) -> Tuple[int, str, str]:
+    stdin_data: bytes | None = None,
+    cwd: str | None = None,
+) -> tuple[int, str, str]:
     """Run a command; the process is killed on timeout or cancellation."""
     proc = await asyncio.create_subprocess_exec(
         *args,
@@ -113,9 +112,9 @@ async def _run(
     return proc.returncode, out.decode(errors="replace"), err.decode(errors="replace")
 
 
-async def get_status() -> Dict[str, Any]:
+async def get_status() -> dict[str, Any]:
     """Installation and sign-in state of the CLI (no secrets)."""
-    status: Dict[str, Any] = {
+    status: dict[str, Any] = {
         "installed": False,
         "can_install": can_install(),
         "version": None,
@@ -135,7 +134,7 @@ async def get_status() -> Dict[str, Any]:
         status["version"] = out.strip().split(" ")[0] or None
         _, out, _ = await _run([path, "auth", "status", "--json"], STATUS_TIMEOUT_SECONDS)
         auth = json.loads(out)
-    except (asyncio.TimeoutError, OSError, json.JSONDecodeError) as e:
+    except (TimeoutError, OSError, json.JSONDecodeError) as e:
         logger.warning("Could not read Claude CLI status: %s", e)
         return status
 
@@ -158,7 +157,7 @@ async def install() -> None:
         code, out, err = await _run(
             ["bash", "-o", "pipefail", "-c", INSTALL_COMMAND], INSTALL_TIMEOUT_SECONDS
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise ValueError("Installing Claude Code timed out. Please try again.")
     if code != 0 or cli_path() is None:
         logger.error("Claude Code installation failed: %s %s", out, err)
@@ -173,7 +172,7 @@ class _LoginSession:
     url: str
 
 
-_login: Optional[_LoginSession] = None
+_login: _LoginSession | None = None
 _login_lock = asyncio.Lock()
 
 
@@ -203,7 +202,10 @@ async def start_login() -> str:
             raise ValueError("Claude Code is not installed yet.")
 
         proc = await asyncio.create_subprocess_exec(
-            path, "auth", "login", "--claudeai",
+            path,
+            "auth",
+            "login",
+            "--claudeai",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -227,9 +229,7 @@ async def start_login() -> str:
                 proc.kill()
             await proc.wait()
             logger.error("Claude sign-in did not print a URL: %s", output)
-            raise ValueError(
-                f"Could not start the Claude sign-in. {output.strip()[-300:]}".strip()
-            )
+            raise ValueError(f"Could not start the Claude sign-in. {output.strip()[-300:]}".strip())
 
         _login = _LoginSession(proc=proc, url=match.group())
         return _login.url
@@ -248,7 +248,7 @@ async def complete_login(code: str) -> None:
         try:
             out = await asyncio.wait_for(proc.stdout.read(), LOGIN_CODE_TIMEOUT_SECONDS)
             returncode = await asyncio.wait_for(proc.wait(), 10)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await _stop_login()
             raise ValueError("Claude did not confirm the sign-in in time. Please try again.")
         _login = None
@@ -275,10 +275,10 @@ async def logout() -> None:
 
 
 # Plan usage from the most recent CLI call (in memory; gone after restart)
-_last_usage: Optional[Dict[str, Any]] = None
+_last_usage: dict[str, Any] | None = None
 
 
-def _usage_window(windows: Dict[str, Any], key: str) -> Optional[Dict[str, Any]]:
+def _usage_window(windows: dict[str, Any], key: str) -> dict[str, Any] | None:
     window = windows.get(key)
     if not isinstance(window, dict) or window.get("utilization") is None:
         return None
@@ -290,7 +290,7 @@ def _usage_window(windows: Dict[str, Any], key: str) -> Optional[Dict[str, Any]]
     }
 
 
-def _remember_usage(windows: Optional[Dict[str, Any]]) -> None:
+def _remember_usage(windows: dict[str, Any] | None) -> None:
     global _last_usage
     if not isinstance(windows, dict):
         return
@@ -301,7 +301,7 @@ def _remember_usage(windows: Optional[Dict[str, Any]]) -> None:
     }
 
 
-def _parse_stream(output: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+def _parse_stream(output: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Return (result event, usage windows) from stream-json output."""
     result = None
     windows = None
@@ -335,23 +335,29 @@ async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -
         raise ValueError(NOT_CONNECTED_MESSAGE)
 
     args = [
-        path, "-p",
-        "--output-format", "stream-json",
+        path,
+        "-p",
+        "--output-format",
+        "stream-json",
         "--verbose",
-        "--tools", "",
+        "--tools",
+        "",
         "--strict-mcp-config",
-        "--setting-sources", "",
+        "--setting-sources",
+        "",
         "--disable-slash-commands",
         "--no-session-persistence",
-        "--model", model_id[len(MODEL_PREFIX):],
-        "--system-prompt", system_prompt,
+        "--model",
+        model_id[len(MODEL_PREFIX) :],
+        "--system-prompt",
+        system_prompt,
     ]
     with tempfile.TemporaryDirectory(prefix="scio-claude-") as workdir:
         try:
             code, out, err = await _run(
                 args, GENERATION_TIMEOUT_SECONDS, stdin_data=user_prompt.encode(), cwd=workdir
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise ValueError("Claude did not answer in time. Please try again.")
 
     data, windows = _parse_stream(out)
@@ -370,7 +376,7 @@ async def chat_completion(model_id: str, system_prompt: str, user_prompt: str) -
     return data.get("result") or ""
 
 
-async def refresh_usage() -> Optional[Dict[str, Any]]:
+async def refresh_usage() -> dict[str, Any] | None:
     """Send a minimal request so the CLI reports the current plan usage."""
     await chat_completion(USAGE_CHECK_MODEL, "Reply with OK.", "OK")
     if _last_usage is None:

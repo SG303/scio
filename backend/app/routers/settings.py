@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
@@ -21,9 +21,7 @@ VERIFICATION_MODEL_KEY = "verification_model"
 
 async def get_verification_model(db: AsyncSession) -> str:
     """Effective verification model: settings table, else config default."""
-    result = await db.execute(
-        select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY)
-    )
+    result = await db.execute(select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY))
     row = result.scalar_one_or_none()
     return row.value if row and row.value else get_settings().verification_model
 
@@ -42,14 +40,10 @@ async def get_app_settings(db: AsyncSession = Depends(get_db)):
 
 
 @router.put("", response_model=AppSettingsResponse)
-async def update_app_settings(
-    payload: AppSettingsUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_app_settings(payload: AppSettingsUpdate, db: AsyncSession = Depends(get_db)):
     """Update app settings; values are persisted in the settings table."""
     if payload.verification_model is not None:
-        result = await db.execute(
-            select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY)
-        )
+        result = await db.execute(select(Setting).where(Setting.key == VERIFICATION_MODEL_KEY))
         row = result.scalar_one_or_none()
         if row is not None:
             row.value = payload.verification_model

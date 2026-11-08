@@ -4,11 +4,13 @@ Flashcard AI Generator service.
 This module handles AI-powered generation of flashcards from documents or topics,
 similar to the test_generator but optimized for Q&A flashcard format.
 """
+
 import json
-import re
 import logging
 import math
-from typing import List, Dict, Any, Optional
+import re
+from typing import Any
+
 from app.models import Document, Question
 from app.services.exam_objectives import (
     exam_objectives_section,
@@ -22,19 +24,19 @@ logger = logging.getLogger(__name__)
 
 
 def build_flashcard_prompt(
-    documents: List[Document],
+    documents: list[Document],
     num_cards: int,
     topic: str = "",
-    custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None,
-    language: Optional[str] = None,
+    custom_prompt: str | None = None,
+    existing_fronts: list[str] | None = None,
+    language: str | None = None,
 ) -> str:
     """Build the prompt for generating flashcards."""
-    
+
     # Normalize empty strings to None
     if custom_prompt is not None and not custom_prompt.strip():
         custom_prompt = None
-    
+
     # Output format instructions
     output_format = """OUTPUT FORMAT - Return ONLY a valid JSON object like this example:
 {
@@ -52,7 +54,7 @@ CRITICAL RULES:
 - "back" is the answer that should be recalled
 - Keep answers concise but complete
 - Return ONLY the JSON object, no markdown, no extra text"""
-    
+
     # Build prompt based on whether we have documents
     if documents:
         # Exam objectives get their own focus section instead of being mixed
@@ -131,7 +133,7 @@ REQUIREMENTS:
 7. Mix difficulty levels (basic definitions to applied understanding)
 
 {output_format}"""
-    
+
     # Add existing cards to avoid duplicates
     if existing_fronts:
         fronts_list = "\n".join(f"- {f}" for f in existing_fronts)
@@ -141,24 +143,24 @@ EXISTING FLASHCARDS (DO NOT REPEAT):
 {fronts_list}
 
 IMPORTANT: Create NEW flashcards that are different from the ones listed above. Do not rephrase or create variations of these existing cards."""
-    
+
     prompt += f"\n\n{language_section(language)}"
 
     return prompt
 
 
 async def generate_flashcards(
-    documents: List[Document],
+    documents: list[Document],
     num_cards: int,
     model_id: str,
     topic: str = "",
-    custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None,
-    language: Optional[str] = None,
-) -> List[Dict[str, str]]:
+    custom_prompt: str | None = None,
+    existing_fronts: list[str] | None = None,
+    language: str | None = None,
+) -> list[dict[str, str]]:
     """
     Generate flashcards using OpenRouter API.
-    
+
     Args:
         documents: List of documents to use as context
         num_cards: Number of flashcards to generate
@@ -167,7 +169,7 @@ async def generate_flashcards(
         custom_prompt: Optional custom instructions
         existing_fronts: List of existing card fronts to avoid duplicates
         language: Output language (None = language of the material)
-    
+
     Returns:
         List of flashcard dictionaries with 'front' and 'back' keys
     """
@@ -176,55 +178,61 @@ async def generate_flashcards(
         return await _generate_batch(
             documents, num_cards, model_id, topic, custom_prompt, existing_fronts, language
         )
-    
+
     # Batch generation for larger requests
     all_cards = []
     batch_size = 25
     current_existing = list(existing_fronts) if existing_fronts else []
-    
+
     num_batches = math.ceil(num_cards / batch_size)
-    
-    for i in range(num_batches):
+
+    for _batch in range(num_batches):
         cards_in_batch = min(batch_size, num_cards - len(all_cards))
-        
+
         if cards_in_batch <= 0:
             break
-        
+
         try:
             batch_cards = await _generate_batch(
-                documents, cards_in_batch, model_id, topic, custom_prompt, current_existing, language
+                documents,
+                cards_in_batch,
+                model_id,
+                topic,
+                custom_prompt,
+                current_existing,
+                language,
             )
-            
+
             all_cards.extend(batch_cards)
-            
+
             # Add new fronts to existing list for next batch
             for card in batch_cards:
                 current_existing.append(card["front"])
-                
+
         except Exception as e:
             if not all_cards:
                 raise e
             # Return what we have
             break
-    
+
     return all_cards
 
 
 async def _generate_batch(
-    documents: List[Document],
+    documents: list[Document],
     num_cards: int,
     model_id: str,
     topic: str = "",
-    custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None,
-    language: Optional[str] = None,
-) -> List[Dict[str, str]]:
+    custom_prompt: str | None = None,
+    existing_fronts: list[str] | None = None,
+    language: str | None = None,
+) -> list[dict[str, str]]:
     """Generate a single batch of flashcards."""
-    
+
     prompt = build_flashcard_prompt(
         documents, num_cards, topic, custom_prompt, existing_fronts, language
     )
-    
+
     content = await chat_completion_json(
         model_id=model_id,
         system_prompt="You are an expert educational content creator. Always respond with valid JSON only, no markdown formatting.",
@@ -238,11 +246,11 @@ async def _generate_batch(
     return flashcards
 
 
-def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
+def parse_flashcards_response(content: str) -> list[dict[str, str]]:
     """Parse the AI response and extract flashcards."""
-    
+
     content = content.strip()
-    
+
     # Remove markdown code blocks if present
     if content.startswith("```"):
         lines = content.split("\n")
@@ -251,12 +259,12 @@ def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
         if lines[-1].strip() == "```":
             lines = lines[:-1]
         content = "\n".join(lines)
-    
+
     # Try to find JSON array in the content
-    json_match = re.search(r'\[[\s\S]*\]', content)
+    json_match = re.search(r"\[[\s\S]*\]", content)
     if json_match:
         content = json_match.group()
-    
+
     try:
         flashcards = json.loads(content)
     except json.JSONDecodeError as e:
@@ -264,82 +272,77 @@ def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
         try:
             flashcards = extract_flashcards_fallback(content)
         except Exception:
-            raise ValueError(f"Failed to parse AI response as JSON: {str(e)}\nResponse: {content[:500]}")
-    
+            raise ValueError(
+                f"Failed to parse AI response as JSON: {str(e)}\nResponse: {content[:500]}"
+            )
+
     if isinstance(flashcards, dict):
         # Structured output format: {"flashcards": [...]}
         flashcards = flashcards.get("flashcards")
     if not isinstance(flashcards, list):
         raise ValueError("AI response is not a list of flashcards")
-    
+
     # Validate and normalize flashcards
     validated = []
     for card in flashcards:
         if not isinstance(card, dict):
             continue
-        
+
         # `(x or "")` instead of `x.get("k", "")`: an explicit JSON null
         # would bypass the default and crash .strip() with AttributeError
         # (same pattern as the CSV import in routers/flashcards.py)
         front = (card.get("front") or "").strip()
         back = (card.get("back") or "").strip()
-        
+
         # Also try alternate keys
         if not front:
             front = (card.get("question") or card.get("q") or "").strip()
         if not back:
             back = (card.get("answer") or card.get("a") or "").strip()
-        
+
         if front and back:
-            validated.append({
-                "front": front,
-                "back": back
-            })
-    
+            validated.append({"front": front, "back": back})
+
     if not validated:
         raise ValueError("No valid flashcards found in AI response")
-    
+
     return validated
 
 
-def extract_flashcards_fallback(content: str) -> List[Dict[str, str]]:
+def extract_flashcards_fallback(content: str) -> list[dict[str, str]]:
     """Fallback parser for malformed JSON responses."""
     flashcards = []
-    
+
     # Try to find front/back patterns
     front_pattern = r'"front"\s*:\s*"([^"]+)"'
     back_pattern = r'"back"\s*:\s*"([^"]+)"'
-    
+
     # Split by potential card boundaries
-    blocks = re.split(r'\},\s*\{', content)
-    
+    blocks = re.split(r"\},\s*\{", content)
+
     for block in blocks:
         front_match = re.search(front_pattern, block, re.DOTALL)
         back_match = re.search(back_pattern, block, re.DOTALL)
-        
+
         if front_match and back_match:
-            flashcards.append({
-                "front": front_match.group(1),
-                "back": back_match.group(1)
-            })
-    
+            flashcards.append({"front": front_match.group(1), "back": back_match.group(1)})
+
     if not flashcards:
         raise ValueError("Could not extract flashcards from response")
-    
+
     return flashcards
 
 
 def create_flashcards_from_questions(
-    questions: List[Question],
-    wrong_only: bool = True
-) -> List[Dict[str, Any]]:
+    questions: list[Question], wrong_only: bool = True
+) -> list[dict[str, Any]]:
     """
     Convert test questions to flashcard format.
-    
+
     Args:
         questions: List of Question objects from a test
         wrong_only: If True, only convert incorrectly answered questions
-    
+
     Returns:
         List of flashcard data dictionaries
     """
@@ -351,36 +354,38 @@ def create_flashcards_from_questions(
         # is falsy — unanswered questions must NOT become "wrong" cards)
         if wrong_only and (q.is_correct or q.user_answer is None):
             continue
-        
+
         # Get the correct answer text
         correct_idx = q.correct_answer
         choices = q.choices
         correct_text = ""
-        
+
         if choices and 0 <= correct_idx < len(choices):
             correct_choice = choices[correct_idx]
             if isinstance(correct_choice, dict):
                 correct_text = correct_choice.get("text", "")
             else:
                 correct_text = str(correct_choice)
-        
+
         # Build the back content
         back = correct_text
         if q.explanation:
             back = f"{correct_text}\n\n{q.explanation}"
-        
-        flashcards.append({
-            "front": q.question_text,
-            "back": back,
-            "source_type": "from_test",
-            "source_question_id": q.id
-        })
+
+        flashcards.append(
+            {
+                "front": q.question_text,
+                "back": back,
+                "source_type": "from_test",
+                "source_question_id": q.id,
+            }
+        )
 
     return flashcards
 
 
 def filter_existing_cards(
-    cards_data: List[Dict[str, Any]],
+    cards_data: list[dict[str, Any]],
     existing_source_question_ids: Any,
 ) -> tuple:
     """Remove cards whose source_question_id already has a card in the deck.
@@ -390,9 +395,5 @@ def filter_existing_cards(
     (kept_cards, skipped_count).
     """
     existing = set(existing_source_question_ids)
-    kept = [
-        c for c in cards_data
-        if c.get("source_question_id") not in existing
-    ]
+    kept = [c for c in cards_data if c.get("source_question_id") not in existing]
     return kept, len(cards_data) - len(kept)
-

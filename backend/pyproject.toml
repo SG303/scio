@@ -34,8 +34,45 @@ dependencies = [
 dev = [
     "pytest>=9.2.0",
     "pytest-asyncio>=1.4.1.post1",
+    "ruff>=0.17.4",
 ]
 
 [tool.uv]
 # An application, not a library: install the dependencies only.
 package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    # The formatter keeps code within the limit; what remains are LLM prompt
+    # texts and test data that must stay verbatim.
+    "E501",
+    # The convention is datetime.now(timezone.utc) via utc_now() (AGENTS.md).
+    "UP017",
+    # Exception chaining in the existing handlers is a separate review.
+    "B904",
+    # try/except/pass reads fine; contextlib.suppress adds nothing here.
+    "SIM105",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Logging is configured before the app modules are imported.
+"app/main.py" = ["E402"]
+# Trailing spaces inside an LLM prompt string stay verbatim.
+"app/services/test_generator.py" = ["W291"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependencies and parameters are declared as default values.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+]

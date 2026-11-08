@@ -5,80 +5,78 @@ Implements all endpoints for flashcard deck management, card operations,
 study sessions, and spaced repetition functionality.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from datetime import datetime, timedelta, timezone
-import logging
-import json
 import csv
 import io
+import json
+import logging
 import re
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import genanki
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import (
-    FlashcardDeck,
+    AIModel,
+    Document,
     Flashcard,
+    FlashcardDeck,
     FlashcardReview,
     StudySession,
-    Document,
-    AIModel,
-    Test,
-    Question,
     Subject,
+    Test,
     TestConfig,
 )
 from app.schemas.flashcard import (
-    FlashcardDeckCreate,
-    FlashcardDeckUpdate,
-    FlashcardDeckResponse,
-    FlashcardDeckWithStats,
-    FlashcardCreate,
-    FlashcardUpdate,
-    FlashcardResponse,
-    FlashcardStudyResponse,
-    ReviewSubmit,
-    ReviewResponse,
-    StudySessionCreate,
-    StudySessionResponse,
-    StudySessionComplete,
-    GenerateFlashcardsRequest,
-    GenerateFlashcardsResponse,
-    CreateFromTestRequest,
-    CreateFromTestResponse,
     CreateAndGenerateDeckRequest,
     CreateAndGenerateDeckResponse,
-    ImportCardsResult,
-    ReviewsPerDay,
+    CreateFromTestRequest,
+    CreateFromTestResponse,
     DeckAnswerTime,
-    SubjectScorePoint,
-    SubjectScoreSeries,
-    FlashcardAnalytics,
     DeckStats,
+    FlashcardAnalytics,
+    FlashcardCreate,
+    FlashcardDeckCreate,
+    FlashcardDeckResponse,
+    FlashcardDeckUpdate,
+    FlashcardDeckWithStats,
+    FlashcardResponse,
+    FlashcardStudyResponse,
+    FlashcardUpdate,
+    GenerateFlashcardsRequest,
+    GenerateFlashcardsResponse,
     GlobalStats,
+    ImportCardsResult,
+    ReviewResponse,
+    ReviewsPerDay,
+    ReviewSubmit,
     StreakResponse,
     StudyQueueResponse,
+    StudySessionComplete,
+    StudySessionCreate,
+    StudySessionResponse,
+    SubjectScorePoint,
+    SubjectScoreSeries,
 )
+from app.services.flashcard_generator import (
+    create_flashcards_from_questions,
+    filter_existing_cards,
+    generate_flashcards,
+)
+from app.services.lecture_sources import load_lecture_sources
 from app.services.spaced_repetition import (
     calculate_next_review,
-    get_study_queue,
     get_deck_stats,
     get_global_stats,
     get_incomplete_session,
     get_streak_stats,
+    get_study_queue,
 )
-from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import ensure_subject_exists, existing_subject_fronts
-from app.services.flashcard_generator import (
-    generate_flashcards,
-    create_flashcards_from_questions,
-    filter_existing_cards,
-)
 
 router = APIRouter(prefix="/api/flashcards", tags=["flashcards"])
 logger = logging.getLogger(__name__)
@@ -89,7 +87,7 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> dict:
+async def get_deck_stats_map(db: AsyncSession, decks: list[FlashcardDeck]) -> dict:
     """Batched variant of get_deck_stats for list endpoints.
 
     Computes the same per-deck statistics as get_deck_stats() with a
@@ -172,9 +170,7 @@ async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> di
         counts_by_state = counts_by_deck_state.get(deck.id, {})
         total = sum(counts_by_state.values())
         new_count = counts_by_state.get("new", 0)
-        learning_count = (
-            counts_by_state.get("learning", 0) + counts_by_state.get("relearning", 0)
-        )
+        learning_count = counts_by_state.get("learning", 0) + counts_by_state.get("relearning", 0)
         review_count = counts_by_state.get("review", 0)
         due_count = due_by_deck.get(deck.id, 0)
         new_reviewed_today = new_reviewed_by_deck.get(deck.id, 0)
@@ -197,12 +193,10 @@ async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> di
 # ============== Deck Endpoints ==============
 
 
-@router.get("/decks", response_model=List[FlashcardDeckWithStats])
+@router.get("/decks", response_model=list[FlashcardDeckWithStats])
 async def list_decks(db: AsyncSession = Depends(get_db)):
     """List all flashcard decks with statistics."""
-    result = await db.execute(
-        select(FlashcardDeck).order_by(FlashcardDeck.created_at.desc())
-    )
+    result = await db.execute(select(FlashcardDeck).order_by(FlashcardDeck.created_at.desc()))
     decks = result.scalars().all()
 
     # One batched stats computation for all decks (no per-deck queries)
@@ -238,15 +232,11 @@ async def list_decks(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/decks", response_model=FlashcardDeckResponse)
-async def create_deck(
-    deck_data: FlashcardDeckCreate, db: AsyncSession = Depends(get_db)
-):
+async def create_deck(deck_data: FlashcardDeckCreate, db: AsyncSession = Depends(get_db)):
     """Create a new flashcard deck."""
     # Validate AI model if provided
     if deck_data.ai_model_id:
-        result = await db.execute(
-            select(AIModel).where(AIModel.id == deck_data.ai_model_id)
-        )
+        result = await db.execute(select(AIModel).where(AIModel.id == deck_data.ai_model_id))
         ai_model = result.scalar_one_or_none()
         if not ai_model:
             raise HTTPException(status_code=404, detail="AI model not found")
@@ -261,9 +251,7 @@ async def create_deck(
         found_ids = set(row[0] for row in result.fetchall())
         missing_ids = set(deck_data.document_ids) - found_ids
         if missing_ids:
-            raise HTTPException(
-                status_code=404, detail=f"Document(s) not found: {missing_ids}"
-            )
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
 
     await ensure_subject_exists(db, deck_data.subject_id)
 
@@ -360,9 +348,7 @@ async def get_flashcard_analytics(db: AsyncSession = Depends(get_db)):
 
     # Reviews per day for the last 14 days (including today)
     days = 14
-    start = (now - timedelta(days=days - 1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    start = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(
         select(
             func.date(FlashcardReview.reviewed_at).label("day"),
@@ -388,8 +374,7 @@ async def get_flashcard_analytics(db: AsyncSession = Depends(get_db)):
     counts_by_state = dict(result.all())
     state_distribution = {
         "new": counts_by_state.get("new", 0),
-        "learning": counts_by_state.get("learning", 0)
-        + counts_by_state.get("relearning", 0),
+        "learning": counts_by_state.get("learning", 0) + counts_by_state.get("relearning", 0),
         "review": counts_by_state.get("review", 0),
     }
 
@@ -446,16 +431,12 @@ async def get_flashcard_analytics(db: AsyncSession = Depends(get_db)):
             )
         )
     # drop subjects without usable dates
-    subject_scores = [
-        s for s in series_by_subject.values() if all(p.date for p in s.points)
-    ]
+    subject_scores = [s for s in series_by_subject.values() if all(p.date for p in s.points)]
 
     return FlashcardAnalytics(
         reviews_per_day=reviews_per_day,
         state_distribution=state_distribution,
-        avg_answer_time_ms=round(avg_answer_time_ms, 0)
-        if avg_answer_time_ms is not None
-        else None,
+        avg_answer_time_ms=round(avg_answer_time_ms, 0) if avg_answer_time_ms is not None else None,
         per_deck=per_deck,
         subject_scores=subject_scores,
     )
@@ -497,9 +478,7 @@ async def export_deck(
         raise HTTPException(status_code=404, detail="Deck not found")
 
     result = await db.execute(
-        select(Flashcard)
-        .where(Flashcard.deck_id == deck_id)
-        .order_by(Flashcard.id)
+        select(Flashcard).where(Flashcard.deck_id == deck_id).order_by(Flashcard.id)
     )
     cards = result.scalars().all()
 
@@ -510,9 +489,7 @@ async def export_deck(
     if format == "apkg":
         anki_deck = genanki.Deck(2059400110 + deck_id, deck.title)
         for card in cards:
-            anki_deck.add_note(
-                genanki.Note(model=_SCIO_ANKI_MODEL, fields=[card.front, card.back])
-            )
+            anki_deck.add_note(genanki.Note(model=_SCIO_ANKI_MODEL, fields=[card.front, card.back]))
         buf = io.BytesIO()
         genanki.Package(anki_deck).write_to_file(buf)
         data = buf.getvalue()
@@ -559,9 +536,7 @@ async def import_cards(
 
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames or "front" not in reader.fieldnames or "back" not in reader.fieldnames:
-        raise HTTPException(
-            status_code=400, detail="CSV must have the columns: front, back, state"
-        )
+        raise HTTPException(status_code=400, detail="CSV must have the columns: front, back, state")
 
     cards_imported = 0
     rows_skipped = 0
@@ -613,16 +588,12 @@ async def create_and_generate_deck(
 
     documents = []
     if request.document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(request.document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(request.document_ids)))
         documents = list(result.scalars().all())
         found_ids = {d.id for d in documents}
         missing_ids = set(request.document_ids) - found_ids
         if missing_ids:
-            raise HTTPException(
-                status_code=404, detail=f"Document(s) not found: {missing_ids}"
-            )
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
 
     target_deck = None
     if request.deck_id is not None:
@@ -664,9 +635,7 @@ async def create_and_generate_deck(
         )
     except ValueError as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to generate flashcards: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to generate flashcards: {str(e)}")
     except Exception as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -677,12 +646,12 @@ async def create_and_generate_deck(
     if target_deck is not None:
         deck = target_deck
         # The new sources join the deck's, so "generate more" knows them too
-        deck.document_ids = list(
-            dict.fromkeys([*(deck.document_ids or []), *(request.document_ids or [])])
-        ) or None
-        deck.lecture_ids = list(
-            dict.fromkeys([*(deck.lecture_ids or []), *request.lecture_ids])
-        ) or None
+        deck.document_ids = (
+            list(dict.fromkeys([*(deck.document_ids or []), *(request.document_ids or [])])) or None
+        )
+        deck.lecture_ids = (
+            list(dict.fromkeys([*(deck.lecture_ids or []), *request.lecture_ids])) or None
+        )
     else:
         deck_fields = request.model_dump(exclude={"num_cards", "topic", "deck_id"})
         deck = FlashcardDeck(**deck_fields)
@@ -733,23 +702,17 @@ async def generate_cards_for_deck(
     # Get documents if configured
     documents = []
     if deck.document_ids:
-        result = await db.execute(
-            select(Document).where(Document.id.in_(deck.document_ids))
-        )
+        result = await db.execute(select(Document).where(Document.id.in_(deck.document_ids)))
         documents = list(result.scalars().all())
         # Same validation as create-and-generate: a deleted document must not
         # silently turn into generation without study material
         found_ids = {d.id for d in documents}
         missing_ids = set(deck.document_ids) - found_ids
         if missing_ids:
-            raise HTTPException(
-                status_code=404, detail=f"Document(s) not found: {missing_ids}"
-            )
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
 
     # Get existing card fronts to avoid duplicates
-    result = await db.execute(
-        select(Flashcard.front).where(Flashcard.deck_id == deck_id)
-    )
+    result = await db.execute(select(Flashcard.front).where(Flashcard.deck_id == deck_id))
     existing_fronts = [row[0] for row in result.fetchall()]
 
     # Generate flashcards
@@ -767,9 +730,7 @@ async def generate_cards_for_deck(
         )
     except ValueError as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to generate flashcards: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to generate flashcards: {str(e)}")
     except Exception as e:
         logger.error(f"Failed to generate flashcards: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -805,7 +766,7 @@ async def generate_cards_for_deck(
 # ============== Card CRUD ==============
 
 
-@router.get("/decks/{deck_id}/cards", response_model=List[FlashcardResponse])
+@router.get("/decks/{deck_id}/cards", response_model=list[FlashcardResponse])
 async def list_cards(deck_id: int, db: AsyncSession = Depends(get_db)):
     """List all cards in a deck."""
     # Verify deck exists
@@ -814,9 +775,7 @@ async def list_cards(deck_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Deck not found")
 
     result = await db.execute(
-        select(Flashcard)
-        .where(Flashcard.deck_id == deck_id)
-        .order_by(Flashcard.created_at.desc())
+        select(Flashcard).where(Flashcard.deck_id == deck_id).order_by(Flashcard.created_at.desc())
     )
     cards = result.scalars().all()
 
@@ -824,9 +783,7 @@ async def list_cards(deck_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/decks/{deck_id}/cards", response_model=FlashcardResponse)
-async def create_card(
-    deck_id: int, card_data: FlashcardCreate, db: AsyncSession = Depends(get_db)
-):
+async def create_card(deck_id: int, card_data: FlashcardCreate, db: AsyncSession = Depends(get_db)):
     """Create a flashcard manually."""
     # Verify deck exists
     result = await db.execute(select(FlashcardDeck).where(FlashcardDeck.id == deck_id))
@@ -847,9 +804,7 @@ async def create_card(
 
 
 @router.put("/cards/{card_id}", response_model=FlashcardResponse)
-async def update_card(
-    card_id: int, card_data: FlashcardUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_card(card_id: int, card_data: FlashcardUpdate, db: AsyncSession = Depends(get_db)):
     """Update a flashcard's content."""
     result = await db.execute(select(Flashcard).where(Flashcard.id == card_id))
     card = result.scalar_one_or_none()
@@ -888,9 +843,7 @@ async def delete_card(card_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/decks/{deck_id}/study", response_model=StudyQueueResponse)
 async def get_study_cards(
     deck_id: int,
-    session_id: Optional[int] = Query(
-        None, description="Optional session ID for resume"
-    ),
+    session_id: int | None = Query(None, description="Optional session ID for resume"),
     db: AsyncSession = Depends(get_db),
 ):
     """Get the study queue for a deck, optionally resuming a session."""
@@ -905,9 +858,7 @@ async def get_study_cards(
     cards_studied_json = None
 
     if session_id is not None:
-        result = await db.execute(
-            select(StudySession).where(StudySession.id == session_id)
-        )
+        result = await db.execute(select(StudySession).where(StudySession.id == session_id))
         session = result.scalar_one_or_none()
         if session:
             cards_studied_json = session.cards_studied_json
@@ -980,7 +931,7 @@ async def get_incomplete_session_info(deck_id: int, db: AsyncSession = Depends(g
 async def submit_review(
     card_id: int,
     review: ReviewSubmit,
-    session_id: Optional[int] = Query(None, description="Session ID to track progress"),
+    session_id: int | None = Query(None, description="Session ID to track progress"),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a review rating for a flashcard."""
@@ -994,9 +945,7 @@ async def submit_review(
     # review records when a stale/mismatched session id was supplied.
     session = None
     if session_id is not None:
-        result = await db.execute(
-            select(StudySession).where(StudySession.id == session_id)
-        )
+        result = await db.execute(select(StudySession).where(StudySession.id == session_id))
         session = result.scalar_one_or_none()
         if not session:
             raise HTTPException(status_code=404, detail="Study session not found")
@@ -1012,15 +961,13 @@ async def submit_review(
     old_interval = card.interval_days
 
     # Calculate new review parameters
-    new_state, new_ef, new_interval, new_reps, new_step, next_review = (
-        calculate_next_review(
-            state=card.state,
-            easiness_factor=card.easiness_factor,
-            interval_days=card.interval_days,
-            repetitions=card.repetitions,
-            learning_step=card.learning_step,
-            rating=review.rating,
-        )
+    new_state, new_ef, new_interval, new_reps, new_step, next_review = calculate_next_review(
+        state=card.state,
+        easiness_factor=card.easiness_factor,
+        interval_days=card.interval_days,
+        repetitions=card.repetitions,
+        learning_step=card.learning_step,
+        rating=review.rating,
     )
 
     # Update card
@@ -1064,9 +1011,7 @@ async def submit_review(
         session.study_date = today
 
         if old_state == "new" and review.rating >= 2:  # Rating >= Hard counts as reviewed
-            session.new_cards_reviewed_today = (
-                session.new_cards_reviewed_today or 0
-            ) + 1
+            session.new_cards_reviewed_today = (session.new_cards_reviewed_today or 0) + 1
 
     await db.commit()
     await db.refresh(card)
@@ -1084,9 +1029,7 @@ async def submit_review(
 
 
 @router.post("/sessions", response_model=StudySessionResponse)
-async def start_session(
-    session_data: StudySessionCreate, db: AsyncSession = Depends(get_db)
-):
+async def start_session(session_data: StudySessionCreate, db: AsyncSession = Depends(get_db)):
     """Start a new study session."""
     # Verify deck exists if specified
     if session_data.deck_id:
@@ -1206,9 +1149,7 @@ async def create_from_test(
 
     # Get or create deck
     if request.deck_id:
-        result = await db.execute(
-            select(FlashcardDeck).where(FlashcardDeck.id == request.deck_id)
-        )
+        result = await db.execute(select(FlashcardDeck).where(FlashcardDeck.id == request.deck_id))
         deck = result.scalar_one_or_none()
         if not deck:
             raise HTTPException(status_code=404, detail="Deck not found")
