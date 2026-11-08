@@ -6,6 +6,13 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- Update backend dependencies with known vulnerabilities: python-multipart
+  0.0.33, FastAPI 0.162 (Starlette 1.x), Uvicorn 0.54 and Pydantic 2.14.
+- Replace the deprecated, vulnerable PyPDF2 with its maintained successor
+  pypdf for PDF parsing and chapter splitting.
+
 ### Changed
 
 - Build the frontend with Node 24 LTS (Node 20 reached end of life) and

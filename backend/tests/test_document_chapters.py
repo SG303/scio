@@ -13,8 +13,8 @@ import sqlite3
 
 import pytest
 from fastapi import HTTPException
-from PyPDF2 import PdfWriter
-from PyPDF2.generic import DecodedStreamObject, DictionaryObject, NameObject
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 

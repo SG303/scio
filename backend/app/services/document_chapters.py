@@ -72,7 +72,7 @@ def _read_pdf(path: str) -> Tuple[List[str], List[Chapter]]:
     if key in _pdf_cache:
         return _pdf_cache[key]
 
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
 
     reader = PdfReader(path)
     pages = []
