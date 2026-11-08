@@ -41,7 +41,7 @@ updates:
       - dependency-name: tailwindcss
         update-types: [version-update:semver-major]
 
-  - package-ecosystem: pip
+  - package-ecosystem: uv
     directory: /backend
     schedule:
       interval: weekly
@@ -51,7 +51,7 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      pip-minor-and-patch:
+      uv-minor-and-patch:
         update-types: [minor, patch]
 
   - package-ecosystem: docker

@@ -1,0 +1,41 @@
+[project]
+name = "scio-backend"
+description = "FastAPI backend of Scio, a personal AI learning web app"
+# The app version lives in app/VERSION (see RELEASING.md); this file only
+# declares the dependencies, so it carries no version of its own.
+version = "0"
+requires-python = ">=3.12"
+dependencies = [
+    # FastAPI and server
+    "fastapi>=0.162.2",
+    "uvicorn[standard]>=0.54.0",
+    "python-multipart>=0.0.33",
+    # Database
+    "sqlalchemy[asyncio]>=2.1.8",
+    "aiosqlite>=0.22.1",
+    # HTTP client for OpenRouter
+    "httpx>=0.28.1",
+    # Validation
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
+    # Document parsing
+    "python-docx>=1.2.0",
+    "pypdf>=7.0.0",
+    "python-magic>=0.4.27",
+    # Utilities
+    "python-dateutil>=4.0.0",
+    "aiofiles>=25.1.0",
+    # Anki export (P6.1)
+    "genanki>=0.13.1",
+]
+
+[dependency-groups]
+# Development and test dependencies (not included in the Docker image)
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+]
+
+[tool.uv]
+# An application, not a library: install the dependencies only.
+package = false
