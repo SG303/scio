@@ -12,6 +12,9 @@ and uses [Semantic Versioning](https://semver.org/).
   0.0.33, FastAPI 0.162 (Starlette 1.x), Uvicorn 0.54 and Pydantic 2.14.
 - Replace the deprecated, vulnerable PyPDF2 with its maintained successor
   pypdf for PDF parsing and chapter splitting.
+- Update the frontend toolchain to Vite 8, Vitest 5, @vitejs/plugin-react 6
+  and vite-plugin-pwa 2, and React Router to 6.30.6. This resolves all
+  critical and high npm audit findings.
 
 ### Changed
 
