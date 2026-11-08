@@ -12,8 +12,8 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.database import Base
 from app import models
+from app.database import Base
 from app.routers import subjects as subjects_router
 from app.schemas.subject import GenerateFlashcardsInSubjectRequest, GenerateTestInSubjectRequest
 

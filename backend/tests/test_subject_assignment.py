@@ -20,8 +20,8 @@ from app.database import Base
 from app.routers import flashcards as flashcards_router
 from app.routers import subjects as subjects_router
 from app.routers import tests as tests_router
-from app.schemas.flashcard import CreateAndGenerateDeckRequest, FlashcardDeckUpdate
 from app.schemas import test as test_schemas
+from app.schemas.flashcard import CreateAndGenerateDeckRequest, FlashcardDeckUpdate
 from app.schemas.test import CreateAndGenerateRequest
 
 FAKE_QUESTIONS = [

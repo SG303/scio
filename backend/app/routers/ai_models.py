@@ -1,19 +1,20 @@
 import logging
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text
-from typing import List, Any, Dict
 
 from app.database import get_db
-from app.models import AIModel, TestConfig, FlashcardDeck, Subject
-from app.schemas.ai_model import AIModelCreate, AIModelUpdate, AIModelResponse
-from app.services.default_model import get_default_ai_model_id
-from app.services.openrouter import fetch_openrouter_models
+from app.models import AIModel, FlashcardDeck, Subject, TestConfig
+from app.schemas.ai_model import AIModelCreate, AIModelResponse, AIModelUpdate
 from app.services.claude_cli import (
     MODEL_PREFIX,
     SUBSCRIPTION_CONTEXT_LENGTH,
     is_subscription_model,
 )
+from app.services.default_model import get_default_ai_model_id
+from app.services.openrouter import fetch_openrouter_models
 
 router = APIRouter(prefix="/api/models", tags=["ai_models"])
 logger = logging.getLogger(__name__)
@@ -204,7 +205,7 @@ async def seed_subscription_models(db: AsyncSession) -> None:
     await db.commit()
 
 
-@router.get("", response_model=List[Dict[str, Any]])
+@router.get("", response_model=list[dict[str, Any]])
 async def list_models(enabled_only: bool = False, db: AsyncSession = Depends(get_db)):
     """List all AI models with OpenRouter pricing info"""
     query = select(AIModel)
@@ -245,7 +246,7 @@ async def list_models(enabled_only: bool = False, db: AsyncSession = Depends(get
     return models
 
 
-@router.get("/{model_id}", response_model=Dict[str, Any])
+@router.get("/{model_id}", response_model=dict[str, Any])
 async def get_model(model_id: int, db: AsyncSession = Depends(get_db)):
     """Get a specific AI model with OpenRouter pricing info"""
     result = await db.execute(select(AIModel).where(AIModel.id == model_id))

@@ -5,53 +5,52 @@ Implements endpoints for organizing tests and flashcard decks into subjects
 with shared configuration and centralized management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, update
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import (
-    Subject,
-    TestConfig,
-    Test,
-    Question,
-    FlashcardDeck,
-    Flashcard,
-    Document,
     AIModel,
+    Document,
+    Flashcard,
+    FlashcardDeck,
     Lecture,
+    Question,
+    Subject,
+    Test,
+    TestConfig,
 )
-from app.schemas.subject import (
-    SubjectCreate,
-    SubjectUpdate,
-    SubjectResponse,
-    SubjectListResponse,
-    SubjectDetailResponse,
-    TestConfigInSubject,
-    FlashcardDeckInSubject,
-    GenerateTestInSubjectRequest,
-    GenerateFlashcardsInSubjectRequest,
-    AddQuestionsRequest,
-    AddCardsRequest,
-)
-from app.schemas.test import TestResponse
+from app.routers.flashcards import get_deck_stats_map
 from app.routers.tests import build_test_response
 from app.schemas.flashcard import (
-    FlashcardDeckResponse,
-    GenerateFlashcardsResponse,
     FlashcardResponse,
+    GenerateFlashcardsResponse,
 )
+from app.schemas.subject import (
+    AddCardsRequest,
+    AddQuestionsRequest,
+    FlashcardDeckInSubject,
+    GenerateFlashcardsInSubjectRequest,
+    GenerateTestInSubjectRequest,
+    SubjectCreate,
+    SubjectDetailResponse,
+    SubjectListResponse,
+    SubjectResponse,
+    SubjectUpdate,
+    TestConfigInSubject,
+)
+from app.schemas.test import TestResponse
 from app.services.default_model import resolve_ai_model_id
-from app.services.language import clean_language
-from app.services.test_generator import generate_test_questions
 from app.services.flashcard_generator import generate_flashcards
-from app.routers.flashcards import get_deck_stats_map
+from app.services.language import clean_language
 from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import existing_subject_fronts, existing_subject_questions
+from app.services.test_generator import generate_test_questions
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ def utc_now() -> datetime:
 # ============== Subject CRUD ==============
 
 
-@router.get("", response_model=List[SubjectListResponse])
+@router.get("", response_model=list[SubjectListResponse])
 async def list_subjects(db: AsyncSession = Depends(get_db)):
     """List all subjects with statistics."""
     result = await db.execute(
@@ -312,25 +311,23 @@ async def update_subject(
         raise HTTPException(status_code=404, detail="Subject not found")
 
     # Validate AI model if being updated
-    if subject_data.ai_model_id is not None:
-        if subject_data.ai_model_id:
-            result = await db.execute(select(AIModel).where(AIModel.id == subject_data.ai_model_id))
-            ai_model = result.scalar_one_or_none()
-            if not ai_model:
-                raise HTTPException(status_code=404, detail="AI model not found")
-            if not ai_model.is_enabled:
-                raise HTTPException(status_code=400, detail="AI model is not enabled")
+    if subject_data.ai_model_id is not None and subject_data.ai_model_id:
+        result = await db.execute(select(AIModel).where(AIModel.id == subject_data.ai_model_id))
+        ai_model = result.scalar_one_or_none()
+        if not ai_model:
+            raise HTTPException(status_code=404, detail="AI model not found")
+        if not ai_model.is_enabled:
+            raise HTTPException(status_code=400, detail="AI model is not enabled")
 
     # Validate documents if being updated
-    if subject_data.document_ids is not None:
-        if subject_data.document_ids:
-            result = await db.execute(
-                select(Document.id).where(Document.id.in_(subject_data.document_ids))
-            )
-            found_ids = set(row[0] for row in result.fetchall())
-            missing_ids = set(subject_data.document_ids) - found_ids
-            if missing_ids:
-                raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
+    if subject_data.document_ids is not None and subject_data.document_ids:
+        result = await db.execute(
+            select(Document.id).where(Document.id.in_(subject_data.document_ids))
+        )
+        found_ids = set(row[0] for row in result.fetchall())
+        missing_ids = set(subject_data.document_ids) - found_ids
+        if missing_ids:
+            raise HTTPException(status_code=404, detail=f"Document(s) not found: {missing_ids}")
 
     update_data = subject_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():

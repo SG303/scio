@@ -1,29 +1,30 @@
 import json
 import logging
-import re
 import math
-from typing import List, Dict, Any, Optional
+import re
+from typing import Any
+
 from app.models import Document
 from app.services.exam_objectives import (
     exam_objectives_section,
     format_documents,
     split_exam_objectives,
 )
+from app.services.generation_progress import GenerationCancelled
 from app.services.language import language_section
 from app.services.openrouter_client import chat_completion_json
-from app.services.generation_progress import GenerationCancelled
 
 logger = logging.getLogger(__name__)
 
 
 def build_prompt(
-    documents: List[Document],
+    documents: list[Document],
     num_questions: int,
     num_choices: int,
     topic: str = "",
     custom_prompt: str = None,
-    existing_questions: List[str] = None,
-    language: Optional[str] = None,
+    existing_questions: list[str] = None,
+    language: str | None = None,
 ) -> str:
     """Build the prompt for generating test questions"""
 
@@ -32,23 +33,23 @@ def build_prompt(
         custom_prompt = None
 
     # Base output format instructions (always included)
-    output_format = f"""OUTPUT FORMAT - Return ONLY a valid JSON object like this example:
-{{
+    output_format = """OUTPUT FORMAT - Return ONLY a valid JSON object like this example:
+{
   "questions": [
-    {{
+    {
       "question": "What is the capital of France?",
       "choices": ["Paris", "London", "Berlin", "Madrid"],
       "correct_answer": 0,
       "explanation": "Paris is the capital city of France."
-    }},
-    {{
+    },
+    {
       "question": "Which planet is closest to the Sun?",
       "choices": ["Venus", "Mercury", "Mars", "Earth"],
       "correct_answer": 1,
       "explanation": "Mercury is the closest planet to the Sun."
-    }}
+    }
   ]
-}}
+}
 
 CRITICAL RULES:
 - The top level must be a JSON object with a single key "questions" containing the array of questions
@@ -150,16 +151,16 @@ IMPORTANT: Create NEW questions that are different from the ones listed above. D
 
 
 async def generate_test_questions(
-    documents: List[Document],
+    documents: list[Document],
     num_questions: int,
     num_choices: int,
     model_id: str,
     topic: str = "",
     custom_prompt: str = None,
-    existing_questions: List[str] = None,
+    existing_questions: list[str] = None,
     on_progress=None,
-    language: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    language: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Generate test questions using OpenRouter API.
 
@@ -180,10 +181,10 @@ async def generate_test_questions(
 
     # Start with any previously existing questions passed to the function
     current_existing = list(existing_questions) if existing_questions else []
-    collected: List[Dict[str, Any]] = []
+    collected: list[dict[str, Any]] = []
     seen_texts = {str(q).strip().casefold() for q in current_existing}
 
-    def _merge(new_questions: List[Dict[str, Any]]) -> None:
+    def _merge(new_questions: list[dict[str, Any]]) -> None:
         """Collect questions that are not already known (new or DB)."""
         for q in new_questions:
             text = str(q["question"]).strip().casefold()
@@ -290,19 +291,19 @@ async def generate_test_questions(
 
 
 async def _generate_with_batch_size(
-    documents: List[Document],
+    documents: list[Document],
     num_questions: int,
     num_choices: int,
     model_id: str,
     topic: str,
     custom_prompt: str,
-    existing_questions: List[str],
+    existing_questions: list[str],
     batch_size: int,
     on_progress=None,
     progress_done: int = 0,
-    progress_total: Optional[int] = None,
-    language: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    progress_total: int | None = None,
+    language: str | None = None,
+) -> list[dict[str, Any]]:
     """Generate questions using the specified batch size.
 
     num_questions is the remaining deficit for THIS call. progress_done /
@@ -376,15 +377,15 @@ async def _generate_with_batch_size(
 
 
 async def _generate_batch(
-    documents: List[Document],
+    documents: list[Document],
     num_questions: int,
     num_choices: int,
     model_id: str,
     topic: str = "",
     custom_prompt: str = None,
-    existing_questions: List[str] = None,
-    language: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    existing_questions: list[str] = None,
+    language: str | None = None,
+) -> list[dict[str, Any]]:
     """Generate a single batch of test questions using OpenRouter API"""
 
     prompt = build_prompt(
@@ -435,7 +436,7 @@ def _repair_choices_arrays(content: str) -> str:
     )
 
 
-def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, Any]]:
+def parse_questions_response(content: str, num_choices: int) -> list[dict[str, Any]]:
     """Parse the AI response and extract questions"""
 
     # Try to extract JSON from the response
@@ -480,7 +481,7 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
 
     # Validate and normalize questions
     validated_questions = []
-    for i, q in enumerate(questions):
+    for q in questions:
         if not isinstance(q, dict):
             continue
 
@@ -563,7 +564,7 @@ def parse_questions_response(content: str, num_choices: int) -> List[Dict[str, A
     return validated_questions
 
 
-def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str, Any]]:
+def extract_questions_fallback(content: str, num_choices: int) -> list[dict[str, Any]]:
     """Fallback parser for malformed JSON responses"""
     questions = []
 
@@ -657,11 +658,11 @@ def extract_questions_fallback(content: str, num_choices: int) -> List[Dict[str,
 
 async def verify_question_integrity(
     question_text: str,
-    choices: List[str],
+    choices: list[str],
     correct_answer_index: int,
     explanation: str,
     verification_model: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Verify if a question and its answer key are logically sound.
 
     verification_model is resolved by the caller (settings table with

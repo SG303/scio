@@ -1,30 +1,31 @@
-from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class DocumentCreate(BaseModel):
     title: str
     doc_type: str  # exam_objectives, study_guide, example_questions
-    content: Optional[str] = None
+    content: str | None = None
 
 
 class DocumentUpdate(BaseModel):
-    title: Optional[str] = None
-    doc_type: Optional[str] = None
-    content: Optional[str] = None
+    title: str | None = None
+    doc_type: str | None = None
+    content: str | None = None
 
 
 class DocumentResponse(BaseModel):
     id: int
     title: str
     doc_type: str
-    content: Optional[str] = None
-    file_path: Optional[str] = None
-    file_name: Optional[str] = None
-    parent_document_id: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
+    content: str | None = None
+    file_path: str | None = None
+    file_name: str | None = None
+    parent_document_id: int | None = None
+    page_start: int | None = None
+    page_end: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -35,7 +36,7 @@ class DocumentResponse(BaseModel):
 class ChapterDetectRequest(BaseModel):
     # None: free detection only (PDF bookmarks, DOCX/Markdown headings);
     # set: let this AI model find the chapters of a PDF
-    ai_model_id: Optional[int] = None
+    ai_model_id: int | None = None
 
 
 class ChapterProposalItem(BaseModel):
@@ -48,8 +49,8 @@ class ChapterProposal(BaseModel):
     unit: Literal["page", "section"]
     unit_count: int
     ai_available: bool  # AI detection works for PDFs only
-    ai_input_tokens: Optional[int] = None  # rough prompt size of the AI detection
-    chapters: List[ChapterProposalItem]
+    ai_input_tokens: int | None = None  # rough prompt size of the AI detection
+    chapters: list[ChapterProposalItem]
 
 
 class ChapterRange(BaseModel):
@@ -59,4 +60,4 @@ class ChapterRange(BaseModel):
 
 
 class ChapterSplitRequest(BaseModel):
-    chapters: List[ChapterRange] = Field(min_length=1, max_length=300)
+    chapters: list[ChapterRange] = Field(min_length=1, max_length=300)

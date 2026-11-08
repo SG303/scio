@@ -6,7 +6,6 @@ with a busy_timeout instead of the default journal mode.
 """
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.database import BUSY_TIMEOUT_MS, async_session
 

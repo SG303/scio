@@ -6,7 +6,6 @@ sees text, and the URLs would just be noise.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -24,8 +23,8 @@ class LectureSource:
 
 
 async def load_lecture_sources(
-    db: AsyncSession, lecture_ids: Optional[List[int]]
-) -> List[LectureSource]:
+    db: AsyncSession, lecture_ids: list[int] | None
+) -> list[LectureSource]:
     """Lectures in the requested order; 404 if one no longer exists, so a
     deleted lecture never silently turns into generation without material."""
     if not lecture_ids:

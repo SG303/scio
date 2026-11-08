@@ -5,7 +5,7 @@ are not study material: when the user selects them, the generators put them
 into their own prompt section that steers the focus of the questions/cards.
 """
 
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 from app.models import Document
 
@@ -14,7 +14,7 @@ EXAM_OBJECTIVES = "exam_objectives"
 
 def split_exam_objectives(
     documents: Sequence[Document],
-) -> Tuple[List[Document], List[Document]]:
+) -> tuple[list[Document], list[Document]]:
     """Split into (study materials, exam objectives)."""
     study = [d for d in documents if d.doc_type != EXAM_OBJECTIVES]
     objectives = [d for d in documents if d.doc_type == EXAM_OBJECTIVES]

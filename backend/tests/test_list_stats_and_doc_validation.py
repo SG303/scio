@@ -6,24 +6,25 @@ per-item get_deck_stats() computation, and generation endpoints must reject
 missing document IDs with a 404 *before* calling the AI generator.
 """
 
-import pytest
 from datetime import timedelta
+
+import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.database import Base
 from app import models
+from app.database import Base
 from app.routers import flashcards as flashcards_router
 from app.routers import subjects as subjects_router
-from app.services.spaced_repetition import get_deck_stats, utc_now
 from app.schemas.flashcard import GenerateFlashcardsRequest
 from app.schemas.subject import (
+    AddCardsRequest,
+    AddQuestionsRequest,
     GenerateFlashcardsInSubjectRequest,
     GenerateTestInSubjectRequest,
-    AddQuestionsRequest,
-    AddCardsRequest,
 )
+from app.services.spaced_repetition import get_deck_stats, utc_now
 
 
 @pytest.fixture
@@ -129,7 +130,7 @@ async def test_deck_stats_map_matches_get_deck_stats(stats_db):
 async def test_list_decks_values_match_get_deck(stats_db):
     """List endpoint data is identical to the per-deck detail endpoint."""
     db = stats_db
-    decks = await _build_decks_with_cards(db)
+    await _build_decks_with_cards(db)
 
     listed = await flashcards_router.list_decks(db)
     assert len(listed) == 2

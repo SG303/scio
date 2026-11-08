@@ -6,8 +6,8 @@ import pytest
 @pytest.mark.parametrize("docker", [False, True])
 @pytest.mark.parametrize("source", ["env", "dotenv", "default"])
 def test_configured_paths_override_local_defaults(tmp_path, monkeypatch, docker, source):
-    from app.config import get_settings
     import app.config as config
+    from app.config import get_settings
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("DATABASE_PATH", raising=False)

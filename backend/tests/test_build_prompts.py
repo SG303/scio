@@ -9,10 +9,9 @@ normalization, and the "do not repeat" sections for existing questions
 and flashcards.
 """
 
-from tests.conftest import MockDocument
-
-from app.services.test_generator import build_prompt
 from app.services.flashcard_generator import build_flashcard_prompt
+from app.services.test_generator import build_prompt
+from tests.conftest import MockDocument
 
 
 def make_docs():

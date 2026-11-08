@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import uuid
-from typing import List
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -59,7 +58,7 @@ async def _get_lecture(db: AsyncSession, lecture_id: int) -> Lecture:
     return lecture
 
 
-@router.get("/subjects/{subject_id}/lectures", response_model=List[LectureListItem])
+@router.get("/subjects/{subject_id}/lectures", response_model=list[LectureListItem])
 async def list_lectures(subject_id: int, db: AsyncSession = Depends(get_db)):
     """Lectures of a subject, newest first."""
     await ensure_subject_exists(db, subject_id)

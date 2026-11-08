@@ -16,8 +16,6 @@ network access is involved.
 import json
 import re
 
-import pytest
-
 import app.services.flashcard_generator as flashcard_generator
 from app.services.flashcard_generator import generate_flashcards
 

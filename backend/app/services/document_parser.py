@@ -1,4 +1,5 @@
 import asyncio
+
 import aiofiles
 
 
@@ -17,7 +18,7 @@ async def parse_document(file_path: str, file_ext: str) -> str:
 
 async def parse_text_file(file_path: str) -> str:
     """Parse plain text or markdown file"""
-    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+    async with aiofiles.open(file_path, encoding="utf-8") as f:
         return await f.read()
 
 

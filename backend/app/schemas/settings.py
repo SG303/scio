@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -30,7 +28,7 @@ class AppSettingsResponse(BaseModel):
 
     verification_model: str
     # Global default AI model (None = not set)
-    default_ai_model_id: Optional[int] = None
+    default_ai_model_id: int | None = None
 
 
 class AppSettingsUpdate(BaseModel):
@@ -39,5 +37,5 @@ class AppSettingsUpdate(BaseModel):
     ``default_ai_model_id: null`` clears the default.
     """
 
-    verification_model: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    default_ai_model_id: Optional[int] = None
+    verification_model: str | None = Field(default=None, min_length=1, max_length=255)
+    default_ai_model_id: int | None = None

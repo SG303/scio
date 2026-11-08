@@ -6,8 +6,8 @@ Note: If you're starting fresh, these changes will be created automatically by S
 This script is for adding to an existing database.
 """
 
-import sqlite3
 import os
+import sqlite3
 
 # Determine database path
 if os.path.exists("/app/data"):

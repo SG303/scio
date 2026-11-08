@@ -3,26 +3,26 @@
 ``None`` means "auto": the AI writes in the language of the study material.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from pydantic import BeforeValidator, StringConstraints
 
 LANGUAGE_MAX_LENGTH = 50
 
 
-def clean_language(language: Optional[str]) -> Optional[str]:
+def clean_language(language: str | None) -> str | None:
     """Trimmed language name, or None for auto (empty / whitespace)."""
     return (language or "").strip() or None
 
 
 # Request/response field type: trimmed, blank = None (auto)
 Language = Annotated[
-    Optional[Annotated[str, StringConstraints(max_length=LANGUAGE_MAX_LENGTH)]],
+    Annotated[str, StringConstraints(max_length=LANGUAGE_MAX_LENGTH)] | None,
     BeforeValidator(lambda value: clean_language(value) if isinstance(value, str) else value),
 ]
 
 
-def language_section(language: Optional[str]) -> str:
+def language_section(language: str | None) -> str:
     """Prompt paragraph that fixes the output language."""
     language = clean_language(language)
     if language:

@@ -9,13 +9,12 @@ import json
 import os
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
 
-from app.schemas.settings import BackupCreateResponse, BackupListResponse
 from app.routers import settings as settings_router
+from app.schemas.settings import BackupCreateResponse, BackupListResponse
 from app.services import db_backup
 
 
@@ -65,7 +64,7 @@ async def test_create_backup_writes_valid_verified_db(source_db):
 
 async def test_create_backup_missing_db_raises(source_db):
     missing = source_db.parent / "does-not-exist.db"
-    with pytest.raises(Exception):
+    with pytest.raises(FileNotFoundError):
         await db_backup.create_backup(str(missing))
 
 

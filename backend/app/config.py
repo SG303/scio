@@ -1,7 +1,8 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
-from functools import lru_cache
 import os
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -42,6 +43,6 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()

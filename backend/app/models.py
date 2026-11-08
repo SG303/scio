@@ -1,17 +1,19 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import (
+    JSON,
+    Boolean,
     Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
     Integer,
     String,
     Text,
-    Boolean,
-    DateTime,
-    Date,
-    ForeignKey,
-    JSON,
-    Float,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+
 from app.database import Base
 
 

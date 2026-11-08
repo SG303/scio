@@ -14,9 +14,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.services.spaced_repetition import (
-    calculate_next_review,
     LEARNING_STEPS,
     MIN_EF,
+    calculate_next_review,
 )
 
 

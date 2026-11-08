@@ -9,6 +9,9 @@ GenerateFlashcardsRequest (ge/le); defaults stay untouched.
 import pytest
 from pydantic import ValidationError
 
+# imported as a module: its Test* schema classes would otherwise trip
+# pytest's collection (PytestCollectionWarning)
+from app.schemas import test as test_schemas
 from app.schemas.flashcard import CreateAndGenerateDeckRequest
 from app.schemas.subject import (
     AddCardsRequest,
@@ -16,10 +19,6 @@ from app.schemas.subject import (
     GenerateFlashcardsInSubjectRequest,
     GenerateTestInSubjectRequest,
 )
-
-# imported as a module: its Test* schema classes would otherwise trip
-# pytest's collection (PytestCollectionWarning)
-from app.schemas import test as test_schemas
 
 
 class TestCreateAndGenerateDeckRequest:

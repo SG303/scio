@@ -1,35 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update, func
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import Test, TestConfig, Question, Document, AIModel, Flashcard
-from app.schemas.test import (
-    TestConfigCreate,
-    TestConfigUpdate,
-    TestConfigResponse,
-    TestResponse,
-    TestDetailResponse,
-    QuestionResponse,
-    AnswerSubmit,
-    TestResultResponse,
-    Choice,
-    GenerateFromTemplateRequest,
-    CreateAndGenerateRequest,
-)
-from app.services.test_generator import generate_test_questions, verify_question_integrity
+from app.models import AIModel, Document, Flashcard, Question, Test, TestConfig
 from app.routers.settings import get_verification_model
+from app.schemas.test import (
+    AnswerSubmit,
+    Choice,
+    CreateAndGenerateRequest,
+    GenerateFromTemplateRequest,
+    QuestionResponse,
+    TestConfigCreate,
+    TestConfigResponse,
+    TestConfigUpdate,
+    TestDetailResponse,
+    TestResponse,
+    TestResultResponse,
+)
 from app.services import generation_progress
 from app.services.generation_progress import GenerationCancelled
 from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import ensure_subject_exists, existing_subject_questions
+from app.services.test_generator import generate_test_questions, verify_question_integrity
 
 
-def _progress_reporter(token: Optional[str]):
+def _progress_reporter(token: str | None):
     """P6.2: build an on_progress callback for a generation token (or None)."""
     if not token:
         return None
@@ -40,7 +40,7 @@ def _progress_reporter(token: Optional[str]):
     return report
 
 
-def build_test_response(test: Test, config: Optional[TestConfig]) -> TestResponse:
+def build_test_response(test: Test, config: TestConfig | None) -> TestResponse:
     """Single place that maps a Test (+ its config) to TestResponse, so
     config-derived fields cannot be forgotten in one of the endpoints."""
     return TestResponse(
@@ -93,7 +93,7 @@ async def create_test_config(config: TestConfigCreate, db: AsyncSession = Depend
     return db_config
 
 
-@router.get("/configs", response_model=List[TestConfigResponse])
+@router.get("/configs", response_model=list[TestConfigResponse])
 async def list_test_configs(db: AsyncSession = Depends(get_db)):
     """List all test configurations (non-templates)"""
     result = await db.execute(
@@ -143,7 +143,7 @@ async def delete_test_config(config_id: int, db: AsyncSession = Depends(get_db))
     return {"message": "Test configuration deleted successfully"}
 
 
-@router.get("/configs/{config_id}/scores", response_model=List[int])
+@router.get("/configs/{config_id}/scores", response_model=list[int])
 async def get_config_scores(config_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)):
     """
     P5.1: chronological scores of the last completed tests for a config.
@@ -160,7 +160,7 @@ async def get_config_scores(config_id: int, limit: int = 20, db: AsyncSession = 
     return list(reversed(scores))
 
 
-@router.get("/templates", response_model=List[TestConfigResponse])
+@router.get("/templates", response_model=list[TestConfigResponse])
 async def list_test_templates(db: AsyncSession = Depends(get_db)):
     """List all test templates"""
     result = await db.execute(
@@ -266,7 +266,7 @@ async def delete_test_template(template_id: int, db: AsyncSession = Depends(get_
 async def create_and_generate_test(
     request: CreateAndGenerateRequest,
     db: AsyncSession = Depends(get_db),
-    progress_token: Optional[str] = Query(None),
+    progress_token: str | None = Query(None),
 ):
     """P5.2: create a config and generate its first test in one commit.
 
@@ -382,9 +382,9 @@ async def create_and_generate_test(
 @router.post("/generate/{config_id}", response_model=TestResponse)
 async def generate_test(
     config_id: int,
-    request: Optional[GenerateFromTemplateRequest] = Body(default=None),
+    request: GenerateFromTemplateRequest | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
-    progress_token: Optional[str] = Query(None),
+    progress_token: str | None = Query(None),
 ):
     """Generate a new test from a configuration or template"""
     # Get config with AI model
@@ -490,7 +490,7 @@ async def generate_test(
     return build_test_response(test, config)
 
 
-@router.get("", response_model=List[TestResponse])
+@router.get("", response_model=list[TestResponse])
 async def list_tests(db: AsyncSession = Depends(get_db)):
     """List all tests"""
     result = await db.execute(

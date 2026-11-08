@@ -11,7 +11,7 @@ CLI instead (app/services/claude_cli.py); their callers stay unchanged.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -30,7 +30,7 @@ async def chat_completion_json(
     system_prompt: str,
     user_prompt: str,
     temperature: float,
-    max_tokens: Optional[int] = None,
+    max_tokens: int | None = None,
 ) -> str:
     """Call the model and return the raw assistant message content.
 
@@ -47,7 +47,7 @@ async def chat_completion_json(
             "OpenRouter API key is not configured. Add it under Settings → AI providers."
         )
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "model": model_id,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -85,7 +85,7 @@ async def chat_completion_json(
         return data["choices"][0]["message"]["content"]
 
 
-async def _post(client: httpx.AsyncClient, payload: Dict[str, Any], api_key: str) -> httpx.Response:
+async def _post(client: httpx.AsyncClient, payload: dict[str, Any], api_key: str) -> httpx.Response:
     return await client.post(
         f"{settings.openrouter_base_url}/chat/completions",
         headers={

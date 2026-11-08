@@ -5,7 +5,6 @@ upgrades existing ones. Idempotent (PRAGMA check)."""
 import logging
 import os
 import sqlite3
-from typing import Optional
 
 from app.config import get_settings
 
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 TABLES = ("test_configs", "flashcard_decks")
 
 
-def migrate(db_path: Optional[str] = None) -> None:
+def migrate(db_path: str | None = None) -> None:
     db_path = db_path or get_settings().database_path
     if not os.path.exists(db_path):
         return

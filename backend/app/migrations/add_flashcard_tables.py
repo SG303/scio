@@ -6,8 +6,8 @@ Note: If you're starting fresh, these tables will be created automatically by SQ
 This script is for adding tables to an existing database.
 """
 
-import sqlite3
 import os
+import sqlite3
 
 # Determine database path
 if os.path.exists("/app/data"):

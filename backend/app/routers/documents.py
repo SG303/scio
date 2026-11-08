@@ -1,26 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
-from typing import Collection, List, Sequence, Type
 import logging
 import os
 import uuid
-import aiofiles
+from collections.abc import Collection, Sequence
 
+import aiofiles
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import get_settings
 from app.database import get_db
-from app.models import AIModel, Document, TestConfig, FlashcardDeck, Subject
+from app.models import AIModel, Document, FlashcardDeck, Subject, TestConfig
 from app.schemas.document import (
     ChapterDetectRequest,
     ChapterProposal,
     ChapterProposalItem,
     ChapterSplitRequest,
     DocumentCreate,
-    DocumentUpdate,
     DocumentResponse,
+    DocumentUpdate,
 )
 from app.services import document_chapters
 from app.services.document_parser import parse_document
-from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -30,7 +31,7 @@ settings = get_settings()
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
 
-@router.get("", response_model=List[DocumentResponse])
+@router.get("", response_model=list[DocumentResponse])
 async def list_documents(db: AsyncSession = Depends(get_db)):
     """List all documents"""
     result = await db.execute(select(Document).order_by(Document.created_at.desc()))
@@ -208,7 +209,7 @@ async def detect_chapters(
     )
 
 
-@router.post("/{document_id}/chapters", response_model=List[DocumentResponse])
+@router.post("/{document_id}/chapters", response_model=list[DocumentResponse])
 async def split_into_chapters(
     document_id: int, request: ChapterSplitRequest, db: AsyncSession = Depends(get_db)
 ):
@@ -284,7 +285,7 @@ async def delete_document(document_id: int, db: AsyncSession = Depends(get_db)):
 
 
 async def _scrub_document_references(
-    models_with_document_ids: Sequence[Type], document_ids: Collection[int], db: AsyncSession
+    models_with_document_ids: Sequence[type], document_ids: Collection[int], db: AsyncSession
 ):
     """Remove deleted documents' IDs from all document_ids JSON lists.
 

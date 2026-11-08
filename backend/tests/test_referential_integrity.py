@@ -15,8 +15,8 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.database import Base
 from app import models
+from app.database import Base
 from app.routers import documents as documents_router
 from app.routers import flashcards as flashcards_router
 from app.routers import tests as tests_router

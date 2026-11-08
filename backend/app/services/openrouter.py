@@ -1,9 +1,10 @@
-import httpx
 import asyncio
 import logging
-from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 class ModelCache:
     """Thread-safe cache for OpenRouter model data."""
 
-    data: Optional[Dict[str, Any]] = None
+    data: dict[str, Any] | None = None
     expires: datetime = field(default_factory=lambda: datetime.min)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -25,7 +26,7 @@ class ModelCache:
 _model_cache = ModelCache()
 
 
-async def fetch_openrouter_models() -> Dict[str, Any]:
+async def fetch_openrouter_models() -> dict[str, Any]:
     """
     Fetch models from OpenRouter API.
     Returns a dictionary mapping model ID to model data (pricing, context_length).

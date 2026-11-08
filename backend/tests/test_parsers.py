@@ -13,13 +13,13 @@ import json
 
 import pytest
 
-from app.services.test_generator import (
-    parse_questions_response,
-    extract_questions_fallback,
-)
 from app.services.flashcard_generator import (
-    parse_flashcards_response,
     extract_flashcards_fallback,
+    parse_flashcards_response,
+)
+from app.services.test_generator import (
+    extract_questions_fallback,
+    parse_questions_response,
 )
 
 

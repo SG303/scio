@@ -5,80 +5,78 @@ Implements all endpoints for flashcard deck management, card operations,
 study sessions, and spaced repetition functionality.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from datetime import datetime, timedelta, timezone
-import logging
-import json
 import csv
 import io
+import json
+import logging
 import re
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import genanki
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import (
-    FlashcardDeck,
+    AIModel,
+    Document,
     Flashcard,
+    FlashcardDeck,
     FlashcardReview,
     StudySession,
-    Document,
-    AIModel,
-    Test,
-    Question,
     Subject,
+    Test,
     TestConfig,
 )
 from app.schemas.flashcard import (
-    FlashcardDeckCreate,
-    FlashcardDeckUpdate,
-    FlashcardDeckResponse,
-    FlashcardDeckWithStats,
-    FlashcardCreate,
-    FlashcardUpdate,
-    FlashcardResponse,
-    FlashcardStudyResponse,
-    ReviewSubmit,
-    ReviewResponse,
-    StudySessionCreate,
-    StudySessionResponse,
-    StudySessionComplete,
-    GenerateFlashcardsRequest,
-    GenerateFlashcardsResponse,
-    CreateFromTestRequest,
-    CreateFromTestResponse,
     CreateAndGenerateDeckRequest,
     CreateAndGenerateDeckResponse,
-    ImportCardsResult,
-    ReviewsPerDay,
+    CreateFromTestRequest,
+    CreateFromTestResponse,
     DeckAnswerTime,
-    SubjectScorePoint,
-    SubjectScoreSeries,
-    FlashcardAnalytics,
     DeckStats,
+    FlashcardAnalytics,
+    FlashcardCreate,
+    FlashcardDeckCreate,
+    FlashcardDeckResponse,
+    FlashcardDeckUpdate,
+    FlashcardDeckWithStats,
+    FlashcardResponse,
+    FlashcardStudyResponse,
+    FlashcardUpdate,
+    GenerateFlashcardsRequest,
+    GenerateFlashcardsResponse,
     GlobalStats,
+    ImportCardsResult,
+    ReviewResponse,
+    ReviewsPerDay,
+    ReviewSubmit,
     StreakResponse,
     StudyQueueResponse,
+    StudySessionComplete,
+    StudySessionCreate,
+    StudySessionResponse,
+    SubjectScorePoint,
+    SubjectScoreSeries,
 )
+from app.services.flashcard_generator import (
+    create_flashcards_from_questions,
+    filter_existing_cards,
+    generate_flashcards,
+)
+from app.services.lecture_sources import load_lecture_sources
 from app.services.spaced_repetition import (
     calculate_next_review,
-    get_study_queue,
     get_deck_stats,
     get_global_stats,
     get_incomplete_session,
     get_streak_stats,
+    get_study_queue,
 )
-from app.services.lecture_sources import load_lecture_sources
 from app.services.subject_materials import ensure_subject_exists, existing_subject_fronts
-from app.services.flashcard_generator import (
-    generate_flashcards,
-    create_flashcards_from_questions,
-    filter_existing_cards,
-)
 
 router = APIRouter(prefix="/api/flashcards", tags=["flashcards"])
 logger = logging.getLogger(__name__)
@@ -89,7 +87,7 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> dict:
+async def get_deck_stats_map(db: AsyncSession, decks: list[FlashcardDeck]) -> dict:
     """Batched variant of get_deck_stats for list endpoints.
 
     Computes the same per-deck statistics as get_deck_stats() with a
@@ -195,7 +193,7 @@ async def get_deck_stats_map(db: AsyncSession, decks: List[FlashcardDeck]) -> di
 # ============== Deck Endpoints ==============
 
 
-@router.get("/decks", response_model=List[FlashcardDeckWithStats])
+@router.get("/decks", response_model=list[FlashcardDeckWithStats])
 async def list_decks(db: AsyncSession = Depends(get_db)):
     """List all flashcard decks with statistics."""
     result = await db.execute(select(FlashcardDeck).order_by(FlashcardDeck.created_at.desc()))
@@ -768,7 +766,7 @@ async def generate_cards_for_deck(
 # ============== Card CRUD ==============
 
 
-@router.get("/decks/{deck_id}/cards", response_model=List[FlashcardResponse])
+@router.get("/decks/{deck_id}/cards", response_model=list[FlashcardResponse])
 async def list_cards(deck_id: int, db: AsyncSession = Depends(get_db)):
     """List all cards in a deck."""
     # Verify deck exists
@@ -845,7 +843,7 @@ async def delete_card(card_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/decks/{deck_id}/study", response_model=StudyQueueResponse)
 async def get_study_cards(
     deck_id: int,
-    session_id: Optional[int] = Query(None, description="Optional session ID for resume"),
+    session_id: int | None = Query(None, description="Optional session ID for resume"),
     db: AsyncSession = Depends(get_db),
 ):
     """Get the study queue for a deck, optionally resuming a session."""
@@ -933,7 +931,7 @@ async def get_incomplete_session_info(deck_id: int, db: AsyncSession = Depends(g
 async def submit_review(
     card_id: int,
     review: ReviewSubmit,
-    session_id: Optional[int] = Query(None, description="Session ID to track progress"),
+    session_id: int | None = Query(None, description="Session ID to track progress"),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a review rating for a flashcard."""

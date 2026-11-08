@@ -6,10 +6,10 @@ already exist, so description fixes reach existing installations.
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app import models
-from app.models import Base, AIModel, Setting
+from app.models import AIModel, Base, Setting
 from app.routers.ai_models import DEFAULT_MODELS, MODELS_VERSION, seed_default_models
 
 SONNET_ID = "anthropic/claude-sonnet-5.5"

@@ -3,8 +3,8 @@ Migration script to add template fields to test_configs table.
 Run this script once to add the is_template and custom_prompt columns.
 """
 
-import sqlite3
 import os
+import sqlite3
 
 # Determine database path
 if os.path.exists("/app/data"):

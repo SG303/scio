@@ -6,10 +6,11 @@ similar to the test_generator but optimized for Q&A flashcard format.
 """
 
 import json
-import re
 import logging
 import math
-from typing import List, Dict, Any, Optional
+import re
+from typing import Any
+
 from app.models import Document, Question
 from app.services.exam_objectives import (
     exam_objectives_section,
@@ -23,12 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 def build_flashcard_prompt(
-    documents: List[Document],
+    documents: list[Document],
     num_cards: int,
     topic: str = "",
-    custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None,
-    language: Optional[str] = None,
+    custom_prompt: str | None = None,
+    existing_fronts: list[str] | None = None,
+    language: str | None = None,
 ) -> str:
     """Build the prompt for generating flashcards."""
 
@@ -149,14 +150,14 @@ IMPORTANT: Create NEW flashcards that are different from the ones listed above. 
 
 
 async def generate_flashcards(
-    documents: List[Document],
+    documents: list[Document],
     num_cards: int,
     model_id: str,
     topic: str = "",
-    custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None,
-    language: Optional[str] = None,
-) -> List[Dict[str, str]]:
+    custom_prompt: str | None = None,
+    existing_fronts: list[str] | None = None,
+    language: str | None = None,
+) -> list[dict[str, str]]:
     """
     Generate flashcards using OpenRouter API.
 
@@ -185,7 +186,7 @@ async def generate_flashcards(
 
     num_batches = math.ceil(num_cards / batch_size)
 
-    for i in range(num_batches):
+    for _batch in range(num_batches):
         cards_in_batch = min(batch_size, num_cards - len(all_cards))
 
         if cards_in_batch <= 0:
@@ -218,14 +219,14 @@ async def generate_flashcards(
 
 
 async def _generate_batch(
-    documents: List[Document],
+    documents: list[Document],
     num_cards: int,
     model_id: str,
     topic: str = "",
-    custom_prompt: Optional[str] = None,
-    existing_fronts: Optional[List[str]] = None,
-    language: Optional[str] = None,
-) -> List[Dict[str, str]]:
+    custom_prompt: str | None = None,
+    existing_fronts: list[str] | None = None,
+    language: str | None = None,
+) -> list[dict[str, str]]:
     """Generate a single batch of flashcards."""
 
     prompt = build_flashcard_prompt(
@@ -245,7 +246,7 @@ async def _generate_batch(
     return flashcards
 
 
-def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
+def parse_flashcards_response(content: str) -> list[dict[str, str]]:
     """Parse the AI response and extract flashcards."""
 
     content = content.strip()
@@ -308,7 +309,7 @@ def parse_flashcards_response(content: str) -> List[Dict[str, str]]:
     return validated
 
 
-def extract_flashcards_fallback(content: str) -> List[Dict[str, str]]:
+def extract_flashcards_fallback(content: str) -> list[dict[str, str]]:
     """Fallback parser for malformed JSON responses."""
     flashcards = []
 
@@ -333,8 +334,8 @@ def extract_flashcards_fallback(content: str) -> List[Dict[str, str]]:
 
 
 def create_flashcards_from_questions(
-    questions: List[Question], wrong_only: bool = True
-) -> List[Dict[str, Any]]:
+    questions: list[Question], wrong_only: bool = True
+) -> list[dict[str, Any]]:
     """
     Convert test questions to flashcard format.
 
@@ -384,7 +385,7 @@ def create_flashcards_from_questions(
 
 
 def filter_existing_cards(
-    cards_data: List[Dict[str, Any]],
+    cards_data: list[dict[str, Any]],
     existing_source_question_ids: Any,
 ) -> tuple:
     """Remove cards whose source_question_id already has a card in the deck.

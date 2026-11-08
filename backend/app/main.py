@@ -11,35 +11,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from contextlib import asynccontextmanager
-import os
+from fastapi.staticfiles import StaticFiles
 
-from app.database import init_db, async_session
-from app.routers import (
-    documents,
-    ai_models,
-    tests,
-    flashcards,
-    subjects,
-    generation,
-    providers,
-    lectures,
-)
-from app.routers.settings import router as settings_router
-from app.routers.ai_models import seed_default_models
 from app.config import get_settings
-from app.services import claude_cli, db_backup
-from app.migrations.add_template_fields import migrate as migrate_template_fields
+from app.database import async_session, init_db
+from app.migrations.add_document_chapters import migrate as migrate_document_chapters
 from app.migrations.add_flashcard_tables import migrate as migrate_flashcard_tables
-from app.migrations.add_subjects_table import migrate as migrate_subjects_table
+from app.migrations.add_language_columns import migrate as migrate_language_columns
 from app.migrations.add_lecture_formatting import migrate as migrate_lecture_formatting
 from app.migrations.add_lecture_sources import migrate as migrate_lecture_sources
-from app.migrations.add_language_columns import migrate as migrate_language_columns
-from app.migrations.add_document_chapters import migrate as migrate_document_chapters
+from app.migrations.add_subjects_table import migrate as migrate_subjects_table
+from app.migrations.add_template_fields import migrate as migrate_template_fields
+from app.routers import (
+    ai_models,
+    documents,
+    flashcards,
+    generation,
+    lectures,
+    providers,
+    subjects,
+    tests,
+)
+from app.routers.ai_models import seed_default_models
+from app.routers.settings import router as settings_router
+from app.services import claude_cli, db_backup
 
 settings = get_settings()
 
@@ -101,9 +102,7 @@ if "*" in cors_origins or not cors_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True
-    if cors_origins != ["*"]
-    else False,  # credentials require specific origins
+    allow_credentials=cors_origins != ["*"],  # credentials require specific origins
     allow_methods=["*"],
     allow_headers=["*"],
 )
