@@ -1,257 +1,366 @@
-# AGENTS.md — Projektgedächtnis & Konventionen für AI Agents
+# Scio
 
-> Diese Datei ist die zentrale Referenz für jeden AI Agent (OpenCode, Claude Code usw.), der an **Scio** arbeitet. Lies sie vollständig, bevor du Änderungen machst. Halte sie aktuell, wenn sich Konventionen oder Start-Befehle ändern.
+> The central reference for every AI agent (Claude Code, Codex, opencode, …)
+> working on **Scio**. Read it in full before making changes. Keep it current
+> when conventions or start commands change.
 
 Follows the SG303 baseline v1 (`sgstack/global/AGENTS.md`,
-`sgstack/baseline/tools.md`). Where this file and the global rules overlap,
-this file adds project detail; the global Git and security rules always apply.
+`sgstack/baseline/tools.md`). The global rules cover the general way of
+working (ask before assuming, simplicity first, surgical changes, verifiable
+goals); this file adds the project detail. The global Git and security rules
+always apply.
 
-## Arbeitsweise — Grundprinzipien
+## Project overview
 
-### 1. Think Before Coding
+Scio is a **personal learning web app** ("Your AI Learning Hub"): AI-generated
+flashcards and practice quizzes for exam preparation, with SM-2 spaced
+repetition for flashcards. Cards and questions are generated through the
+OpenRouter API with freely selectable models, or through the owner's Claude
+subscription (official Claude Code CLI).
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+**Key constraints:**
 
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+- **Single-user project.** No auth, no multi-user features: intended, not
+  forgotten. Do not add login or user management. The app runs only in the
+  local network or via Tailscale.
+- The owner is **not a developer**: results must be verifiable by clicking in
+  the UI, not through command-line output.
+- Every OpenRouter call **costs the owner real money**. Build generation logic
+  so that whole generations are not repeated unnecessarily (reuse partial
+  results instead of discarding them).
 
-### 2. Simplicity First
+## Tech stack
 
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-### 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-### 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-
-```text
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-## Projektüberblick
-
-Scio ist eine **persönliche Lern-Web-App** („Your AI Learning Hub"): AI-generierte Flashcards und Practice-Quizzes zur Prüfungsvorbereitung, mit SM-2-Spaced-Repetition für Flashcards. Karten und Fragen werden über die OpenRouter-API von frei wählbaren Modellen erzeugt – oder über die Claude-Subscription des Besitzers (offizielle Claude-Code-CLI).
-
-**Wichtige Rahmenbedingungen:**
-
-- **Single-User-Projekt.** Kein Auth, keine Multi-User-Funktionen — gewollt, nicht vergessen. Füge keine Login-/Benutzerverwaltung hinzu. Die App läuft nur im lokalen Netzwerk bzw. via Tailscale.
-- Der Besitzer ist **kein Entwickler**: Ergebnisse müssen in der UI klickbar prüfbar sein, nicht über Kommandozeilen-Ausgaben.
-- Jeder OpenRouter-Call **kostet echtes Geld** des Besitzers. Generierungs-Logik so bauen, dass nicht unnötig ganze Generierungen wiederholt werden (Teilergebnisse wiederverwenden statt verwerfen).
-
-## Tech-Stack
-
-| Layer | Technologie |
-|-------|-------------|
+| Layer | Technology |
+|-------|------------|
 | Backend | FastAPI (async), SQLAlchemy 2.0 async, aiosqlite, Pydantic v2 |
 | Frontend | React 18, TypeScript, Vite, TanStack Query v5, React Router v6, Tailwind, shadcn/ui |
-| Daten | SQLite unter `data/scio.db` |
-| AI | OpenRouter Chat-Completions (`app/services/openrouter.py`, `test_generator.py`, `flashcard_generator.py`) |
-| Deployment | Docker (Multi-Stage-Image), Docker Compose, GitHub Actions → ghcr.io |
+| Data | SQLite at `data/scio.db` |
+| AI | OpenRouter chat completions (`app/services/openrouter.py`, `test_generator.py`, `flashcard_generator.py`) |
+| Deployment | Docker (multi-stage image), Docker Compose, GitHub Actions → ghcr.io |
 
-## Codebase-Struktur
+## Codebase structure
 
 ```
 backend/
   app/
-    main.py              # FastAPI-App, Lifespan (init_db, Migrationen, Model-Seeding), SPA-Static-Serving
-    config.py            # pydantic-settings; Pfade, OPENROUTER_API_KEY (Fallback) & CLAUDE_CLI_HOME via .env
-    database.py           # async engine + session factory + get_db-Dependency
-    models.py            # SQLAlchemy-Modelle (Zeitstempel immer timezone-aware via utc_now())
-    routers/             # HTTP-Endpunkte: documents, ai_models, tests, flashcards, subjects
-    schemas/             # Pydantic-Request/Response-Modelle (ein Modul pro Domäne)
-    services/            # Geschäftslogik: spaced_repetition (SM-2), test_generator,
-                         # flashcard_generator, document_parser, openrouter (Model-Cache),
-                         # openrouter_client (gemeinsamer JSON-API-Call mit response_format,
-                         # routet Subscription-Modelle an claude_cli), openrouter_key (Key aus
-                         # Settings-Tabelle oder Env), claude_cli (Claude-Code-CLI: Install, Login, -p),
-                         # subject_materials (Subject-Prüfung + Dedupe-Quellen),
-                         # document_chapters (Bücher in Kapitel-Dokumente aufteilen)
-    migrations/          # idempotente Migrations-Skripte, laufen beim Startup (lifespan)
+    main.py              # FastAPI app, lifespan (init_db, migrations, model seeding), SPA static serving
+    config.py            # pydantic-settings; paths, OPENROUTER_API_KEY (fallback) & CLAUDE_CLI_HOME via .env
+    database.py          # async engine + session factory + get_db dependency
+    models.py            # SQLAlchemy models (timestamps always timezone-aware via utc_now())
+    routers/             # HTTP endpoints: documents, ai_models, tests, flashcards, subjects
+    schemas/             # Pydantic request/response models (one module per domain)
+    services/            # Business logic: spaced_repetition (SM-2), test_generator,
+                         # flashcard_generator, document_parser, openrouter (model cache),
+                         # openrouter_client (shared JSON API call with response_format,
+                         # routes subscription models to claude_cli), openrouter_key (key from
+                         # the settings table or env), claude_cli (Claude Code CLI: install, login, -p),
+                         # subject_materials (subject check + dedupe sources),
+                         # document_chapters (split books into chapter documents)
+    migrations/          # idempotent migration scripts, run at startup (lifespan)
 frontend/
   src/
-    pages/               # Alle Seiten; Unterordner flashcards/ und subjects/
-    components/ui/       # shadcn/ui-generierter Code — NICHT manuell anpassen
-    components/flashcards/FlashcardStudy.tsx  # Kern-Lern-UI
-    services/api.ts      # Alle fetch-Aufrufe (fetchApi-Wrapper)
-    lib/constants.ts    # Geteilte Konstanten (Query-Keys hierher auslagern)
-    lib/utils.ts         # Helpers (u. a. Kostenschätzung)
-  package.json          # Scripts: dev / build / preview / typecheck / lint
-Dockerfile              # Multi-Stage: Frontend-Build → Python-Image mit Static-Files
+    pages/               # All pages; subfolders flashcards/ and subjects/
+    components/ui/       # shadcn/ui generated code: do NOT edit by hand
+    components/flashcards/FlashcardStudy.tsx  # Core study UI
+    services/api.ts      # All fetch calls (fetchApi wrapper)
+    lib/constants.ts     # Shared constants (put query keys here)
+    lib/utils.ts         # Helpers (including cost estimation)
+  package.json           # Scripts: dev / build / preview / typecheck / lint
+Dockerfile               # Multi-stage: frontend build → Python image with static files
 docker-compose.yml.template
-frontend/eslint.config.js  # ESLint-Regeln; shadcn-Code in src/components/ui/ ist von bestimmten Regeln ausgenommen
-.github/workflows/       # docker-build.yml, tests.yml (pytest + frontend typecheck/lint bei jedem Push/PR)
-data/                   # SQLite-DB (runtime, git-ignored ausser .gitkeep)
-uploads/                # Hochgeladene Dokumente (runtime)
+frontend/eslint.config.js  # ESLint rules; shadcn code in src/components/ui/ is exempt from some rules
+.github/workflows/       # docker-build.yml, tests.yml (pytest + frontend typecheck/lint on every push/PR)
+data/                    # SQLite DB (runtime, git-ignored except .gitkeep)
+uploads/                 # Uploaded documents (runtime)
 ```
 
-## Lokale Entwicklung
+## Local development
 
-**Backend** (aus `backend/`, virtuelle Umgebung mit `requirements.txt`):
+**Backend** (from `backend/`, virtual environment with `requirements.txt`):
 
 ```bash
 cd backend
 pip install -r requirements.txt
-cp ../env.example .env        # OPENROUTER_API_KEY eintragen (nur für AI-Generierung nötig;
-                             # alle anderen Endpunkte funktionieren ohne Key)
-uvicorn app.main:app --reload --port 8000
+cp ../env.example .env        # set OPENROUTER_API_KEY (only needed for AI generation;
+                              # all other endpoints work without a key)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Hinweis: Ohne Docker-`/app/data`-Verzeichnis landet die lokale DB relativ zum CWD in `backend/data/scio.db`. Per `DATABASE_PATH` in `.env` überschreibbar.
+Note: without the Docker `/app/data` directory, the local DB ends up relative
+to the working directory in `backend/data/scio.db`. Override with
+`DATABASE_PATH` in `.env`.
 
-**Frontend** (aus `frontend/`):
+**Frontend** (from `frontend/`):
 
 ```bash
 cd frontend
 npm install
-npm run dev        # Vite-Dev-Server (Port 3000, API-Proxy s. vite.config.ts)
+npm run dev        # Vite dev server (port 3000, API proxy see vite.config.ts)
 npm run build      # tsc + vite build → dist/
 ```
 
-**Docker (Produktions-Setup des Besitzers):**
+**Docker (the owner's production setup):**
 
 ```bash
-cp docker-compose.yml.template docker-compose.yml   # OPENROUTER_API_KEY setzen
-docker compose build && docker compose up -d         # Port 8001→8000
-curl http://localhost:8001/api/health                 # Health-Check
+cp docker-compose.yml.template docker-compose.yml   # set OPENROUTER_API_KEY
+docker compose build && docker compose up -d         # port 8001→8000
+curl http://<host>:8001/api/health                   # health check
 ```
 
-## Datenbank & Migrationen — kritische Regeln
+## Database and migrations: critical rules
 
-1. SQLAlchemy `create_all` läuft beim **Startup** (`init_db`) und legt fehlende Tabellen mit dem vollständigen ORM-Schema an. Handgeschriebene Migrationen sind nur für **neue Spalten an bestehenden Tabellen** nötig.
-2. Migrationen in `app/migrations/` müssen **idempotent** sein (immer `PRAGMA table_info`-Check vor `ALTER TABLE`, immer `if table exists`-Check vor `CREATE TABLE`). Sie laufen bei jedem Startup in `main.py`-lifespan — ein Fehler blockiert den kompletten App-Start.
-3. **P5.3 erledigt:** `study_sessions` hat jetzt alle ORM-Spalten (`cards_studied_json`, `new_cards_reviewed_today`, `study_date`) — per CREATE TABLE und idempotenten ALTERs mit PRAGMA-Check. Bleibende Regel: Wenn das ORM neue Spalten bekommt, die zugehörige Migration nie "unberührt" lassen.
-4. SQLite: `PRAGMA foreign_keys` ist per Default **aus** — dangling FKs passieren still. Bei Referenz-Löschungen (z. B. AI-Modelle) immer explizit referenzierende Objekte prüfen.
-5. Bestehende Nutzer-DBs sind heilig: Migrationen nie mit `DROP`/`RENAME` auf Daten-Tabellen "vereinfachen".
+1. SQLAlchemy `create_all` runs at **startup** (`init_db`) and creates missing
+   tables with the full ORM schema. Hand-written migrations are only needed
+   for **new columns on existing tables**.
+2. Migrations in `app/migrations/` must be **idempotent** (always a
+   `PRAGMA table_info` check before `ALTER TABLE`, always an "if table exists"
+   check before `CREATE TABLE`). They run on every startup in the `main.py`
+   lifespan; an error blocks the whole app start.
+3. **P5.3 done:** `study_sessions` now has all ORM columns
+   (`cards_studied_json`, `new_cards_reviewed_today`, `study_date`), via
+   CREATE TABLE and idempotent ALTERs with a PRAGMA check. Lasting rule: when
+   the ORM gets new columns, never leave the corresponding migration untouched.
+4. SQLite: `PRAGMA foreign_keys` is **off** by default, so dangling FKs happen
+   silently. When deleting referenced rows (e.g. AI models), always check the
+   referencing objects explicitly.
+5. Existing user databases are sacred: never "simplify" migrations with
+   `DROP`/`RENAME` on data tables.
 
-## Konventionen
+## Conventions
 
-**Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). Ein Commit = eine logische Änderung. Keine Mixing von Refactoring und Feature.
+**Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`,
+`test:`, `chore:`). One commit = one logical change. Do not mix refactoring
+and features.
 
-**GitHub language:** All content published to GitHub must be in English,
-including commit messages, PR titles and descriptions, issues, review comments,
-release notes, and repository documentation such as `CHANGELOG.md` and
-`RELEASING.md`. New or updated documentation and changelog headings must also
-be in English. Translating historical entries must preserve their meaning,
-versions, and dates; never rewrite tags or published release artifacts.
-Conversation with the owner may remain in German.
+**GitHub language:** everything published to GitHub is in English, including
+commit messages, PR titles and descriptions, issues, review comments, release
+notes and repository documentation such as `CHANGELOG.md` and `RELEASING.md`.
+Translating historical entries must preserve their meaning, versions and
+dates; never rewrite tags or published release artifacts. Conversation with
+the owner may stay in German.
 
 **Backend:**
-- Zeitstempel **immer** timezone-aware (`datetime.now(timezone.utc)`) — zentral via `utc_now()`.
-- Kein `print()` — `logging` verwenden.
-- Queries bevorzugt als **Aggregation** (`select(func.count())`, `GROUP BY`) statt Objekt-Materialisierung; keine N+1-Patterns ( Schleifen über `db.execute` vermeiden).
-- Request/Response-Modelle immer als Pydantic-Schemas in `app/schemas/` pflegen, nicht inline.
-- AI-Generierungs-Logik gehört in `app/services/`, nie in Router-Dateien.
+- Timestamps **always** timezone-aware (`datetime.now(timezone.utc)`),
+  centrally via `utc_now()`.
+- No `print()`; use `logging`.
+- Prefer **aggregation** queries (`select(func.count())`, `GROUP BY`) over
+  materialising objects; no N+1 patterns (avoid loops over `db.execute`).
+- Keep request/response models as Pydantic schemas in `app/schemas/`, never
+  inline.
+- AI generation logic belongs in `app/services/`, never in router files.
 
 **Frontend:**
-- `components/ui/` ist generierter shadcn-Code: **nicht** manuell ändern.
-- Server-State ausschliesslich über TanStack Query (`useQuery`/`useMutation`). Nach Mutationen **alle betroffenen Query-Keys invalidieren** (Query-Keys als Konstanten in `lib/constants.ts`).
-- Jede Mutation braucht sichtbares Fehler-Handling (kein stiller `catch`).
-- UI-Sprache der App ist **Englisch**; neue UI-Texte entsprechend halten.
+- `components/ui/` is generated shadcn code: do **not** edit it by hand.
+- Server state only through TanStack Query (`useQuery`/`useMutation`). After
+  mutations, **invalidate every affected query key** (query keys as constants
+  in `lib/constants.ts`).
+- Every mutation needs visible error handling (no silent `catch`).
+- The app's UI language is **English**; keep new UI text in English.
 
-## Release Management (mandatory)
+## Release management (mandatory)
 
 - Read **[RELEASING.md](RELEASING.md) in full** before release work.
 - Document relevant changes under `## [Unreleased]` in `CHANGELOG.md`.
   Do not bump versions for every change.
-- The authoritative app version is `backend/app/VERSION`; synchronize frontend
-  versions using `python3 scripts/release.py prepare X.Y.Z`.
+- The authoritative app version is `backend/app/VERSION`; synchronize the
+  frontend versions with `python3 scripts/release.py prepare X.Y.Z`.
 - Before completing work, run `python3 scripts/release.py check` and
-  `python3 -m unittest discover -s scripts -p 'test_*.py'` in addition to
-  existing checks; also run frontend and Docker builds before releases.
-- Prepare releases as `chore: release vX.Y.Z` and merge into `main` through a PR.
-  Explicitly pushing a tag triggers tests → GHCR image → GitHub Release.
+  `python3 -m unittest discover -s scripts -p 'test_*.py'` in addition to the
+  existing checks; also run the frontend and Docker builds before releases.
+- Prepare releases as `chore: release vX.Y.Z` and merge them into `main`
+  through a PR. Explicitly pushing a tag triggers tests → GHCR image → GitHub
+  release.
 - Tag and push releases only when publication has been requested. Never change
   existing tags. Setting up the process alone does not publish anything.
-  See `RELEASING.md` for updates, backups, and rollback; never reset user data
+  See `RELEASING.md` for updates, backups and rollback; never reset user data
   automatically.
 
-## Verification — Definition of Done (Pflicht vor jedem Commit)
+## Verification: definition of done (required before every commit)
 
-| Check | Befehl | Status |
-|-------|--------|--------|
-| Backend-Tests | `cd backend && pytest` | Verfügbar seit P0.2 (`backend/tests/`, Dependencies: `pip install -r requirements-dev.txt`). Läuft auch als GitHub-Actions-Job bei jedem Push/PR |
-| Frontend-Typecheck | `cd frontend && npm run typecheck` | Verfügbar seit P0.3 |
-| Lint | `cd frontend && npm run lint` | Verfügbar seit P0.3. Bestehende Warnungen sind bekannte, geplante Bugs (siehe `eslint.config.js`) und blockieren nicht |
-| Docker-Build | `docker build .` (nur bei Dockerfile/Compose-Änderungen) | Verfügbar |
+| Check | Command | Status |
+|-------|---------|--------|
+| Backend tests | `cd backend && pytest` | Available since P0.2 (`backend/tests/`, dependencies: `pip install -r requirements-dev.txt`). Also runs as a GitHub Actions job on every push/PR |
+| Frontend type check | `cd frontend && npm run typecheck` | Available since P0.3 |
+| Lint | `cd frontend && npm run lint` | Available since P0.3. Existing warnings are known, planned bugs (see `eslint.config.js`) and do not block |
+| Docker build | `docker build .` (only for Dockerfile/Compose changes) | Available |
 
-**Eiserne Regel: Niemals committen, wenn ein verfügbarer Check rot ist.** Das gilt seit P0.2/P0.3 für `pytest`, `typecheck` und `lint` ohne Ausnahme.
+**Iron rule: never commit while an available check is red.** Since P0.2/P0.3
+this applies to `pytest`, `typecheck` and `lint` without exception.
 
-Zusätzlich gilt für jedes abgeschlossene Arbeitspaket: Der Besitzer prüft das Ergebnis **durch Benutzen der App** (Klick-Test). Liefere deshalb mit jeder Änderung eine einzeilige, nicht-technische Prüf-Anleitung („Studiere 5 Karten → nach Reload erscheint Resume-Prompt").
+In addition, for every finished work package the owner checks the result **by
+using the app** (click test). So deliver a one-line, non-technical test
+instruction with every change ("Study 5 cards → after a reload the resume
+prompt appears").
 
-## Nicht-Ziele & Landminen
+## Non-goals and landmines
 
-- **Nicht tun:** Auth/Multi-User, neue Abhängigkeiten ohne Not, Änderungen an `components/ui/`, Umbau von SM-2-Konstanten ohne neue Tests, Aufrüstung auf anderes DB-System.
-- **UI-Überarbeitung abgeschlossen (PRs #22–#24):** Themes und
-  Design-Tokens leben in `frontend/src/index.css` (`:root` = Light,
-  `.dark` = Dark). Neue UI-Arbeit muss die semantischen Tokens, die
-  gemeinsamen Komponenten in `frontend/src/components/` (PageHeader,
-  List/RowActions, EmptyState, OptionCard u. a.) und die Karten-Status-
-  und Bewertungsfarben aus `lib/studyColors.ts` verwenden.
-  `components/ui/` bleibt generierter shadcn-Code und damit tabu.
-- **Landmine 1 (gelöst, P4.3):** Die doppelte `_build_interleaved_queue`-Definition in `spaced_repetition.py` wurde entfernt — es existiert nur noch die aktive Definition.
-- **Landmine 2 (mit P1.1 behoben):** `test_generator.py` verwirft ungültige `correct_answer`-Indizes (ausserhalb `0..len(choices)-1`, nicht konvertierbar, fehlend) mit `logger.warning`, statt sie still auf einen gültigen Index zu klemmen. **Niemals Clamping-Muster (`max(0, min(...))`) auf Antwort-Schlüssel zurückbringen oder auf neue Codepfade kopieren** — ein geklemmter Schlüssel lehrt eine falsche Antwort als richtig.
-- **Landmine 3 (mit P1.2 behoben):** Alle OpenRouter-Calls laufen über `app/services/openrouter_client.py` mit `response_format: json_object` (Automatisch-Retry ohne, falls ein Modell es nicht unterstützt). Reparatur-Regexes laufen **nur noch nach gescheitertem `json.loads`** und **nur innerhalb von `"choices": [...]`-Arrays** (`_repair_choices_arrays`). **Niemals globale Regex-Substitutionen über den AI-Response einbauen** — sie zerstören legitime Frage-/Erklärungsinhalte.
-- **Landmine 4 (gelöst, P5.2):** Bei allen Generierungs-Endpunkten (`tests.py`, `flashcards.py`, `subjects.py`) läuft der AI-Call **vor** dem ersten Write — keine offene SQLite-Schreib-Transaktion während des Calls. Muster für neue Generierungs-Endpunkte beibehalten: Reads → AI-Call → Persistenz in einem Commit, Kontrakt-Test „fehlgeschlagene Generierung hinterlässt keine leere Config/Deck".
+- **Do not:** add auth/multi-user, add dependencies without need, change
+  `components/ui/`, change SM-2 constants without new tests, move to another
+  database system.
+- **UI overhaul done (PRs #22–#24):** themes and design tokens live in
+  `frontend/src/index.css` (`:root` = light, `.dark` = dark). New UI work must
+  use the semantic tokens, the shared components in
+  `frontend/src/components/` (PageHeader, List/RowActions, EmptyState,
+  OptionCard and others) and the card status and rating colours from
+  `lib/studyColors.ts`. `components/ui/` stays generated shadcn code and is
+  off limits.
+- **Landmine 1 (solved, P4.3):** the duplicate `_build_interleaved_queue`
+  definition in `spaced_repetition.py` was removed; only the active definition
+  exists.
+- **Landmine 2 (fixed with P1.1):** `test_generator.py` discards invalid
+  `correct_answer` indices (outside `0..len(choices)-1`, not convertible,
+  missing) with `logger.warning` instead of silently clamping them to a valid
+  index. **Never bring back clamping patterns (`max(0, min(...))`) for answer
+  keys or copy them into new code paths**: a clamped key teaches a wrong
+  answer as correct.
+- **Landmine 3 (fixed with P1.2):** all OpenRouter calls go through
+  `app/services/openrouter_client.py` with `response_format: json_object`
+  (automatic retry without it if a model does not support it). Repair regexes
+  run **only after a failed `json.loads`** and **only inside `"choices": [...]`
+  arrays** (`_repair_choices_arrays`). **Never add global regex substitutions
+  over the AI response**: they destroy legitimate question and explanation
+  content.
+- **Landmine 4 (solved, P5.2):** in all generation endpoints (`tests.py`,
+  `flashcards.py`, `subjects.py`) the AI call runs **before** the first write,
+  so no SQLite write transaction is open during the call. Keep this pattern for
+  new generation endpoints: reads → AI call → persistence in one commit, with
+  the contract test "a failed generation leaves no empty config/deck".
 
-## Architektur-Entscheide (dokumentiert gemäss Roadmap)
+## Architecture decisions (documented per roadmap)
 
-- **Generierungs-Fortschritt (P6.2) — Polling statt SSE:** Der Fortschritt langer KI-Generierungen läuft über ein einfaches Polling (`GET /api/generation/progress/{token}`, 1,5 s Intervall) statt Server-Sent-Events. Grund: kein WebSocket/SSE in FastAPI nötig, keine Proxy-Konfiguration für Tailscale nötig, Code bleibt simpel. Cancel ist kooperativ: das Frontend setzt ein Flag, der Generator prüft es zwischen den Batches und wirft `GenerationCancelled`. Ein bereits laufender OpenRouter-Call läuft fertig, das Resultat wird verworfen. Wer je auf SSE/Streams umstellt: `generation_progress.py` und `hooks/useGenerationProgress.ts` sind die einzigen Berührungspunkte.
-- **Offline-Studium (P6.4) — localStorage-Queue:** Die Study-Queue eines Decks wird beim Laden in `localStorage` gespiegelt; offline abgegebene Bewertungen landen in einer Queue (`lib/offlineQueue.ts`) und werden bei `online`-Event **in Reihenfolge** repliziert (letzte Bewertung gewinnt, SM-2-Reihenfolge bleibt erhalten). HTTP-Fehler beim Replizieren (z. B. 404 für gelöschte Karte) werden verworfen, Netzwerkfehler bleiben queued. Nur wenn das Gerät **online**, der Server aber nicht erreichbar ist (z. B. Tailscale down), greift die localStorage-Queue; ist das Gerät selbst offline, pausiert TanStack Query die Rating-Anfrage und setzt sie bei wiederhergestellter Verbindung fort — die lokale Queue kommt dann nicht zum Zug (verhalten unverändert, durch manuellen Test bestätigt).
-- **PWA (P6.4):** Manifest + Service Worker über `vite-plugin-pwa` (autoUpdate). `/api/**` ist nie im Service-Worker-Cache (`navigateFallbackDenylist`) — die API braucht den Server, offline fliegen API-Calls kontrolliert in die react-query-Fehlerpfade.
-- **SQLite-Pragmas (Runde 4):** WAL + `busy_timeout=5000 ms` werden pro Verbindung via `connect`-Event in `database.py` gesetzt — die offene READ-Transaktion über den AI-Call blockiert keine Writes mehr. In-Memory-Test-Engines erstellen eigene Engines und hängen nicht am App-Engine-Event.
-- **Menü & Subjects (Runde 5):** Vier Hauptbereiche (Dashboard, Subjects, Flashcards, Tests), „New"-Menü und Zahnrad (`/settings`, Tabs AI models | AI providers | Test templates). Documents sind global und liegen als Tab unter Subjects; ein Subject merkt sich nur Standard-Dokumente (Vorauswahl, nie exklusiv). Tests und Decks werden in den normalen Wizards optional einem Subject zugewiesen (`subject_id`), nachträglich über „Assign subject". Mit `subject_id` dedupliziert `create-and-generate` gegen die vorhandenen Fragen/Karten des Subjects (`subject_materials.py`).
-- **Claude-Subscription (Runde 6) — offizielle CLI statt Token:** Subscription-Modelle haben die Model-ID `claude-subscription/<alias>` (opus/sonnet/haiku); `openrouter_client.chat_completion_json` erkennt das Präfix und ruft `claude_cli.chat_completion` (`claude -p`, **alle Tools aus** via `--tools ""`, Prompt über stdin, leeres Temp-Arbeitsverzeichnis, `ANTHROPIC_*` aus der Env entfernt). Kein DB-Feld „Provider", keine Migration. Scio liest, speichert oder leitet **nie** Claude-Tokens weiter: der Web-Login startet `claude auth login`, zeigt die Anthropic-URL und reicht nur den Einmal-Code an die CLI weiter; Tokens verwaltet die CLI selbst. Grund: Anthropics Bedingungen verbieten Apps das Sammeln/Vermitteln von Claude-Credentials (Tools wie OpenCode/Cline/CLIProxyAPI, die Tokens selbst nutzen, wurden 2026 gesperrt). Die CLI ist **nicht** im Docker-Image (öffentliches Repo/Image = keine Weiterverteilung proprietärer Software); sie wird per Klick mit dem offiziellen Installer nach `CLAUDE_CLI_HOME` (`/app/claude`, Volume) installiert und aktualisiert sich dort selbst. Niemals Werkzeuge für `claude -p` freischalten, ohne das Prompt-Injection-Risiko durch hochgeladene Dokumente zu bewerten.
-- **OpenRouter-Key im Web-UI:** Der Key liegt in der Settings-Tabelle (`openrouter_api_key`) und hat Vorrang vor `OPENROUTER_API_KEY`; die API gibt nur die letzten 4 Zeichen zurück. Vor dem Speichern prüft `GET /key` bei OpenRouter den Key (kostenlos).
-- **Templates sind reine Vorlagen:** Ein Template wird im Wizard nur *kopiert* (`?template=`), nie verknüpft. `create-and-generate` schreibt immer `is_template=False`, `POST /tests/generate/{id}` lehnt Template-IDs ab und Templates bekommen nie ein `subject_id`. Grund: der `TestConfig.tests`-Cascade würde beim Löschen eines Templates alle daran hängenden Tests mitlöschen. Alt-Tests, die noch an einem Template hängen, zeigt die Löschbestätigung über `test_count` an.
-- **Exam Objectives steuern den Fokus:** Dokumente vom Typ `exam_objectives` sind kein Lernstoff, sondern die Lernziele der Prüfung. Sind sie ausgewählt, setzen die Generatoren sie in einen eigenen Prompt-Abschnitt „EXAM OBJECTIVES" mit der Anweisung, Fragen/Karten darauf auszurichten (`services/exam_objectives.py`). Sie bleiben im Wizard frei abwählbar (Wunsch des Besitzers) — nicht automatisch erzwingen.
-- **Vorlesungsnotizen (Lectures):** Tabelle `lectures` (gehört fest zu einem Subject, Markdown in `content`), Router `routers/lectures.py`. Bilder liegen unter `<uploads>/lectures/<id>/<uuid>.<ext>` (nur PNG/JPEG/GIF/WebP, **kein SVG** wegen Skripten), das Markdown verlinkt `/api/lectures/{id}/images/{name}`. Löschen einer Vorlesung löscht ihren Bilderordner; ein Subject mit Vorlesungen lässt sich nicht löschen (409), Notizen werden nie implizit mitgelöscht. Editor: Milkdown Crepe, lazy geladen (`components/lectures/MarkdownEditor.tsx`, Farben über `markdown-editor.css` an die Tokens gebunden). Das Dock (`LectureDock` in `App.tsx`, State über `LectureEditorProvider` in `main.tsx`) überlebt Navigation; minimiert bleibt der Editor gemountet. Autosave 1,2 s nach der letzten Änderung; jede Änderung landet zusätzlich in `localStorage` (`scio-lecture-draft:<id>`) und gewinnt beim nächsten Öffnen, bis der Server sie bestätigt. Achtung: `db_backup.py` sichert nur die DB, nicht die Bilder im uploads-Volume.
-- **Vorlesung abschliessen (KI-Formatierung):** `POST /api/lectures/{id}/format` (`services/lecture_formatter.py`) korrigiert Rechtschreibung und strukturiert das Markdown, **ohne Inhalt hinzuzufügen oder zu entfernen**. Das Ergebnis wird sofort gespeichert, der Text davor landet in `original_content` (Vergleichsansicht mit Wort-Diff im Dock, „Restore original" per PATCH). Ein Call pro Klick, das Ergebnis geht nie verloren. Der Server verwirft das Ergebnis, wenn sich die Menge der Bild-URLs ändert — dieser Check darf nicht entfallen. Vor dem Call speichert das Frontend die Notizen; während der Formatierung ist der Editor gesperrt. Spalten `original_content`/`formatted_at` per idempotenter Migration `add_lecture_formatting.py`.
-- **Vorlesungen als Lernstoff:** Tests und Decks speichern ihre Quell-Vorlesungen in `lecture_ids` (JSON, wie `document_ids`; Migration `add_lecture_sources.py`). `services/lecture_sources.py` macht daraus dokumentähnliche Objekte (`doc_type="lecture_notes"`, Bild-Links entfernt) für die Generatoren; alle Folge-Generierungen (Deck nachgenerieren, Add questions/cards, neuer Test aus Config) nutzen die gespeicherten `lecture_ids`. Fehlende Vorlesung = 404 vor dem KI-Call; beim Löschen einer Vorlesung wird ihre ID aus allen `lecture_ids` entfernt. Templates bekommen nie `lecture_ids` (Vorlesungen gehören zu einem Subject). Im Wizard erscheinen Vorlesungen nur mit gewähltem Subject; `?lecture=<id>` (zusammen mit `?subject=`) wählt eine vor.
-- **Bücher in Kapitel aufteilen:** Ein Dokument (meist ein grosses PDF) wird auf Wunsch in ein Dokument pro Hauptkapitel geteilt (`services/document_chapters.py`, `POST /api/documents/{id}/chapters/detect` → Vorschau, `POST /api/documents/{id}/chapters` → Anlegen). Erkennung billig zuerst: PDF-Lesezeichen bzw. DOCX-„Heading 1“/Markdown-`#`; nur bei PDFs ohne Lesezeichen und nur auf Klick die KI. Die KI sieht **nie das ganze Buch**, nur die ersten Seiten (Inhaltsverzeichnis) und den Seitenanfang jeder Seite, und liefert nur Startseiten; den Text schneidet immer der Server zu (`locate_chapters` korrigiert gedruckte vs. PDF-Seitenzahlen). Nichts wird gespeichert, bevor der Besitzer die Vorschau bestätigt. Kapitel sind normale Dokumente mit `parent_document_id` (+ `page_start`/`page_end` bei PDFs; Migration `add_document_chapters.py`) und erben den `doc_type`; das Buch bleibt erhalten. Ein Buch wird nur einmal geteilt (409), Kapitel nicht weiter. Löschen eines Buchs löscht seine Kapitel mit (Referenzen werden bereinigt). UI gruppiert Kapitel unter dem Buch (`lib/documents.ts`, `DocumentPicker`, Documents-Seite).
-
-- **Cross-origin write protection:** API mutations reject browser Origins other than the request origin or an explicit `ALLOWED_ORIGINS` entry. `*` only enables CORS reads, never arbitrary cross-origin writes. Requests without Origin remain available to CLI clients unless `Sec-Fetch-Site` is `cross-site`. Reverse proxies must preserve the public Host and forward `X-Forwarded-Proto`; the Docker image sets `FORWARDED_ALLOW_IPS=*` so uvicorn honors it from any peer (uvicorn's default only trusts 127.0.0.1, which broke every write behind Traefik); the Vite development proxy preserves Host too.
+- **Generation progress (P6.2): polling instead of SSE.** Progress of long AI
+  generations uses simple polling (`GET /api/generation/progress/{token}`,
+  1.5 s interval) instead of server-sent events. Reason: no WebSocket/SSE
+  needed in FastAPI, no proxy configuration for Tailscale, code stays simple.
+  Cancel is cooperative: the frontend sets a flag, the generator checks it
+  between batches and raises `GenerationCancelled`. An OpenRouter call that is
+  already running finishes and its result is discarded. Whoever moves to
+  SSE/streams: `generation_progress.py` and `hooks/useGenerationProgress.ts`
+  are the only touch points.
+- **Offline study (P6.4): localStorage queue.** A deck's study queue is
+  mirrored to `localStorage` on load; ratings given offline go into a queue
+  (`lib/offlineQueue.ts`) and are replayed **in order** on the `online` event
+  (last rating wins, SM-2 order is preserved). HTTP errors while replaying
+  (e.g. 404 for a deleted card) are dropped, network errors stay queued. The
+  localStorage queue only applies when the device is **online** but the server
+  is unreachable (e.g. Tailscale down); when the device itself is offline,
+  TanStack Query pauses the rating request and resumes it once the connection
+  is back, so the local queue is not used (behaviour unchanged, confirmed by a
+  manual test).
+- **PWA (P6.4):** manifest and service worker via `vite-plugin-pwa`
+  (autoUpdate). `/api/**` is never in the service worker cache
+  (`navigateFallbackDenylist`): the API needs the server, offline API calls
+  fail into the react-query error paths in a controlled way.
+- **SQLite pragmas (round 4):** WAL + `busy_timeout=5000 ms` are set per
+  connection via the `connect` event in `database.py`, so the open READ
+  transaction during the AI call no longer blocks writes. In-memory test
+  engines create their own engines and do not use the app engine event.
+- **Menu and subjects (round 5):** four main areas (Dashboard, Subjects,
+  Flashcards, Tests), a "New" menu and the gear (`/settings`, tabs AI models |
+  AI providers | Test templates). Documents are global and live as a tab under
+  Subjects; a subject only remembers default documents (preselection, never
+  exclusive). Tests and decks are optionally assigned to a subject
+  (`subject_id`) in the normal wizards, later via "Assign subject". With
+  `subject_id`, `create-and-generate` deduplicates against the subject's
+  existing questions/cards (`subject_materials.py`).
+- **Claude subscription (round 6): official CLI instead of tokens.**
+  Subscription models have the model ID `claude-subscription/<alias>`
+  (opus/sonnet/haiku); `openrouter_client.chat_completion_json` recognises the
+  prefix and calls `claude_cli.chat_completion` (`claude -p`, **all tools
+  off** via `--tools ""`, prompt over stdin, empty temporary working
+  directory, `ANTHROPIC_*` removed from the env). No "provider" DB field, no
+  migration. Scio **never** reads, stores or forwards Claude tokens: the web
+  login starts `claude auth login`, shows the Anthropic URL and only passes the
+  one-time code to the CLI; the CLI manages the tokens itself. Reason:
+  Anthropic's terms forbid apps from collecting or brokering Claude
+  credentials (tools such as OpenCode/Cline/CLIProxyAPI that used tokens
+  themselves were blocked in 2026). The CLI is **not** in the Docker image
+  (public repo/image = no redistribution of proprietary software); it is
+  installed with one click via the official installer into `CLAUDE_CLI_HOME`
+  (`/app/claude`, volume) and updates itself there. Never enable tools for
+  `claude -p` without assessing the prompt injection risk from uploaded
+  documents.
+- **OpenRouter key in the web UI:** the key lives in the settings table
+  (`openrouter_api_key`) and takes precedence over `OPENROUTER_API_KEY`; the
+  API only returns the last 4 characters. Before saving, `GET /key` checks the
+  key with OpenRouter (free).
+- **Templates are pure templates:** the wizard only *copies* a template
+  (`?template=`), it never links it. `create-and-generate` always writes
+  `is_template=False`, `POST /tests/generate/{id}` rejects template IDs and
+  templates never get a `subject_id`. Reason: the `TestConfig.tests` cascade
+  would delete every test attached to a template when the template is
+  deleted. Old tests still attached to a template are shown in the delete
+  confirmation via `test_count`.
+- **Exam objectives steer the focus:** documents of type `exam_objectives` are
+  not study material but the exam's learning objectives. When selected, the
+  generators put them into their own prompt section "EXAM OBJECTIVES" with
+  the instruction to align questions/cards with them
+  (`services/exam_objectives.py`). They stay freely deselectable in the wizard
+  (the owner's wish); do not force them automatically.
+- **Lecture notes (lectures):** table `lectures` (belongs to one subject,
+  Markdown in `content`), router `routers/lectures.py`. Images live under
+  `<uploads>/lectures/<id>/<uuid>.<ext>` (only PNG/JPEG/GIF/WebP, **no SVG**
+  because of scripts); the Markdown links
+  `/api/lectures/{id}/images/{name}`. Deleting a lecture deletes its image
+  folder; a subject with lectures cannot be deleted (409), notes are never
+  deleted implicitly. Editor: Milkdown Crepe, lazy loaded
+  (`components/lectures/MarkdownEditor.tsx`, colours bound to the tokens via
+  `markdown-editor.css`). The dock (`LectureDock` in `App.tsx`, state via
+  `LectureEditorProvider` in `main.tsx`) survives navigation; minimised, the
+  editor stays mounted. Autosave 1.2 s after the last change; every change is
+  also written to `localStorage` (`scio-lecture-draft:<id>`) and wins on the
+  next open until the server confirms it. Caution: `db_backup.py` only backs
+  up the DB, not the images in the uploads volume.
+- **Finishing a lecture (AI formatting):** `POST /api/lectures/{id}/format`
+  (`services/lecture_formatter.py`) fixes spelling and structures the
+  Markdown **without adding or removing content**. The result is saved
+  immediately, the previous text goes into `original_content` (comparison
+  view with word diff in the dock, "Restore original" via PATCH). One call per
+  click; the result is never lost. The server discards the result if the set
+  of image URLs changes; this check must not be removed. Before the call the
+  frontend saves the notes; the editor is locked during formatting. Columns
+  `original_content`/`formatted_at` via the idempotent migration
+  `add_lecture_formatting.py`.
+- **Lectures as study material:** tests and decks store their source lectures
+  in `lecture_ids` (JSON, like `document_ids`; migration
+  `add_lecture_sources.py`). `services/lecture_sources.py` turns them into
+  document-like objects (`doc_type="lecture_notes"`, image links removed) for
+  the generators; all follow-up generations (regenerate deck, add
+  questions/cards, new test from config) use the stored `lecture_ids`. A
+  missing lecture = 404 before the AI call; when a lecture is deleted, its ID
+  is removed from all `lecture_ids`. Templates never get `lecture_ids`
+  (lectures belong to a subject). In the wizard, lectures only appear with a
+  selected subject; `?lecture=<id>` (together with `?subject=`) preselects
+  one.
+- **Splitting books into chapters:** on request, a document (usually a large
+  PDF) is split into one document per main chapter
+  (`services/document_chapters.py`, `POST /api/documents/{id}/chapters/detect`
+  → preview, `POST /api/documents/{id}/chapters` → create). Cheap detection
+  first: PDF bookmarks, DOCX "Heading 1" or Markdown `#`; the AI only for
+  PDFs without bookmarks and only on click. The AI **never sees the whole
+  book**, only the first pages (table of contents) and the start of each
+  page, and only returns start pages; the server always cuts the text
+  (`locate_chapters` corrects printed vs. PDF page numbers). Nothing is saved
+  before the owner confirms the preview. Chapters are normal documents with
+  `parent_document_id` (+ `page_start`/`page_end` for PDFs; migration
+  `add_document_chapters.py`) and inherit the `doc_type`; the book is kept. A
+  book is split only once (409), chapters are not split further. Deleting a
+  book deletes its chapters (references are cleaned up). The UI groups
+  chapters under the book (`lib/documents.ts`, `DocumentPicker`, Documents
+  page).
+- **Cross-origin write protection:** API mutations reject browser Origins
+  other than the request origin or an explicit `ALLOWED_ORIGINS` entry. `*`
+  only enables CORS reads, never arbitrary cross-origin writes. Requests
+  without Origin remain available to CLI clients unless `Sec-Fetch-Site` is
+  `cross-site`. Reverse proxies must preserve the public Host and forward
+  `X-Forwarded-Proto`; the Docker image sets `FORWARDED_ALLOW_IPS=*` so
+  uvicorn honours it from any peer (uvicorn's default only trusts 127.0.0.1,
+  which broke every write behind Traefik); the Vite development proxy
+  preserves Host too.
 
 ## Deviations from baseline
 
 - `tool-canon`: the backend uses `requirements.txt` with pip instead of uv;
   `scripts/` are plain Python scripts tested with `unittest`. Moving the
   backend to uv is planned as a separate change.
-- Language: this file is still in German; translating it to English is
-  planned as a separate change.
