@@ -6,6 +6,8 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.7.2] - 2026-11-08
+
 ### Security
 
 - Update backend dependencies with known vulnerabilities: python-multipart
@@ -30,6 +32,7 @@ and uses [Semantic Versioning](https://semver.org/).
   versions.
 - Let Dependabot propose weekly updates for npm, pip, Docker and GitHub
   Actions dependencies.
+- Update aiofiles to 25.1 and python-dateutil to 4.0.
 
 ## [v0.7.1] - 2026-11-04
 
