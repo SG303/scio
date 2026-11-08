@@ -23,7 +23,7 @@ async def parse_text_file(file_path: str) -> str:
 
 def _sync_parse_pdf(file_path: str) -> str:
     """Synchronous PDF parsing (runs in executor to avoid blocking)"""
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
     
     reader = PdfReader(file_path)
     text_parts = []
@@ -42,7 +42,7 @@ async def parse_pdf(file_path: str) -> str:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _sync_parse_pdf, file_path)
     except ImportError:
-        raise ValueError("PyPDF2 is required for PDF parsing")
+        raise ValueError("pypdf is required for PDF parsing")
     except Exception as e:
         raise ValueError(f"Failed to parse PDF: {str(e)}")
 
