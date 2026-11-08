@@ -1,9 +1,19 @@
+# Dependabot config (SG303 baseline v1). Weekly on Sunday evening, minor and
+# patch updates grouped and merged automatically by dependabot-auto-merge.yml
+# once the checks pass. Majors come as separate PRs (or are parked below).
+# The 7-day cooldown skips versions younger than a week; security updates are
+# not delayed.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
+      day: sunday
+      time: "22:00"
+      timezone: Europe/Zurich
+    cooldown:
+      default-days: 7
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
@@ -35,6 +45,11 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+      day: sunday
+      time: "22:00"
+      timezone: Europe/Zurich
+    cooldown:
+      default-days: 7
     groups:
       pip-minor-and-patch:
         update-types: [minor, patch]
@@ -43,6 +58,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: sunday
+      time: "22:00"
+      timezone: Europe/Zurich
+    cooldown:
+      default-days: 7
     ignore:
       # Odd Node majors never become LTS; stay on even (LTS) releases
       - dependency-name: node
@@ -52,3 +72,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: sunday
+      time: "22:00"
+      timezone: Europe/Zurich
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        update-types: [minor, patch]

@@ -2,6 +2,10 @@
 
 > Diese Datei ist die zentrale Referenz für jeden AI Agent (OpenCode, Claude Code usw.), der an **Scio** arbeitet. Lies sie vollständig, bevor du Änderungen machst. Halte sie aktuell, wenn sich Konventionen oder Start-Befehle ändern.
 
+Follows the SG303 baseline v1 (`sgstack/global/AGENTS.md`,
+`sgstack/baseline/tools.md`). Where this file and the global rules overlap,
+this file adds project detail; the global Git and security rules always apply.
+
 ## Arbeitsweise — Grundprinzipien
 
 ### 1. Think Before Coding
@@ -243,3 +247,11 @@ Zusätzlich gilt für jedes abgeschlossene Arbeitspaket: Der Besitzer prüft das
 - **Bücher in Kapitel aufteilen:** Ein Dokument (meist ein grosses PDF) wird auf Wunsch in ein Dokument pro Hauptkapitel geteilt (`services/document_chapters.py`, `POST /api/documents/{id}/chapters/detect` → Vorschau, `POST /api/documents/{id}/chapters` → Anlegen). Erkennung billig zuerst: PDF-Lesezeichen bzw. DOCX-„Heading 1“/Markdown-`#`; nur bei PDFs ohne Lesezeichen und nur auf Klick die KI. Die KI sieht **nie das ganze Buch**, nur die ersten Seiten (Inhaltsverzeichnis) und den Seitenanfang jeder Seite, und liefert nur Startseiten; den Text schneidet immer der Server zu (`locate_chapters` korrigiert gedruckte vs. PDF-Seitenzahlen). Nichts wird gespeichert, bevor der Besitzer die Vorschau bestätigt. Kapitel sind normale Dokumente mit `parent_document_id` (+ `page_start`/`page_end` bei PDFs; Migration `add_document_chapters.py`) und erben den `doc_type`; das Buch bleibt erhalten. Ein Buch wird nur einmal geteilt (409), Kapitel nicht weiter. Löschen eines Buchs löscht seine Kapitel mit (Referenzen werden bereinigt). UI gruppiert Kapitel unter dem Buch (`lib/documents.ts`, `DocumentPicker`, Documents-Seite).
 
 - **Cross-origin write protection:** API mutations reject browser Origins other than the request origin or an explicit `ALLOWED_ORIGINS` entry. `*` only enables CORS reads, never arbitrary cross-origin writes. Requests without Origin remain available to CLI clients unless `Sec-Fetch-Site` is `cross-site`. Reverse proxies must preserve the public Host and forward `X-Forwarded-Proto`; the Docker image sets `FORWARDED_ALLOW_IPS=*` so uvicorn honors it from any peer (uvicorn's default only trusts 127.0.0.1, which broke every write behind Traefik); the Vite development proxy preserves Host too.
+
+## Deviations from baseline
+
+- `tool-canon`: the backend uses `requirements.txt` with pip instead of uv;
+  `scripts/` are plain Python scripts tested with `unittest`. Moving the
+  backend to uv is planned as a separate change.
+- Language: this file is still in German; translating it to English is
+  planned as a separate change.
