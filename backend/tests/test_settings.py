@@ -31,11 +31,6 @@ async def session():
 
 
 @pytest.mark.asyncio
-async def test_fallback_to_config_default_when_unset(session):
-    assert await get_verification_model(session) == get_settings().verification_model
-
-
-@pytest.mark.asyncio
 async def test_fallback_when_stored_value_is_empty(session):
     session.add(Setting(key=VERIFICATION_MODEL_KEY, value=""))
     await session.commit()

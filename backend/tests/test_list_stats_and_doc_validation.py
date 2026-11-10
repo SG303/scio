@@ -1,9 +1,9 @@
 """Regression tests for the round-3 backend fixes:
 
-List endpoints (decks / subjects) must compute their stats with a constant
-number of batched GROUP BY queries while producing values identical to the
-per-item get_deck_stats() computation, and generation endpoints must reject
-missing document IDs with a 404 *before* calling the AI generator.
+List endpoints (decks / subjects) must produce the same stats as the per-item
+get_deck_stats() computation, and generation endpoints must reject missing
+document IDs with a 404 *before* calling the AI generator. These tests check
+result correctness, not the number of SQL queries.
 """
 
 from datetime import timedelta

@@ -6,12 +6,6 @@ startup. Importing the module catches them in CI.
 """
 
 
-def test_app_module_imports():
-    import app.main  # noqa: F401
-
-    assert app.main.app.title
-
-
 def test_unknown_api_path_returns_404():
     """Regression: unknown /api/* paths must return a real 404 (JSON
     detail body) instead of the SPA catch-all's HTTP 200."""

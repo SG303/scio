@@ -17,7 +17,7 @@ describe('formatErrorDetail', () => {
     )
   })
 
-  it('handles single-element locators and non-string messages', () => {
+  it('handles body-only and query parameter locators', () => {
     expect(formatErrorDetail([{ loc: ['body'], msg: 'invalid request' }])).toBe('invalid request')
     expect(formatErrorDetail([{ loc: ['query', 'limit'], msg: 'Input should be a valid integer' }])).toBe(
       'limit: Input should be a valid integer'

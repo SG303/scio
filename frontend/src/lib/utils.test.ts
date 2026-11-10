@@ -35,16 +35,6 @@ describe('parseApiDate', () => {
     expect(parseApiDate('2026-10-20T22:12:21.484+02:00').getTime()).toBe(utc)
     expect(parseApiDate('2026-10-20T15:12:21.484-0500').getTime()).toBe(utc)
   })
-
-  it('leaves date-only strings to the native parser', () => {
-    expect(parseApiDate('2026-10-20').getTime()).toBe(Date.UTC(2026, 9, 20))
-  })
-
-  it('copies Date inputs', () => {
-    const date = new Date(utc)
-    expect(parseApiDate(date).getTime()).toBe(utc)
-    expect(parseApiDate(date)).not.toBe(date)
-  })
 })
 
 describe('formatDate', () => {

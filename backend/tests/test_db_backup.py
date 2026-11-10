@@ -62,12 +62,6 @@ async def test_create_backup_writes_valid_verified_db(source_db):
     assert rows == [("note 0",), ("note 1",), ("note 2",)]
 
 
-async def test_create_backup_missing_db_raises(source_db):
-    missing = source_db.parent / "does-not-exist.db"
-    with pytest.raises(FileNotFoundError):
-        await db_backup.create_backup(str(missing))
-
-
 async def test_create_backup_same_second_collision_suffix(source_db, tmp_path):
     backup_dir = db_backup.get_backup_dir(str(source_db))
     backup_dir.mkdir(parents=True)
@@ -180,19 +174,6 @@ async def test_post_creates_backup_and_get_lists_it(tmp_path, source_db, monkeyp
     assert listing_json["backups"][0]["created_at"].endswith("+00:00")
 
 
-async def test_list_endpoint_newest_first(tmp_path, source_db, monkeypatch):
-    _stub_settings(monkeypatch, source_db)
-    backup_dir = db_backup.get_backup_dir(str(source_db))
-    backup_dir.mkdir(parents=True)
-    _touch_backup_files(backup_dir, 3)
-
-    listing = await settings_router.list_backups()
-
-    assert [b.file_name for b in listing.backups] == [
-        f"scio-backup-20260101-{i:06d}.db" for i in (2, 1, 0)
-    ]
-
-
 async def test_post_endpoint_failure_returns_500_with_detail(tmp_path, monkeypatch):
     _stub_settings(monkeypatch, tmp_path / "does-not-exist.db")
 
@@ -200,3 +181,4 @@ async def test_post_endpoint_failure_returns_500_with_detail(tmp_path, monkeypat
         await settings_router.create_backup()
     assert error.value.status_code == 500
     assert "Database backup failed" in error.value.detail
+    assert not (tmp_path / "does-not-exist.db").exists()

@@ -6,6 +6,18 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Remove 25 redundant or low-value test cases while retaining checks for
+  learning correctness, paid generation, data preservation and security.
+
+### Fixed
+
+- Isolate SQLite connection tests from the configured app database and make
+  rejected-origin tests safe even if the origin guard regresses.
+- Strengthen answer-key truncation, repaired explanation, minimum review
+  interval and backup failure checks; correct misleading test descriptions.
+
 ## [v0.7.3] - 2026-11-10
 
 ### Changed

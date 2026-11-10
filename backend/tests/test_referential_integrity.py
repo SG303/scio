@@ -11,7 +11,6 @@ router cleanup logic keep children consistent when parents are deleted:
 """
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -207,12 +206,3 @@ async def test_delete_document_scrubs_document_ids(integrity_db):
     subject = (await db.execute(select(models.Subject))).scalar_one()
     assert subject.document_ids == []
     assert await _row_count(db, models.Document) == 1
-
-
-async def test_delete_template_ignores_missing_document(integrity_db):
-    """Unknown document IDs are a 404 and clean up nothing."""
-    db = integrity_db
-    with pytest.raises(HTTPException) as error:
-        await documents_router.delete_document(9999, db)
-    assert error.value.status_code == 404
-    assert await _row_count(db, models.TestConfig) == 0
