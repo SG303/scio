@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 settings = get_settings()
 
-# Maximum file upload size: 100 MB
-MAX_FILE_SIZE = 100 * 1024 * 1024
+# Maximum file upload size: 300 MB
+MAX_FILE_SIZE = 300 * 1024 * 1024
 
 
 @router.get("", response_model=list[DocumentResponse])

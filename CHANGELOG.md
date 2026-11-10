@@ -6,6 +6,11 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the document upload limit from 100 MB to 300 MB so large textbooks
+  can be uploaded.
+
 ## [v0.7.2] - 2026-11-08
 
 ### Security
