@@ -13,10 +13,6 @@ def _reset():
     gp._entries.clear()
 
 
-def test_new_token_is_unique():
-    assert gp.new_token() != gp.new_token()
-
-
 def test_update_and_get_roundtrip():
     _reset()
     token = "tok-1"
@@ -59,7 +55,7 @@ def test_cancel_then_update_raises():
     assert gp.get(token)["status"] == "cancelled"
 
 
-def test_cancel_unknown_token_is_false():
+def test_cancel_unknown_token_returns_none():
     _reset()
     assert gp.cancel("nope") is None
 

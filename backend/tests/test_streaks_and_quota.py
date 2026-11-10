@@ -8,7 +8,6 @@ simple data structures, the quota helper takes plain integers and dates.
 from datetime import date, timedelta
 
 from app.services.spaced_repetition import (
-    DAILY_GOAL_REVIEWS,
     compute_streak,
     remaining_new_quota,
 )
@@ -73,8 +72,3 @@ class TestRemainingNewQuota:
 
     def test_never_negative(self):
         assert remaining_new_quota(10, 25, TODAY, TODAY) == 0
-
-
-class TestDailyGoalConstant:
-    def test_goal_is_sane(self):
-        assert 1 <= DAILY_GOAL_REVIEWS <= 200

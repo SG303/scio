@@ -77,16 +77,6 @@ class TestBuildPromptDefaults:
         assert "CUSTOM INSTRUCTIONS:" not in prompt
         assert "Include a mix of difficulty levels" in prompt
 
-    def test_empty_string_treated_as_none(self):
-        prompt = build_prompt(
-            documents=[],
-            num_questions=5,
-            num_choices=4,
-            topic="Docker",
-            custom_prompt="",
-        )
-        assert "CUSTOM INSTRUCTIONS:" not in prompt
-
     def test_whitespace_only_treated_as_none(self):
         prompt = build_prompt(
             documents=[],

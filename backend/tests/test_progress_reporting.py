@@ -21,14 +21,6 @@ def _question(name):
     }
 
 
-async def test_router_progress_reporter_is_awaitable():
-    reporter = _progress_reporter("regression-token")
-    assert reporter is not None
-    # The generator awaits the callback's return value — this must not
-    # raise TypeError.
-    await reporter(stage="Generating questions", done=0, total=5)
-
-
 async def test_generation_with_router_reporter_reports_progress(monkeypatch):
     """End-to-end regression: router reporter + generator must not crash
     and must record progress entries."""

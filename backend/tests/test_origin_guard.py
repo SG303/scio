@@ -8,9 +8,7 @@ from fastapi.testclient import TestClient
 def test_foreign_forms_are_blocked_before_handlers(origin):
     from app.main import app
 
-    response = TestClient(app).post(
-        "/api/providers/claude/logout", headers={"Origin": origin}, data={}
-    )
+    response = TestClient(app).post("/api/does-not-exist", headers={"Origin": origin}, data={})
     assert response.status_code == 403
 
 
