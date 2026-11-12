@@ -50,8 +50,18 @@ export const LANGUAGE_PRESETS = ['German', 'English', 'French', 'Italian', 'Span
 export const LANGUAGE_MAX_LENGTH = 50
 
 // A session's index refers to its initial queue, not a newly filtered queue.
+// gcTime 0: the queue is dropped when the study page closes, so resuming a
+// session later loads the cards that are still open instead of the old list.
 export const studyQueueQueryOptions = {
   staleTime: Infinity,
+  gcTime: 0,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
+} as const
+
+// Whether a session can be resumed must come from the server on every visit:
+// a cached answer offered a session that had been completed in the meantime.
+export const incompleteSessionQueryOptions = {
+  staleTime: 0,
+  gcTime: 0,
 } as const

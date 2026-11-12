@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { FlashcardStudy } from '@/components/flashcards/FlashcardStudy'
 import { flashcardsApi } from '@/services/api'
 import { cn, parseApiDate } from '@/lib/utils'
-import { queryKeys, studyQueueQueryOptions } from '@/lib/constants'
+import { incompleteSessionQueryOptions, queryKeys, studyQueueQueryOptions } from '@/lib/constants'
 import { ratingStyles } from '@/lib/studyColors'
 import {
   cacheStudyQueue,
@@ -130,6 +130,7 @@ export default function StudySession() {
     isLoading: sessionChecking,
     error: incompleteSessionError,
   } = useQuery({
+    ...incompleteSessionQueryOptions,
     queryKey: queryKeys.incompleteSession(deckId),
     queryFn: () => flashcardsApi.getIncompleteSession(parseInt(deckId!)),
     enabled: !!deckId,
