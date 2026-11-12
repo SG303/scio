@@ -13,6 +13,9 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Studying a deck again shortly after finishing a session no longer offers to
+  continue the finished session with its old cards, where every rating failed
+  with "Save failed".
 - Isolate SQLite connection tests from the configured app database and make
   rejected-origin tests safe even if the origin guard regresses.
 - Strengthen answer-key truncation, repaired explanation, minimum review
