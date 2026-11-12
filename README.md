@@ -2,6 +2,9 @@
 
 Your AI Learning Hub. Upload study materials, generate practice tests, create flashcards, and organize your learning journey with AI-powered tools.
 
+> [!NOTE]
+> Personal project, built with AI coding agents under my supervision. Review the code carefully before you use it.
+
 ![Scio](https://img.shields.io/badge/AI-Powered-blue)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
 ![Python](https://img.shields.io/badge/Python-3.12-green)
@@ -273,6 +276,12 @@ Make sure your `.env` file contains a valid `OPENROUTER_API_KEY`.
 - Ensure the file isn't corrupted
 - Try converting to TXT/Markdown format
 - Check file size (very large files may fail)
+
+## Status
+
+Personal project, built with AI coding agents under my supervision. There is
+no support and no stability guarantee; review the code carefully before you
+rely on it. See [LICENSE](LICENSE) for the warranty terms.
 
 ## License
 

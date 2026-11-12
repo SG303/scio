@@ -4,7 +4,7 @@
 > working on **Scio**. Read it in full before making changes. Keep it current
 > when conventions or start commands change.
 
-Follows the SG303 baseline v1 (`sgstack/global/AGENTS.md`,
+Follows the SG303 baseline v2 (`sgstack/global/AGENTS.md`,
 `sgstack/baseline/tools.md`). The global rules cover the general way of
 working (ask before assuming, simplicity first, surgical changes, verifiable
 goals); this file adds the project detail. The global Git and security rules
