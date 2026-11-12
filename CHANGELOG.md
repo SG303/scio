@@ -6,6 +6,8 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.7.4] - 2026-11-12
+
 ### Changed
 
 - Remove 25 redundant or low-value test cases while retaining checks for
