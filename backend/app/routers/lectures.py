@@ -43,8 +43,20 @@ IMAGE_TYPES = {
 _IMAGE_NAME_RE = re.compile(r"^[0-9a-f]{32}\.(png|jpg|gif|webp)$")
 
 
+def _inside(base: str, *parts: str) -> str:
+    """Join parts under base and refuse any result that resolves outside it.
+
+    The int IDs and the strict image-name pattern already rule out traversal;
+    this check sits right before every file access so it holds on its own."""
+    root = os.path.realpath(base)
+    path = os.path.realpath(os.path.join(root, *parts))
+    if not path.startswith(root + os.sep):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return path
+
+
 def lecture_images_dir(lecture_id: int) -> str:
-    return os.path.join(get_settings().uploads_path, "lectures", str(lecture_id))
+    return _inside(os.path.join(get_settings().uploads_path, "lectures"), str(lecture_id))
 
 
 def remove_lecture_images(lecture_id: int) -> None:
@@ -214,7 +226,7 @@ async def upload_lecture_image(
     directory = lecture_images_dir(lecture_id)
     os.makedirs(directory, exist_ok=True)
     name = f"{uuid.uuid4().hex}.{ext}"
-    async with aiofiles.open(os.path.join(directory, name), "wb") as f:
+    async with aiofiles.open(_inside(directory, name), "wb") as f:
         await f.write(content)
     return LectureImageResponse(url=f"/api/lectures/{lecture_id}/images/{name}")
 
@@ -222,9 +234,9 @@ async def upload_lecture_image(
 @router.get("/lectures/{lecture_id}/images/{name}")
 async def get_lecture_image(lecture_id: int, name: str):
     # Strict name pattern: no path traversal, only files this API wrote
-    if not _IMAGE_NAME_RE.match(name):
+    if not _IMAGE_NAME_RE.fullmatch(name):
         raise HTTPException(status_code=404, detail="Image not found")
-    path = os.path.join(lecture_images_dir(lecture_id), name)
+    path = _inside(lecture_images_dir(lecture_id), name)
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Image not found")
     # File names are random and never reused, so the content never changes

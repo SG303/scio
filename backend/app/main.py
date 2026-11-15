@@ -162,13 +162,13 @@ if os.path.exists(static_dir):
     async def serve_frontend(full_path: str):
         # P5.3b: path-traversal guard — only serve files that really live
         # inside the static directory (blocks ../ escapes and absolute paths)
-        file_path = os.path.realpath(os.path.join(static_dir, full_path))
         static_root = os.path.realpath(static_dir)
-        if os.path.commonpath([static_root, file_path]) != static_root:
+        file_path = os.path.realpath(os.path.join(static_root, full_path))
+        if file_path.startswith(static_root + os.sep):
+            if os.path.isfile(file_path):
+                return FileResponse(file_path)
+        elif file_path != static_root:
             raise HTTPException(status_code=404, detail="Not Found")
-
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
 
         # Serve index.html for all other routes (SPA routing)
         index_path = f"{static_dir}/index.html"
