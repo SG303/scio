@@ -21,7 +21,7 @@ COPY frontend/ .
 RUN echo "Starting frontend build..." && npm run build && echo "Frontend build completed successfully!"
 
 # Stage 2: Python backend with frontend static files
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
