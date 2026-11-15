@@ -6,6 +6,12 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- Update react-router to 7.18 to fix GHSA-337j-9hxr-rhxg and
+  GHSA-wrjc-x8rr-h8h6 (Scio was not exploitable: no server rendering and no
+  user-controlled link targets).
+
 ## [v0.7.4] - 2026-11-12
 
 ### Changed
