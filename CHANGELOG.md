@@ -6,6 +6,8 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.8.0] - 2026-11-15
+
 ### Added
 
 - Generate with your ChatGPT subscription: connect it under Settings → AI
