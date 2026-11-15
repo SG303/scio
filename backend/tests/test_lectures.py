@@ -91,11 +91,19 @@ async def test_svg_and_unknown_types_are_rejected(db):
     assert exc.value.status_code == 400
 
 
-@pytest.mark.parametrize("name", ["../../scio.db", "x.png", "a" * 32 + ".svg"])
+@pytest.mark.parametrize("name", ["../../scio.db", "x.png", "a" * 32 + ".svg", "a" * 32 + ".png\n"])
 async def test_image_names_outside_the_pattern_are_404(db, name):
     with pytest.raises(HTTPException) as exc:
         await lectures_router.get_lecture_image(1, name)
     assert exc.value.status_code == 404
+
+
+@pytest.mark.parametrize("part", ["..", "../other", "/etc/passwd", "1/../../x"])
+def test_paths_outside_the_base_are_refused(tmp_path, part):
+    with pytest.raises(HTTPException) as exc:
+        lectures_router._inside(str(tmp_path / "lectures"), part)
+    assert exc.value.status_code == 404
+    assert lectures_router._inside(str(tmp_path), "1") == str(tmp_path.resolve() / "1")
 
 
 async def test_subject_with_lectures_cannot_be_deleted(db):
