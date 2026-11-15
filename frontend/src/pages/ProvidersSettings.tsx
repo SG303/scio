@@ -11,7 +11,7 @@ import { providersApi } from '@/services/api'
 import { cn, parseApiDate } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import { toast } from '@/components/Toaster'
-import type { ClaudeStatus, ClaudeUsage, ClaudeUsageWindow } from '@/types'
+import type { ChatGPTStatus, ClaudeStatus, ClaudeUsage, ClaudeUsageWindow } from '@/types'
 
 const errorMessage = (err: unknown, fallback: string) =>
   err instanceof Error && err.message ? err.message : fallback
@@ -496,6 +496,173 @@ function ClaudePanel() {
   )
 }
 
+function ChatGPTPanel() {
+  const queryClient = useQueryClient()
+  const [loginUrl, setLoginUrl] = useState<string | null>(null)
+  const [callbackUrl, setCallbackUrl] = useState('')
+
+  const { data: status, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.chatgptStatus,
+    queryFn: providersApi.chatgptStatus,
+  })
+
+  const setStatus = (next: ChatGPTStatus) => queryClient.setQueryData(queryKeys.chatgptStatus, next)
+  const resetLogin = () => {
+    setLoginUrl(null)
+    setCallbackUrl('')
+  }
+
+  const startMutation = useMutation({
+    mutationFn: providersApi.startChatGPTLogin,
+    onSuccess: ({ url }) => setLoginUrl(url),
+    onError: (err) => toast.error(errorMessage(err, 'Could not start the sign-in.')),
+  })
+
+  const completeMutation = useMutation({
+    mutationFn: providersApi.completeChatGPTLogin,
+    onSuccess: (next) => {
+      setStatus(next)
+      resetLogin()
+      // The first sign-in adds the subscription models
+      queryClient.invalidateQueries({ queryKey: queryKeys.models })
+      toast.success('ChatGPT subscription connected.')
+    },
+    onError: async (err) => {
+      toast.error(errorMessage(err, 'Sign-in failed.'))
+      // A wrong paste keeps the sign-in open; any other failure ends it
+      const { data: next } = await refetch()
+      if (!next?.login_pending) resetLogin()
+    },
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: providersApi.cancelChatGPTLogin,
+    onSuccess: (next) => {
+      setStatus(next)
+      resetLogin()
+    },
+    onError: (err) => toast.error(errorMessage(err, 'Could not cancel the sign-in.')),
+  })
+
+  const logoutMutation = useMutation({
+    mutationFn: providersApi.logoutChatGPT,
+    onSuccess: (next) => {
+      setStatus(next)
+      toast.success('Signed out of ChatGPT.')
+    },
+    onError: (err) => {
+      // Scio deletes its sign-in even when OpenAI cannot confirm the sign-out
+      queryClient.invalidateQueries({ queryKey: queryKeys.chatgptStatus })
+      toast.error(errorMessage(err, 'Could not sign out.'))
+    },
+  })
+
+  if (isLoading || error || !status) {
+    return <QueryState loading={isLoading} error={error} onRetry={refetch} />
+  }
+
+  const description =
+    'Generate with the GPT models included in your ChatGPT plan instead of paying per use. Generations count toward the same usage limits as the rest of your ChatGPT use.'
+
+  if (status.logged_in) {
+    return (
+      <ProviderPanel title="ChatGPT subscription" connected description={description}>
+        <dl className="grid max-w-lg grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
+          <dt className="text-muted-foreground">Account</dt>
+          <dd className="truncate">{status.email ?? 'Unknown'}</dd>
+        </dl>
+        <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
+          The models marked “subscription” are listed under AI models and can be picked when
+          creating tests and flashcards. OpenAI does not share usage numbers with other apps: see
+          them in ChatGPT under Settings → Usage, where you can also set a weekly limit for Scio.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          disabled={logoutMutation.isPending}
+          onClick={() => {
+            if (confirm('Sign out of ChatGPT? Subscription models stop working until you sign in again.')) {
+              logoutMutation.mutate()
+            }
+          }}
+        >
+          {logoutMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Sign out
+        </Button>
+      </ProviderPanel>
+    )
+  }
+
+  return (
+    <ProviderPanel title="ChatGPT subscription" connected={false} description={description}>
+      <ol>
+        <Step number={1} state={loginUrl ? 'done' : 'current'} title="Sign in at OpenAI">
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Opens OpenAI’s sign-in page. You sign in there and allow Scio to use your plan, so
+            Scio never sees your password.
+          </p>
+          <Button size="sm" disabled={startMutation.isPending} onClick={() => startMutation.mutate()}>
+            {startMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Start sign-in
+          </Button>
+        </Step>
+
+        <Step
+          number={2}
+          state={loginUrl ? 'current' : 'upcoming'}
+          title="Paste the address from your browser"
+          isLast
+        >
+          <Button asChild size="sm" variant="outline">
+            <a href={loginUrl ?? undefined} target="_blank" rel="noopener noreferrer">
+              Open OpenAI sign-in
+              <ExternalLink className="ml-2 h-3.5 w-3.5" />
+            </a>
+          </Button>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            After you allow Scio, the browser tab shows a page that cannot be reached. That is
+            expected. Copy the whole address from the address bar (it starts with
+            http://127.0.0.1:1455) and paste it here.
+          </p>
+          <form
+            className="flex max-w-md gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              completeMutation.mutate(callbackUrl)
+            }}
+          >
+            <Label htmlFor="chatgpt-callback" className="sr-only">
+              Address from your browser
+            </Label>
+            <Input
+              id="chatgpt-callback"
+              autoComplete="off"
+              spellCheck={false}
+              value={callbackUrl}
+              onChange={(e) => setCallbackUrl(e.target.value)}
+              placeholder="http://127.0.0.1:1455/auth/callback?…"
+              required
+            />
+            <Button type="submit" disabled={completeMutation.isPending || !callbackUrl.trim()}>
+              {completeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Connect
+            </Button>
+          </form>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={cancelMutation.isPending}
+            onClick={() => cancelMutation.mutate()}
+          >
+            Start over
+          </Button>
+        </Step>
+      </ol>
+    </ProviderPanel>
+  )
+}
+
 export default function ProvidersSettings() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -506,6 +673,7 @@ export default function ProvidersSettings() {
       />
       <OpenRouterPanel />
       <ClaudePanel />
+      <ChatGPTPanel />
     </div>
   )
 }

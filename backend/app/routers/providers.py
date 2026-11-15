@@ -1,18 +1,21 @@
-"""AI provider connections: OpenRouter API key and Claude subscription."""
+"""AI provider connections: OpenRouter API key, Claude and ChatGPT subscriptions."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.routers.ai_models import seed_subscription_models
+from app.routers.ai_models import seed_chatgpt_models, seed_subscription_models
 from app.schemas.providers import (
+    ChatGPTLoginComplete,
+    ChatGPTLoginStart,
+    ChatGPTStatus,
     ClaudeLoginComplete,
     ClaudeLoginStart,
     ClaudeStatus,
     OpenRouterKeyStatus,
     OpenRouterKeyUpdate,
 )
-from app.services import claude_cli, openrouter_key
+from app.services import chatgpt_plan, claude_cli, openrouter_key
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
 
@@ -107,3 +110,39 @@ async def logout_claude():
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return await claude_cli.get_status()
+
+
+@router.get("/chatgpt", response_model=ChatGPTStatus)
+async def get_chatgpt_status():
+    return chatgpt_plan.get_status()
+
+
+@router.post("/chatgpt/login", response_model=ChatGPTLoginStart)
+async def start_chatgpt_login():
+    return ChatGPTLoginStart(url=chatgpt_plan.start_login())
+
+
+@router.post("/chatgpt/login/complete", response_model=ChatGPTStatus)
+async def complete_chatgpt_login(payload: ChatGPTLoginComplete, db: AsyncSession = Depends(get_db)):
+    """Finish the sign-in; on first success the plan's top models are added."""
+    try:
+        await chatgpt_plan.complete_login(payload.callback_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await seed_chatgpt_models(db)
+    return chatgpt_plan.get_status()
+
+
+@router.post("/chatgpt/login/cancel", response_model=ChatGPTStatus)
+async def cancel_chatgpt_login():
+    chatgpt_plan.cancel_login()
+    return chatgpt_plan.get_status()
+
+
+@router.post("/chatgpt/logout", response_model=ChatGPTStatus)
+async def logout_chatgpt():
+    try:
+        await chatgpt_plan.logout()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return chatgpt_plan.get_status()

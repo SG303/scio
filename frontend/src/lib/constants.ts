@@ -14,6 +14,7 @@ export const queryKeys = {
   settings: ['settings'] as const,
   openRouterStatus: ['providers', 'openrouter'] as const,
   claudeStatus: ['providers', 'claude'] as const,
+  chatgptStatus: ['providers', 'chatgpt'] as const,
   subjects: ['subjects'] as const,
   subject: (id: QueryId) => ['subject', String(id ?? '')] as const,
   lectures: (subjectId: QueryId) => ['lectures', String(subjectId ?? '')] as const,
@@ -35,6 +36,9 @@ export const queryKeys = {
 // Models served through the Claude subscription (Claude Code CLI) carry
 // this prefix in their model ID — same constant as backend claude_cli.py.
 export const CLAUDE_SUBSCRIPTION_PREFIX = 'claude-subscription/'
+// Models served through the ChatGPT subscription (Sign in with ChatGPT) —
+// same constant as backend chatgpt_plan.py.
+export const CHATGPT_SUBSCRIPTION_PREFIX = 'chatgpt-subscription/'
 
 // Test configuration options
 export const QUESTION_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50, 60] as const

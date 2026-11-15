@@ -8,8 +8,8 @@ export type CostEstimates = {
   contextUsage: number
   contextLimit: number
   hasPricing: string | boolean | undefined
-  /** Claude subscription model: no per-use cost, counts toward plan limits. */
-  includedInSubscription: boolean
+  /** Subscription model ("Claude"/"ChatGPT"): no per-use cost, counts toward plan limits. */
+  subscriptionPlan: string | null
   numBatches: number
 }
 
@@ -39,9 +39,9 @@ export function CostEstimate({ estimates, overLimitMessage }: CostEstimateProps)
         <div>
           <dt className="text-xs text-muted-foreground">Estimated cost</dt>
           <dd className="mt-0.5 text-base font-semibold tabular-nums">
-            {estimates.includedInSubscription ? (
+            {estimates.subscriptionPlan ? (
               <span className="text-sm font-normal text-muted-foreground">
-                Included in your Claude plan
+                Included in your {estimates.subscriptionPlan} plan
               </span>
             ) : estimates.hasPricing ? (
               `$${estimates.estimatedCost.toFixed(4)}`

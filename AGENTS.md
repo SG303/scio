@@ -53,7 +53,8 @@ backend/
     services/            # Business logic: spaced_repetition (SM-2), test_generator,
                          # flashcard_generator, document_parser, openrouter (model cache),
                          # openrouter_client (shared JSON API call with response_format,
-                         # routes subscription models to claude_cli), openrouter_key (key from
+                         # routes subscription models to claude_cli / chatgpt_plan),
+                         # chatgpt_plan (Sign in with ChatGPT: OAuth, Responses API), openrouter_key (key from
                          # the settings table or env), claude_cli (Claude Code CLI: install, login, -p),
                          # subject_materials (subject check + dedupe sources),
                          # document_chapters (split books into chapter documents)
@@ -284,6 +285,22 @@ prompt appears").
   (`/app/claude`, volume) and updates itself there. Never enable tools for
   `claude -p` without assessing the prompt injection risk from uploaded
   documents.
+- **ChatGPT subscription: Sign in with ChatGPT instead of a CLI.** Unlike
+  Anthropic, OpenAI officially lets open-source and locally hosted apps use a
+  ChatGPT plan (developers.openai.com/siwc), so Scio holds the OAuth tokens
+  itself (`services/chatgpt_plan.py`, model IDs `chatgpt-subscription/<slug>`,
+  routed in `openrouter_client`). The app registers dynamically on the first
+  sign-in (issued client ID in `chatgpt-client.json`). OpenAI only redirects
+  to `127.0.0.1` on the browser's computer, so the owner pastes the
+  unreachable callback address into Scio. Tokens live in
+  `chatgpt-credentials.json` next to the DB (0600, atomic writes), **never in
+  the DB** (backups) and never in logs or API responses. Generation uses
+  `POST /v1/responses` with `store:false`, `stream:true`, the system prompt as
+  a developer message and `json_object` format (retry without it, like
+  OpenRouter); no tools, so no prompt-injection execution risk. The plan's
+  top three models are seeded once after the first sign-in. OpenAI shares no
+  usage numbers; a limit shows as an error pointing to ChatGPT → Usage. This
+  does **not** relax the Claude rule above: Claude tokens stay with the CLI.
 - **OpenRouter key in the web UI:** the key lives in the settings table
   (`openrouter_api_key`) and takes precedence over `OPENROUTER_API_KEY`; the
   API only returns the last 4 characters. Before saving, `GET /key` checks the

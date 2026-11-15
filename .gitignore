@@ -16,6 +16,10 @@ backend/data/*.db-journal
 backend/data/*.db-wal
 backend/data/*.db-shm
 
+# ChatGPT subscription sign-in (stored next to the database)
+chatgpt-credentials.json*
+chatgpt-client.json*
+
 # Uploads
 uploads/*
 !uploads/.gitkeep
