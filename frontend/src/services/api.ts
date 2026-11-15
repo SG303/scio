@@ -39,6 +39,7 @@ import type {
   AppSettings,
   OpenRouterKeyStatus,
   ClaudeStatus,
+  ChatGPTStatus,
   Lecture,
   LectureListItem
 } from '@/types'
@@ -170,6 +171,23 @@ export const providersApi = {
 
   logoutClaude: () =>
     fetchApi<ClaudeStatus>('/providers/claude/logout', { method: 'POST' }),
+
+  chatgptStatus: () => fetchApi<ChatGPTStatus>('/providers/chatgpt'),
+
+  startChatGPTLogin: () =>
+    fetchApi<{ url: string }>('/providers/chatgpt/login', { method: 'POST' }),
+
+  completeChatGPTLogin: (callbackUrl: string) =>
+    fetchApi<ChatGPTStatus>('/providers/chatgpt/login/complete', {
+      method: 'POST',
+      body: JSON.stringify({ callback_url: callbackUrl }),
+    }),
+
+  cancelChatGPTLogin: () =>
+    fetchApi<ChatGPTStatus>('/providers/chatgpt/login/cancel', { method: 'POST' }),
+
+  logoutChatGPT: () =>
+    fetchApi<ChatGPTStatus>('/providers/chatgpt/logout', { method: 'POST' }),
 }
 
 export const modelsApi = {

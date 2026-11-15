@@ -6,6 +6,12 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Generate with your ChatGPT subscription: connect it under Settings → AI
+  providers with OpenAI's official "Sign in with ChatGPT". After the first
+  sign-in, the plan's top three GPT models are added as subscription models.
+
 ### Security
 
 - Update react-router to 7.18 to fix GHSA-337j-9hxr-rhxg and

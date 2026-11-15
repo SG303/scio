@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import AIModel, FlashcardDeck, Subject, TestConfig
 from app.schemas.ai_model import AIModelCreate, AIModelResponse, AIModelUpdate
+from app.services import chatgpt_plan
 from app.services.claude_cli import (
     MODEL_PREFIX,
     SUBSCRIPTION_CONTEXT_LENGTH,
@@ -205,6 +206,53 @@ async def seed_subscription_models(db: AsyncSession) -> None:
     await db.commit()
 
 
+CHATGPT_MODELS_SEEDED_KEY = "chatgpt_subscription_models_seeded"
+
+
+async def seed_chatgpt_models(db: AsyncSession) -> None:
+    """Add the ChatGPT plan's top models once, after the first sign-in.
+
+    The plan's model list changes over time, so the models come from
+    OpenAI instead of a fixed list. If the list cannot be loaded, nothing
+    is marked as seeded and the next sign-in tries again.
+    """
+    from app.models import Setting
+
+    result = await db.execute(select(Setting).where(Setting.key == CHATGPT_MODELS_SEEDED_KEY))
+    if result.scalar_one_or_none() is not None:
+        return
+    plan_models = (await chatgpt_plan.list_models())[: chatgpt_plan.SEEDED_MODEL_COUNT]
+    if not plan_models:
+        return
+
+    result = await db.execute(select(AIModel.openrouter_id))
+    existing_ids = set(result.scalars().all())
+    for plan_model in plan_models:
+        model_id = f"{chatgpt_plan.MODEL_PREFIX}{plan_model['slug']}"
+        if model_id not in existing_ids:
+            db.add(
+                AIModel(
+                    is_default=False,
+                    name=f"{plan_model['name']} (subscription)",
+                    openrouter_id=model_id,
+                    description="Via your ChatGPT subscription; counts toward your plan limits",
+                )
+            )
+    db.add(Setting(key=CHATGPT_MODELS_SEEDED_KEY, value="1"))
+    await db.commit()
+
+
+async def _chatgpt_context_lengths(model_ids: list[str]) -> dict[str, int]:
+    """Context window per ChatGPT plan model ID (only fetched when needed)."""
+    if not any(chatgpt_plan.is_plan_model(model_id) for model_id in model_ids):
+        return {}
+    return {
+        f"{chatgpt_plan.MODEL_PREFIX}{m['slug']}": m["context_length"]
+        for m in await chatgpt_plan.list_models()
+        if m.get("context_length")
+    }
+
+
 @router.get("", response_model=list[dict[str, Any]])
 async def list_models(enabled_only: bool = False, db: AsyncSession = Depends(get_db)):
     """List all AI models with OpenRouter pricing info"""
@@ -218,6 +266,7 @@ async def list_models(enabled_only: bool = False, db: AsyncSession = Depends(get
 
     # Fetch OpenRouter data
     openrouter_data = await fetch_openrouter_models()
+    chatgpt_contexts = await _chatgpt_context_lengths([m.openrouter_id for m in db_models])
 
     # Merge data
     models = []
@@ -240,6 +289,8 @@ async def list_models(enabled_only: bool = False, db: AsyncSession = Depends(get
             model_dict["context_length"] = or_model.get("context_length")
         elif is_subscription_model(model.openrouter_id):
             model_dict["context_length"] = SUBSCRIPTION_CONTEXT_LENGTH
+        elif model.openrouter_id in chatgpt_contexts:
+            model_dict["context_length"] = chatgpt_contexts[model.openrouter_id]
 
         models.append(model_dict)
 
@@ -275,6 +326,9 @@ async def get_model(model_id: int, db: AsyncSession = Depends(get_db)):
         model_dict["context_length"] = or_model.get("context_length")
     elif is_subscription_model(model.openrouter_id):
         model_dict["context_length"] = SUBSCRIPTION_CONTEXT_LENGTH
+    else:
+        chatgpt_contexts = await _chatgpt_context_lengths([model.openrouter_id])
+        model_dict["context_length"] = chatgpt_contexts.get(model.openrouter_id)
 
     return model_dict
 

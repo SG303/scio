@@ -7,7 +7,9 @@ once without it — generation keeps working, the parser's fallback path
 handles non-JSON output.
 
 Models with the Claude subscription prefix are routed to the Claude Code
-CLI instead (app/services/claude_cli.py); their callers stay unchanged.
+CLI instead (app/services/claude_cli.py), models with the ChatGPT
+subscription prefix to OpenAI's Responses API (app/services/chatgpt_plan.py);
+their callers stay unchanged.
 """
 
 import logging
@@ -16,7 +18,7 @@ from typing import Any
 import httpx
 
 from app.config import get_settings
-from app.services import claude_cli
+from app.services import chatgpt_plan, claude_cli
 from app.services.openrouter_key import load_effective_key
 
 logger = logging.getLogger(__name__)
@@ -35,11 +37,13 @@ async def chat_completion_json(
     """Call the model and return the raw assistant message content.
 
     temperature and max_tokens only apply to OpenRouter; the Claude Code
-    CLI does not expose them.
+    CLI and the ChatGPT plan do not support them.
     """
 
     if claude_cli.is_subscription_model(model_id):
         return await claude_cli.chat_completion(model_id, system_prompt, user_prompt)
+    if chatgpt_plan.is_plan_model(model_id):
+        return await chatgpt_plan.chat_completion(model_id, system_prompt, user_prompt)
 
     api_key = await load_effective_key()
     if not api_key:
