@@ -11,6 +11,7 @@ Rating Scale:
 - 4 (Easy): Perfect recall with no hesitation
 """
 
+import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
 
@@ -195,7 +196,17 @@ async def get_due_cards(
     return list(result.scalars().all())
 
 
-async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> list[Flashcard]:
+def _daily_shuffle_key(card_id: int, day: date) -> str:
+    """Pseudo-random but stable sort key: the same card keeps its position for
+    the whole day (reload, resume, offline mirror), the next day gets a new mix.
+    Independent of the other cards, so studying some cards does not reshuffle
+    the rest."""
+    return hashlib.sha256(f"{day.isoformat()}:{card_id}".encode()).hexdigest()
+
+
+async def get_new_cards(
+    db: AsyncSession, deck_id: int, limit: int, order: str = "created"
+) -> list[Flashcard]:
     """
     Get new cards that haven't been studied yet.
 
@@ -203,17 +214,20 @@ async def get_new_cards(db: AsyncSession, deck_id: int, limit: int) -> list[Flas
         db: Database session
         deck_id: ID of the deck
         limit: Maximum number of new cards to return
+        order: "created" (oldest first) or "random" (shuffled once per day)
 
     Returns:
         List of new Flashcard objects
     """
-    query = (
-        select(Flashcard)
-        .where(and_(Flashcard.deck_id == deck_id, Flashcard.state == "new"))
-        .order_by(Flashcard.created_at.asc())
-        .limit(limit)
-    )
+    query = select(Flashcard).where(and_(Flashcard.deck_id == deck_id, Flashcard.state == "new"))
 
+    if order == "random":
+        result = await db.execute(query)
+        today = utc_now().date()
+        cards = sorted(result.scalars().all(), key=lambda c: _daily_shuffle_key(c.id, today))
+        return cards[:limit]
+
+    query = query.order_by(Flashcard.created_at.asc(), Flashcard.id.asc()).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())
 
@@ -255,6 +269,7 @@ async def get_study_queue(
     cards_studied_json: str | None = None,
     new_cards_reviewed_today: int = 0,
     study_date: date | None = None,
+    new_card_order: str = "created",
 ) -> list[Flashcard]:
     """
     Build the study queue for a deck following this priority:
@@ -272,6 +287,7 @@ async def get_study_queue(
         cards_studied_json: JSON array of card IDs already reviewed in this session
         new_cards_reviewed_today: Count of new cards already reviewed today
         study_date: Date of the study session (for daily limit reset)
+        new_card_order: "created" (oldest first) or "random" (shuffled per day)
 
     Returns:
         List of Flashcard objects in study order
@@ -300,7 +316,7 @@ async def get_study_queue(
     review_cards = [c for c in due_cards if c.state == "review"]
 
     if remaining_new_quota > 0:
-        new_cards = await get_new_cards(db, deck_id, remaining_new_quota)
+        new_cards = await get_new_cards(db, deck_id, remaining_new_quota, new_card_order)
         new_cards = [c for c in new_cards if c.id not in cards_studied]
     else:
         new_cards = []

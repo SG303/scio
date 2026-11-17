@@ -184,6 +184,9 @@ export interface CreateDocument {
 
 // ============== Flashcard Types ==============
 
+// Order of new cards in the study queue: oldest first, or shuffled once per day
+export type NewCardOrder = 'created' | 'random'
+
 export interface FlashcardDeck {
   id: number
   title: string
@@ -193,6 +196,7 @@ export interface FlashcardDeck {
   custom_prompt: string | null
   language: string | null
   new_cards_per_day: number
+  new_card_order: NewCardOrder
   subject_id: number | null
   created_at: string
   updated_at: string
@@ -293,6 +297,7 @@ export interface CreateFlashcardDeck {
   custom_prompt?: string | null
   language?: string | null
   new_cards_per_day?: number
+  new_card_order?: NewCardOrder
   subject_id?: number | null
 }
 

@@ -3,10 +3,14 @@ Pydantic schemas for Flashcard API endpoints.
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.services.language import Language
+
+# "created" = oldest first, "random" = shuffled once per day
+NewCardOrder = Literal["created", "random"]
 
 # ============== Flashcard Deck Schemas ==============
 
@@ -21,6 +25,7 @@ class FlashcardDeckCreate(BaseModel):
     custom_prompt: str | None = None
     language: Language = None  # None = language of the material
     new_cards_per_day: int = Field(default=20, ge=1, le=100)
+    new_card_order: NewCardOrder = "created"
     subject_id: int | None = None  # Optional subject grouping
 
 
@@ -30,6 +35,7 @@ class FlashcardDeckUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     new_cards_per_day: int | None = Field(None, ge=1, le=100)
+    new_card_order: NewCardOrder | None = None
     subject_id: int | None = None  # explicit null unassigns the subject
 
 
@@ -44,6 +50,7 @@ class FlashcardDeckResponse(BaseModel):
     custom_prompt: str | None = None
     language: Language = None  # None = language of the material
     new_cards_per_day: int
+    new_card_order: NewCardOrder = "created"
     subject_id: int | None = None
     created_at: datetime
     updated_at: datetime

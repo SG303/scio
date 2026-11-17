@@ -215,6 +215,7 @@ async def list_decks(db: AsyncSession = Depends(get_db)):
                 custom_prompt=deck.custom_prompt,
                 language=deck.language,
                 new_cards_per_day=deck.new_cards_per_day,
+                new_card_order=deck.new_card_order,
                 subject_id=deck.subject_id,
                 created_at=deck.created_at,
                 updated_at=deck.updated_at,
@@ -283,6 +284,7 @@ async def get_deck(deck_id: int, db: AsyncSession = Depends(get_db)):
         custom_prompt=deck.custom_prompt,
         language=deck.language,
         new_cards_per_day=deck.new_cards_per_day,
+        new_card_order=deck.new_card_order,
         subject_id=deck.subject_id,
         created_at=deck.created_at,
         updated_at=deck.updated_at,
@@ -888,6 +890,7 @@ async def get_study_cards(
         cards_studied_json,
         new_cards_reviewed_today,
         study_date,
+        new_card_order=deck.new_card_order,
     )
 
     return StudyQueueResponse(

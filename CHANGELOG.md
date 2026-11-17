@@ -6,6 +6,17 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Deck setting "Order of new cards": oldest first (as before) or random.
+  Random shuffles the unseen cards once per day, so the order stays stable
+  across reloads and resumed sessions.
+
+### Upgrade notes
+
+- A startup migration adds the column `new_card_order` to `flashcard_decks`.
+  Existing decks keep the previous order (oldest first).
+
 ## [v0.8.0] - 2026-11-15
 
 ### Added
