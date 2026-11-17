@@ -17,6 +17,14 @@ and uses [Semantic Versioning](https://semver.org/).
 - A startup migration adds the column `new_card_order` to `flashcard_decks`.
   Existing decks keep the previous order (oldest first).
 
+## [v0.8.0] - 2026-11-15
+
+### Added
+
+- Generate with your ChatGPT subscription: connect it under Settings → AI
+  providers with OpenAI's official "Sign in with ChatGPT". After the first
+  sign-in, the plan's top three GPT models are added as subscription models.
+
 ### Security
 
 - Update react-router to 7.18 to fix GHSA-337j-9hxr-rhxg and

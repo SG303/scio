@@ -51,3 +51,21 @@ class ClaudeLoginStart(BaseModel):
 
 class ClaudeLoginComplete(BaseModel):
     code: str = Field(min_length=1, max_length=2000)
+
+
+class ChatGPTStatus(BaseModel):
+    """Sign-in state of the ChatGPT subscription — never the tokens."""
+
+    logged_in: bool
+    email: str | None = None
+    login_pending: bool
+
+
+class ChatGPTLoginStart(BaseModel):
+    """OpenAI sign-in page; afterwards the user pastes the callback address."""
+
+    url: str
+
+
+class ChatGPTLoginComplete(BaseModel):
+    callback_url: str = Field(min_length=1, max_length=8000)

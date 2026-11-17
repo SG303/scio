@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { documentsApi, modelsApi, settingsApi, subjectsApi, testsApi } from '@/services/api'
 import { useGenerationProgress } from '@/hooks/useGenerationProgress'
-import { calculateEstimatedCost, calculateTestGenerationTokens, isSubscriptionModel } from '@/lib/utils'
+import { calculateEstimatedCost, calculateTestGenerationTokens, subscriptionPlan } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 import { QueryState } from '@/components/QueryState'
 import { StepIndicator } from '@/components/StepIndicator'
@@ -306,7 +306,7 @@ function CreateTestWizard({
       contextUsage,
       contextLimit,
       hasPricing,
-      includedInSubscription: isSubscriptionModel(selectedModel.openrouter_id),
+      subscriptionPlan: subscriptionPlan(selectedModel.openrouter_id),
       numBatches
     }
   }, [formData.document_ids, formData.ai_model_id, formData.num_questions, formData.custom_prompt, documents, models, lectureContents])

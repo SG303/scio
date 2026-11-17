@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { SectionTabs, settingsTabs } from '@/components/SectionTabs'
 import { List, ListRow, RowActions } from '@/components/List'
 import { modelsApi, settingsApi } from '@/services/api'
-import { cn, formatContextLength, formatPricePerMillion, isSubscriptionModel } from '@/lib/utils'
+import { cn, formatContextLength, formatPricePerMillion, subscriptionPlan } from '@/lib/utils'
 import { queryKeys } from '@/lib/constants'
 import { toast } from '@/components/Toaster'
 import type { AppSettings } from '@/types'
@@ -155,7 +155,7 @@ export default function ModelsSettings() {
                 <DialogHeader>
                   <DialogTitle>Add AI Model</DialogTitle>
                   <DialogDescription>
-                    Add a model from OpenRouter or your Claude subscription
+                    Add a model from OpenRouter or your Claude or ChatGPT subscription
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -189,7 +189,9 @@ export default function ModelsSettings() {
                         openrouter.ai/models
                       </a>
                       . For your Claude subscription use claude-subscription/opus,
-                      claude-subscription/sonnet or claude-subscription/haiku.
+                      claude-subscription/sonnet or claude-subscription/haiku; for your ChatGPT
+                      subscription use chatgpt-subscription/ followed by the model name, e.g.
+                      chatgpt-subscription/gpt-6.1-sol.
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -223,7 +225,7 @@ export default function ModelsSettings() {
       <div className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          Models run through OpenRouter or your Claude subscription. Connect them under{' '}
+          Models run through OpenRouter or your Claude or ChatGPT subscription. Connect them under{' '}
           <Link to="/settings/providers" className="font-medium text-primary hover:underline">
             AI providers
           </Link>
@@ -280,9 +282,9 @@ export default function ModelsSettings() {
                       </span>
                     </p>
                   )}
-                  {isSubscriptionModel(model.openrouter_id) ? (
+                  {subscriptionPlan(model.openrouter_id) ? (
                     <p className="mt-1.5 text-xs text-muted-foreground">
-                      Included in your Claude plan, counts toward its usage limits
+                      Included in your {subscriptionPlan(model.openrouter_id)} plan, counts toward its usage limits
                     </p>
                   ) : (
                     !model.pricing && !model.context_length && (

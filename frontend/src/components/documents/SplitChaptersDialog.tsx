@@ -16,7 +16,7 @@ import { OptionCard, ModelOptionLabel } from '@/components/OptionCard'
 import { toast } from '@/components/Toaster'
 import { documentsApi, modelsApi } from '@/services/api'
 import { queryKeys } from '@/lib/constants'
-import { calculateEstimatedCost, cn, formatContextLength, isSubscriptionModel } from '@/lib/utils'
+import { calculateEstimatedCost, cn, formatContextLength, subscriptionPlan } from '@/lib/utils'
 import {
   chapterDraftError,
   toChapterRanges,
@@ -188,7 +188,8 @@ function AiDetection({ open, inputTokens, isPending, onDetect, onCancel }: AiDet
 
 function costLine(inputTokens: number, model: AIModel) {
   const size = `Reads about ${formatContextLength(inputTokens)} tokens`
-  if (isSubscriptionModel(model.openrouter_id)) return `${size}, included in your Claude subscription.`
+  const plan = subscriptionPlan(model.openrouter_id)
+  if (plan) return `${size}, included in your ${plan} subscription.`
   if (!model.pricing) return `${size}.`
   const { estimatedCost } = calculateEstimatedCost(inputTokens, 2000, model)
   return `${size}, about $${estimatedCost < 0.01 ? '0.01 or less' : estimatedCost.toFixed(2)} with ${model.name}.`

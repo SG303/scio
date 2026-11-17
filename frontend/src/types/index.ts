@@ -48,6 +48,12 @@ export interface ClaudeStatus {
   usage: ClaudeUsage | null
 }
 
+export interface ChatGPTStatus {
+  logged_in: boolean
+  email: string | null
+  login_pending: boolean
+}
+
 export interface Document {
   id: number
   title: string

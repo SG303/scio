@@ -1,15 +1,17 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { AIModel } from "@/types"
-import { CLAUDE_SUBSCRIPTION_PREFIX } from "@/lib/constants"
+import { CHATGPT_SUBSCRIPTION_PREFIX, CLAUDE_SUBSCRIPTION_PREFIX } from "@/lib/constants"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Model runs on the Claude subscription (no per-token price). */
-export function isSubscriptionModel(modelId: string | undefined): boolean {
-  return !!modelId && modelId.startsWith(CLAUDE_SUBSCRIPTION_PREFIX)
+/** Plan a subscription model runs on ("Claude" or "ChatGPT"); null for pay-per-use models. */
+export function subscriptionPlan(modelId: string | undefined): string | null {
+  if (modelId?.startsWith(CLAUDE_SUBSCRIPTION_PREFIX)) return 'Claude'
+  if (modelId?.startsWith(CHATGPT_SUBSCRIPTION_PREFIX)) return 'ChatGPT'
+  return null
 }
 
 // The API emits UTC datetimes without a timezone designator
