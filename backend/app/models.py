@@ -203,6 +203,8 @@ class FlashcardDeck(Base):
 
     # Settings
     new_cards_per_day = Column(Integer, default=20)  # Daily limit for new cards
+    # Order of new cards: "created" (oldest first) or "random" (shuffled per day)
+    new_card_order = Column(String(20), nullable=False, default="created", server_default="created")
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

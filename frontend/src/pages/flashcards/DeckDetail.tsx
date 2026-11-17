@@ -24,6 +24,7 @@ import { cardStates, cardStateClass } from '@/lib/studyColors'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { flashcardsApi } from '@/services/api'
 import { cn } from '@/lib/utils'
-import type { Flashcard } from '@/types'
+import type { Flashcard, NewCardOrder } from '@/types'
 import { queryKeys } from '@/lib/constants'
 
 export default function DeckDetail() {
@@ -50,9 +51,14 @@ export default function DeckDetail() {
   const queryClient = useQueryClient()
 
   const [isAddingCard, setIsAddingCard] = useState(false)
-  // P4.3: deck settings (title, description, new_cards_per_day)
+  // P4.3: deck settings (title, description, new_cards_per_day, new_card_order)
   const [isEditingDeck, setIsEditingDeck] = useState(false)
-  const [deckForm, setDeckForm] = useState({ title: '', description: '', new_cards_per_day: 20 })
+  const [deckForm, setDeckForm] = useState({
+    title: '',
+    description: '',
+    new_cards_per_day: 20,
+    new_card_order: 'created' as NewCardOrder,
+  })
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null)
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null)
   const [newCard, setNewCard] = useState({ front: '', back: '' })
@@ -171,7 +177,12 @@ export default function DeckDetail() {
 
   // P4.3: save deck settings — invalidates the deck and the deck list
   const updateDeckMutation = useMutation({
-    mutationFn: (data: { title: string; description: string; new_cards_per_day: number }) =>
+    mutationFn: (data: {
+      title: string
+      description: string
+      new_cards_per_day: number
+      new_card_order: NewCardOrder
+    }) =>
       flashcardsApi.updateDeck(parseInt(deckId!), data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.flashcardDeck(deckId) })
@@ -188,6 +199,7 @@ export default function DeckDetail() {
       title: deck?.title ?? '',
       description: deck?.description ?? '',
       new_cards_per_day: deck?.new_cards_per_day ?? 20,
+      new_card_order: deck?.new_card_order ?? 'created',
     })
     setIsEditingDeck(true)
   }
@@ -459,14 +471,14 @@ export default function DeckDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* P4.3: Edit Deck Dialog — title, description, daily new-card limit */}
+      {/* P4.3: Edit Deck Dialog — title, description, daily new-card limit, new-card order */}
       <Dialog open={isEditingDeck} onOpenChange={setIsEditingDeck}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Deck</DialogTitle>
             <DialogDescription>
-              Change the deck's title, description and how many new cards are
-              introduced per day.
+              Change the deck's title, description and how new cards are
+              introduced.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -508,6 +520,23 @@ export default function DeckDetail() {
               <p className="text-xs text-muted-foreground">
                 How many unseen cards a day of studying may introduce (1–100).
               </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="deck-new-card-order">Order of new cards</Label>
+              <Select
+                value={deckForm.new_card_order}
+                onValueChange={(v) =>
+                  setDeckForm((prev) => ({ ...prev, new_card_order: v as NewCardOrder }))
+                }
+              >
+                <SelectTrigger id="deck-new-card-order">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created">Oldest first</SelectItem>
+                  <SelectItem value="random">Random</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
