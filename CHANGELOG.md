@@ -6,6 +6,8 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.9.0] - 2026-11-17
+
 ### Added
 
 - Deck setting "Order of new cards": oldest first (as before) or random.
