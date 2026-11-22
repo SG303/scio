@@ -1,7 +1,7 @@
 # Multi-stage build for Scio - AI Learning Hub
 
 # uv binary for installing the backend dependencies from backend/uv.lock
-FROM ghcr.io/astral-sh/uv:0.13.8 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.9 AS uv
 
 # Stage 1: Build frontend
 FROM node:24-alpine AS frontend-builder
