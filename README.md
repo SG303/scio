@@ -7,7 +7,7 @@ Your AI Learning Hub. Upload study materials, generate practice tests, create fl
 
 ![Scio](https://img.shields.io/badge/AI-Powered-blue)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
-![Python](https://img.shields.io/badge/Python-3.12-green)
+![Python](https://img.shields.io/badge/Python-3.15-green)
 ![React](https://img.shields.io/badge/React-18-blue)
 
 ## Features
