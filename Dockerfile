@@ -4,7 +4,7 @@
 FROM ghcr.io/astral-sh/uv:0.13.9 AS uv
 
 # Stage 1: Build frontend
-FROM node:24-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
